@@ -5,11 +5,11 @@
 - **Tipo:** bounded context de PUBLIC.
 - **Ubicación:** `backend/public/modules/publication-projections/`.
 - **Estado:** diseño documentado; no hay implementación funcional.
-- **Fases previstas:** primer contenido web tenant/proyecciones en Fase 5; directorio, Marketplace y fichas públicas en Fase 9.
+- **Fases previstas:** páginas públicas tenant y proyección base autorizada BUSINESS→PUBLIC en Fase 5.3; directorio, Discovery/Marketplace y fichas adicionales en Fase 9.1, consumiendo la proyección base aceptada.
 
 ## Propósito y responsabilidad
 
-Mantener proyecciones públicas con los campos que el owner fuente haya autorizado. PUBLIC es dueño del listing, versión y estado de publicación proyectado; BUSINESS conserva el contenido fuente y la decisión de publicarlo.
+Mantener proyecciones públicas con los campos que el owner fuente haya autorizado. En Fase 5.3, PUBLIC es dueño del listing, versión y estado de publicación proyectado para las páginas tenant; BUSINESS conserva el contenido fuente y la decisión de publicarlo. Fase 9.1 amplía el consumo de esas proyecciones para Discovery/Marketplace, sin que la publicación base dependa del directorio.
 
 ## Operaciones previstas
 

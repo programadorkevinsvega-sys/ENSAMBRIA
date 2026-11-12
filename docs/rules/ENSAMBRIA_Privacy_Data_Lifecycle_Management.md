@@ -5,7 +5,7 @@
 | Campo | Valor |
 |---|---|
 | Propietario técnico | Arquitectura de CORE |
-| Propietario de cumplimiento | Kevins Yesid Vega Marmolejo, designado por declaración del propietario como responsable DPO/Legal el 2026-11-11; credenciales no verificadas independientemente |
+| Propietario de cumplimiento | Kevins Yesid Vega Marmolejo, designado por declaración del propietario como responsable interno DPO/Legal el 2026-11-11; credenciales no verificadas independientemente. Abogado revisor distinto del responsable pendiente de designación, sin fecha establecida |
 | Revisores obligatorios | Seguridad, SRE/Plataforma, backends CORE · BUSINESS · PLATFORM · PUBLIC |
 | Estado | Diseño técnico/documental aprobado formalmente por el propietario el 2026-11-11. La revisión de fuentes, aplicabilidad legal por tratamiento, borradores y trazabilidad de implementación continúan pendientes; esta aprobación no certifica cumplimiento. La revisión profesional concreta se documenta por separado y no se presume. |
 | Alcance | Plataforma global, multi-tenant, multi-región, multi-jurisdicción |
@@ -820,8 +820,8 @@ Un dominio solo puede reportar `completed` si ejecuta su propia verificación po
 
 | Rol | Responsabilidad |
 |---|---|
-| DPO / Responsable de privacidad | Supervisión del programa, interlocución con autoridades, revisión de DPIA |
-| Legal por jurisdicción | Validación de plazos, excepciones, contratos y comunicaciones |
+| DPO / Responsable interno de privacidad | Supervisión del programa, interlocución con autoridades, revisión de DPIA; asignado al propietario por declaración propia |
+| Abogado revisor por jurisdicción | Validación de plazos, excepciones, contratos y comunicaciones; debe ser distinto del responsable interno DPO/Legal |
 | Arquitectura CORE | Diseño y evolución de PDLM |
 | Propietarios de dominio | Catálogo, agentes de datos, atestaciones |
 | Seguridad | Modelo de amenazas, controles, pruebas, respuesta a incidentes |

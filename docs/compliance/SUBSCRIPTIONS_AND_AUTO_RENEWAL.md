@@ -2,7 +2,7 @@
 
 > **BORRADOR TEMPORAL — ENSAMBRIA — PENDIENTE DE REVISIÓN Y APROBACIÓN POR ABOGADO COMPETENTE EN COLOMBIA.**
 
-> **Estado:** propuesta de aceptación para Fase 0, no contrato comercial ni flujo de cobro implementado. No hay planes, precios, moneda, período de prueba o política de reembolso aprobados aquí. Cada regla de consumo/renovación debe validarse con Producto, Finanzas y asesoría legal del mercado antes de activarse.
+> **Estado:** borrador no contractual ni flujo de cobro implementado. El propietario aprobó que el catálogo y el ciclo contractual completo de suscripción se implementen en Fase 1; esta aprobación de alcance no aprueba planes concretos, precios, moneda, período de prueba, renovación automática, reembolso ni otros términos. Cada regla debe validarse con Producto, Finanzas y asesoría legal del mercado antes de activarse.
 
 ## Ownership
 

@@ -87,7 +87,7 @@ Identifica, cuando existan:
 - Repositorios y transacciones SQL.
 - Modelos, DTO, validadores y reglas de negocio.
 - Productores, consumidores, subjects, streams y consumers de NATS JetStream.
-- Claves, TTL, locks y operaciones de Redis.
+- Claves de caché, TTL, invalidación y operaciones de Redis.
 - Workers, colas, procesos asíncronos y tareas programadas.
 - Webhooks y sus mecanismos de autenticación y reintento.
 - Integraciones con servicios externos.
@@ -219,7 +219,7 @@ No permitas que una prueba pase únicamente porque el mock reproduce el comporta
 
 Prueba las rutas reales mediante solicitudes HTTP al sistema iniciado en un entorno de pruebas.
 
-Incluye:
+Para Redis, incluye:
 
 - Métodos HTTP permitidos y no permitidos.
 - Códigos de estado.
@@ -433,17 +433,15 @@ Incluye:
 - Pérdida de conexiones.
 - Timeouts.
 - Saturación del pool.
-- Operaciones concurrentes.
-- Locks distribuidos, si existen.
-- Contadores y límites de intentos.
-- Rate limiting.
+- Operaciones concurrentes de caché.
+- Confirmación de que Redis no se usa para locks, coordinación, contadores de seguridad ni rate limiting.
 - Recuperación después de una interrupción.
 
 Determina para cada funcionalidad si Redis es una dependencia crítica o si existe una alternativa degradada segura.
 
-No supongas que todo debe continuar sin Redis: algunas operaciones deben fallar de forma controlada para preservar la seguridad.
+No supongas que todo debe continuar sin Redis: las operaciones que dependan de la caché deben degradarse según su política aprobada. Los límites de intentos, rate limiting y demás controles de seguridad deben conservar su autoridad fuera de Redis; comprueba esos controles con Redis desconectado.
 
-Por ejemplo, si Redis controla los límites de intentos de inicio de sesión, verifica que su caída no desactive silenciosamente una protección crítica.
+Si una protección de seguridad depende de que Redis esté disponible para contar, coordinar o limitar operaciones, ese diseño contradice la regla de persistencia del proyecto y no puede aceptarse como un uso válido de Redis.
 
 Si la caché puede omitirse con seguridad, comprueba que el sistema use el origen de datos correcto y mantenga la integridad.
 

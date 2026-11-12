@@ -52,7 +52,7 @@ El ecosistema consta de seis proyectos de interfaz distintos:
 
 1. Business y Tenant Portal son clientes independientes de la misma plataforma empresarial. Consumen el mismo BFF/API de producto, operaciones y contratos tipados, y se sujetan a los mismos controles backend. No se crean endpoints separados solo para distinguir interfaces.
 2. La paridad funcional se mide por capacidad habilitada, actor/rol, operación, permisos, invariantes y resultado. No requiere idénticos componentes, navegación o presentación. La adaptación por plataforma es permitida y no cambia autorización ni reglas de dominio.
-3. App usa el BFF/API de producto para las operaciones de cliente autorizadas y puede usar el BFF público independiente para Discovery. Marketplace usa el BFF público, que consume contratos de PUBLIC. No se concede a ningún cliente acceso directo a gRPC interno o a stores.
+3. App usa el BFF/API de producto para las operaciones de cliente autorizadas y puede usar el BFF público independiente para Discovery cuando esa capacidad se entregue en Fase 9.1. Marketplace usa el BFF público, que consume contratos de PUBLIC. No se concede a ningún cliente acceso directo a gRPC interno o a stores.
 4. Platform Admin consume el BFF administrativo integrado inicialmente en PLATFORM. Cada backend dueño aplica autorización para sus datos y operaciones; el panel no recibe autoridad global implícita sobre otros owners.
 5. Corporate publica contenido institucional estático o servido mediante un contrato público autorizado. No posee reglas de negocio ni accede directamente a servicios, tablas o repositorios. Cualquier tratamiento de datos que se agregue a formularios o integraciones requiere diseño, owner, contrato y controles específicos en su fase.
 6. Los frontends pueden compartir contratos de transporte tipados o componentes de presentación neutrales cuando exista necesidad justificada. No comparten entidades/modelos internos de dominio, sesiones, permisos ni cachés con scope implícito.
@@ -87,7 +87,7 @@ Cada aplicación conserva release, configuración y despliegue acordes a su audi
 
 ### Secuencia de implementación
 
-La decisión es documental en Fase 0 y no implementa ni inicia ahora ningún proyecto. Las aplicaciones se incorporan incrementalmente en las subfases de Fase 5 y en las fases propietarias de su funcionalidad. Onboarding y paneles privados corresponden a los recorridos de 5.1–5.2; superficies web públicas e institucionales a 5.3; experiencias Flutter y capacidades multiplataforma a 5.4. Cada recorrido debe completar contratos, seguridad, pruebas y despliegue antes de declararse aceptado.
+La decisión es documental en Fase 0 y no implementa ni inicia ahora ningún proyecto. Las aplicaciones se incorporan incrementalmente en las subfases de Fase 5 y en las fases propietarias de su funcionalidad. Onboarding y paneles privados corresponden a 5.1–5.2; Tenant Portal web se entrega en 5.2 y ENSAMBRIA Business Flutter en 5.4, compartiendo contratos y paridad por capacidad sin duplicar la app ni sus reglas; las páginas públicas tenant, el flujo base de publicación y Corporate institucional corresponden a 5.3; ENSAMBRIA Marketplace, el directorio y Discovery se entregan en Fase 9.1 sobre las proyecciones tenant de 5.3. Cada recorrido debe completar contratos, seguridad, pruebas y despliegue antes de declararse aceptado.
 
 ## Alternativas evaluadas
 
@@ -103,7 +103,7 @@ La decisión es documental en Fase 0 y no implementa ni inicia ahora ningún pro
 - Hay seis proyectos de interfaz que requieren ciclos de calidad, seguridad, observabilidad y distribución diferenciados; compartir plataforma no elimina ese costo.
 - La paridad entre Business y Tenant Portal debe mantenerse por matriz de capacidades y contratos, no mediante copia de implementación o promesas de igualdad total.
 - La compatibilidad Flutter por sistema operativo, distribución, capacidades nativas y soporte deberá validarse antes de cada release. Este ADR no demuestra que Flutter esté instalado o que un artefacto se construya.
-- Web pública, paneles autenticados y clientes móviles tienen modelos de amenaza y reglas de publicación distintos; no se comparten políticas de caché/indexación indiscriminadamente.
+- Web pública, paneles autenticados y clientes móviles tienen modelos de amenaza y reglas de publicación distintos; no se comparten políticas de caché/indexación indiscriminadamente. Las páginas públicas tenant y Corporate de 5.3 completan su publicación y SEO en esa fase; Marketplace/Discovery de Fase 9.1 consume la proyección base ya aceptada y no es una dependencia de 5.3.
 - La ausencia de contrato de producto, permisos o pruebas reales mantiene bloqueado únicamente el recorrido dependiente.
 
 ## Criterios de aceptación documental

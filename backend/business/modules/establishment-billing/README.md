@@ -11,7 +11,7 @@
 
 Gestionar documentos fiscales asociados a ventas del establecimiento, incluyendo documento, líneas, estados y referencias a un proveedor autorizado. Separa la facturación del establecimiento de la facturación SaaS, que pertenece a PLATFORM.
 
-El diseño no afirma conformidad con DIAN, no selecciona emisor ni proveedor y no habilita emisión. Esos aspectos deben validarse antes de activar la funcionalidad.
+Factus es el proveedor inicial previsto, no exclusivo. El diseño no afirma conformidad con DIAN ni habilita emisión; emisor, capacidades oficiales y requisitos aplicables deben validarse antes de activar la funcionalidad.
 
 ## Operaciones previstas
 
@@ -21,7 +21,7 @@ Solicitar la creación de un documento, consultar su estado y asociar una correc
 
 - Consume ventas confirmadas de Commerce por contrato.
 - Puede referenciar operaciones financieras de CORE; CORE conserva el ownership de pagos.
-- Los adapters de proveedores se desacoplan del dominio y solo se incorporan tras selección y validación.
+- Factus es el adapter inicial previsto; otros proveedores pueden agregarse sin acoplar las reglas del dominio. Ningún adapter se habilita sin verificación oficial, contractual y de los requisitos aplicables.
 - No comparte documentos ni reglas con la facturación SaaS de PLATFORM.
 
 ## Seguridad e integridad
@@ -37,5 +37,6 @@ Este directorio contiene solo la estructura de capas. No hay proveedor, contrato
 ## Fuentes
 
 - [Modelo de dominios](../../../../docs/arquitectura-dominios.md)
+- [ADR-0009: proveedores iniciales y reventa Factus](../../../../docs/adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md)
 - [Requerimiento y roadmap](../../../../docs/requerimiento.md)
 - [Reglas de arquitectura](../../../../ARCHITECTURE_RULES.md)

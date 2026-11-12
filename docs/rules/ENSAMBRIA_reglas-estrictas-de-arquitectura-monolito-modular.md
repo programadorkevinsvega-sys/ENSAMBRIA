@@ -203,17 +203,17 @@ Las pruebas de aceptación incluyen caller permitido/denegado, certificado invá
 
 ## 0.5 Contrato normalizado de método de pago
 
-El webhook saliente conserva una forma común de evento y usa `payment_method` como unión discriminada y versionada. La `type` normalizada define el esquema de `details`; el adapter convierte el protocolo de su proveedor y descarta campos desconocidos/no permitidos. No se devuelve el payload crudo del proveedor. Mínimo inicial:
+El webhook saliente conserva una forma común de evento y usa `payment_method` como unión discriminada y versionada. La `type` normalizada define el esquema de `details`; el adapter convierte el protocolo de su proveedor y descarta campos desconocidos/no permitidos. No se devuelve el payload crudo del proveedor. Wompi es el proveedor inicial previsto para pagos, no exclusivo, conforme a [ADR-0009](../adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md). Solo se exponen métodos que el proveedor seleccionado documente y que ENSAMBRIA haya habilitado:
 
 | `payment_method.type` | `details` normalizado |
 |---|---|
-| `card` | `brand`, `last4`; titular solo si existe necesidad contractual y autorización expresa. No PAN/CVV. |
-| `pse` | `bank_code`, `bank_name`, `payment_reference` si está disponible y permitido. |
-| `crypto` | `asset`, `settlement_currency`, `settlement_amount` decimal string, `network` opcional, `provider_order_id`, `provider_transaction_id` y `network_transaction_id` solo cuando el proveedor los entregue. |
+| `card` | Si el proveedor seleccionado documenta este método: `brand`, `last4`; titular solo si existe necesidad contractual y autorización expresa. No PAN/CVV. |
+| `pse` | Si el proveedor seleccionado documenta este método: `bank_code`, `bank_name`, `payment_reference` si está disponible y permitido. |
+| `crypto` | Extensión futura, no habilitada por la selección inicial de Wompi: `asset`, `settlement_currency`, `settlement_amount` decimal string, `network` opcional, `provider_order_id`, `provider_transaction_id` y `network_transaction_id` solo cuando un proveedor seleccionado los entregue. |
 
-`transaction.amount`/`transaction.currency` siguen expresando el valor comercial facturado en unidades menores enteras. Un importe de liquidación cripto vive en `payment_method.details` como string decimal junto con su activo, porque cada activo puede tener precisión distinta. Nunca usar `f32`/`f64` para importes ni asumir que Binance Pay siempre entrega una red/on-chain transaction ID. `gateway.name` identifica el adapter real (por ejemplo `binance_pay`) y `receipt_id` referencia el recibo oficial disponible.
+`transaction.amount`/`transaction.currency` siguen expresando el valor comercial facturado en unidades menores enteras. Un importe de liquidación cripto vive en `payment_method.details` como string decimal junto con su activo, porque cada activo puede tener precisión distinta. Nunca usar `f32`/`f64` para importes ni asumir que un proveedor entrega campos que su contrato no documenta. `gateway.name` identifica el adapter real (por ejemplo `wompi`) y `receipt_id` referencia el recibo oficial disponible.
 
-El esquema de Binance Pay debe reflejar el contrato vigente de Binance, no extrapolar el HMAC-SHA256 de los webhooks salientes de ENSAMBRIA. Binance documenta firma API HMAC-SHA512 y órdenes con `currency`, importe decimal `totalFee`, `transactionId` y estados propios; el adapter verifica su notificación y firma siguiendo su [regla oficial de firma](https://developers.binance.com/en/docs/products/binance-pay-merchant/api-common) y normaliza la [consulta oficial de órdenes](https://developers.binance.com/en/docs/products/binance-pay-merchant/api-order-query). Verificar de nuevo la documentación y sandbox durante implementación.
+Binance Pay no es el proveedor inicial seleccionado. Si se selecciona en el futuro, su adapter debe reflejar el contrato vigente de Binance y no extrapolar el HMAC-SHA256 de los webhooks salientes de ENSAMBRIA. Binance documenta firma API HMAC-SHA512 y órdenes con `currency`, importe decimal `totalFee`, `transactionId` y estados propios; antes de implementarlo, verificar su [regla oficial de firma](https://developers.binance.com/en/docs/products/binance-pay-merchant/api-common), la [consulta oficial de órdenes](https://developers.binance.com/en/docs/products/binance-pay-merchant/api-order-query) y el sandbox disponible. No se presume su selección ni se limita a ese proveedor la posibilidad de añadir otros adapters.
 
 ### Sincronización realtime obligatoria en todas las fases
 
@@ -247,11 +247,11 @@ La topología de cuatro backends soporta desde el primer cambio varias réplicas
 
 Esta regla es obligatoria y se verifica en cada archivo Rust:
 
-- **Máximo absoluto: 400 líneas físicas por archivo `.rs`**, contando imports, comentarios y líneas en blanco.
-- **Objetivo preferido: alrededor de 200 líneas físicas** cuando la separación preserve cohesión y legibilidad.
-- Un archivo puede acercarse a 400 líneas cuando contiene una función, o un conjunto pequeño de funciones estrechamente relacionadas, que forman una unidad coherente. No se fragmenta código artificialmente solo para alcanzar 200 líneas.
-- Si supera 400 líneas, debe dividirse por responsabilidades en módulos cohesivos; nunca se justifica exceder el máximo por conveniencia.
-- El tamaño es una señal para revisar SRP, no un sustituto del criterio de diseño: se priorizan cohesión, límites claros y ausencia de archivos "bolsa".
+- **Máximo ordinario: 200 líneas con código por archivo `.rs`.**
+- Se permite superar 200 y llegar como máximo a 300 líneas con código únicamente con una excepción técnicamente justificada y documentada antes de implementar o aceptar el cambio.
+- **Máximo absoluto: 300 líneas con código.** No se permite excederlo por ningún motivo.
+- Para el conteo, se cuentan las líneas no vacías que contienen código; se excluyen líneas en blanco y líneas que contienen únicamente comentarios. Una línea con código y comentario inline cuenta como línea de código.
+- El tamaño es una señal para revisar SRP, no un sustituto del criterio de diseño: se priorizan cohesión, límites claros y ausencia de archivos "bolsa". La excepción no debe usarse para evitar una división cohesiva.
 
 ### Un archivo = una responsabilidad pública principal
 
@@ -325,16 +325,16 @@ Evitar `mod.rs` (o el archivo con el nombre del módulo) como contenedor de lóg
 
 `mod.rs` o `lib.rs` solamente puede utilizarse como barrel de `pub mod` y `pub use`, sin lógica propia.
 
-### Cuando un archivo se acerca o supera 400 líneas
+### Cuando un archivo se acerca o supera 200 líneas con código
 
 Las estrategias de división correctas, en orden de preferencia:
 
 1. Extraer funciones privadas reutilizables o con responsabilidad propia a submódulos cohesivos en la misma carpeta.
 2. Extraer subtipos/DTOs a su propio archivo dentro de `dto/` o `value_objects/` según corresponda.
 3. Si una función o servicio mezcla responsabilidades, dividirlo en casos de uso, servicios o handlers distintos.
-4. Si una función larga representa una única operación coherente, puede permanecer en un archivo de hasta 400 líneas; no se divide únicamente para cumplir una preferencia estética de 200 líneas.
+4. Si una función larga representa una única operación coherente y no puede dividirse sin perder cohesión, se puede solicitar una excepción documentada, sin superar 300 líneas con código.
 
-El criterio principal es SRP y cohesión. Ningún archivo puede superar 400 líneas físicas.
+El criterio principal es SRP y cohesión. El límite ordinario es 200 líneas con código; el máximo absoluto, incluso con excepción aprobada, es 300.
 
 Esta regla aplica a TODAS las capas:
 
@@ -2828,7 +2828,7 @@ Antes de dar por terminada una funcionalidad, verificar:
 
 ## Archivos
 
-- [ ] Ningún archivo `.rs` supera 400 líneas físicas; se prefiere aproximadamente 200 cuando la cohesión lo permita.
+- [ ] Ningún archivo `.rs` supera 200 líneas con código, salvo excepción técnicamente justificada y documentada; ningún archivo supera el máximo absoluto de 300 líneas con código.
 - [ ] No existen archivos "bolsa" (`utils.rs`).
 - [ ] Una responsabilidad pública principal por archivo.
 - [ ] El nombre del archivo coincide con su export principal en `snake_case`.
@@ -3005,7 +3005,8 @@ Antes de entregar código Rust, verifica que NO hiciste ninguna de estas cosas:
 - [ ] Usar Redis como única fuente de verdad de un dato crítico.
 - [ ] Añadir al crate `shared-kernel` algo que en realidad pertenece a un solo módulo.
 - [ ] Nombrar structs o traits genéricos como `Manager`, `Helper`, `Util` o `Service` sin responsabilidad clara y acotada.
-- [ ] Generar un archivo `.rs` de más de 400 líneas físicas.
+- [ ] Generar un archivo `.rs` de más de 200 líneas con código sin excepción técnicamente justificada y documentada.
+- [ ] Superar 300 líneas con código en cualquier archivo `.rs`.
 - [ ] Crear un archivo "bolsa" con múltiples structs/funciones no relacionadas.
 - [ ] Usar `mod.rs` o `lib.rs` para escribir lógica en lugar de re-exports limpios.
 - [ ] Escribir lógica de negocio dentro de handlers REST del BFF.

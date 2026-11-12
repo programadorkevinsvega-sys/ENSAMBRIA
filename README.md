@@ -121,12 +121,17 @@ El [manifiesto Cargo](Cargo.toml) confirma Rust Edition 2024 para el paquete `EN
 
 ## Estructura del repositorio
 
-La estructura disponible se concentra en:
+El monorepo contiene las áreas arquitectónicas previstas:
 
-- `docs/`: requerimientos y reglas del proyecto.
-- `.github/agents/` y `.github/skills/`: perfiles y procedimientos de ingeniería.
-- `scripts/validate_engineering_skills.py`: validador del registro de Skills y perfiles.
-- `ARCHITECTURE_RULES.md` y `AGENTS.md`: contrato arquitectónico e instrucciones del repositorio.
+- `backend/`: límites de CORE, BUSINESS, PLATFORM y PUBLIC, con documentación de sus módulos.
+- `apps/` y `bff-public/`: ubicación del BFF de producto y del BFF público.
+- `frontends/` y `flutter/`: proyectos web y aplicaciones Flutter previstos.
+- `crates/`, `contracts/`, `packages/`, `config/` e `infrastructure/`: bibliotecas técnicas, contratos y configuración/infraestructura compartidas.
+- `tests/`, `tools/` y `scripts/`: ubicaciones para pruebas, herramientas y validaciones.
+- `docs/` y `.github/`: documentación normativa, perfiles y configuración de colaboración.
+- `ARCHITECTURE_RULES.md`, `AGENTS.md` y `ROADMAP.md`: contrato arquitectónico, instrucciones y secuencia del proyecto.
+
+Estas rutas describen la organización del repositorio y no acreditan por sí solas implementaciones ejecutables. El estado actual y sus límites se describen en la introducción de este README.
 
 No hay instrucciones de instalación, configuración de runtime o despliegue mientras no existan los componentes ejecutables y sus dependencias verificadas.
 
@@ -155,6 +160,9 @@ El repositorio no presenta configuración de despliegue o runtime de infraestruc
 - [Registro de Fase 0](docs/registro-fase-0-descubrimiento-arquitectura.md)
 - [ADR-0004: plataforma multiproducto](docs/adr/ADR-0004-plataforma-multiproducto.md)
 - [ADR-0006: arquitectura multiplataforma y seis aplicaciones](docs/adr/ADR-0006-arquitectura-multiplataforma-aplicaciones.md)
+- [ADR-0007: separación de contextos comerciales y fiscales SaaS](docs/adr/ADR-0007-separacion-contextos-facturacion-saas.md)
+- [ADR-0008: capacidades compartidas y verticales de BUSINESS](docs/adr/ADR-0008-modulos-compartidos-y-verticales-business.md)
+- [ADR-0009: proveedores iniciales y capacidad Factus](docs/adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md)
 - [Gobierno arquitectónico y documental](docs/rules/ENSAMBRIA_architecture_doc_engineering_governance_standard.md)
 - [Gobierno del repositorio y contribuciones](docs/rules/ENSAMBRIA_github_repository_governance_and_engineering_rules.md)
 - [Estándar de README y documentación](docs/rules/ENSAMBRIA_README_Documentation_Quality_Security_Standard.md)

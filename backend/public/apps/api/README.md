@@ -15,7 +15,7 @@ No es el BFF público ni la API HTTP para navegadores. El BFF público adapta RE
 ## Responsabilidades previstas
 
 - Componer los módulos PUBLIC que se implementen en el proceso.
-- Atender consultas sobre datos proyectados y autorizados mediante contratos explícitos.
+- Atender consultas sobre datos proyectados y autorizados mediante contratos explícitos. Las páginas públicas tenant consumen la proyección base aceptada en Fase 5.3; Discovery/Marketplace se incorpora en Fase 9.1 sobre esa proyección, sin ser precondición de las páginas de Fase 5.
 - Mantener configuración, credenciales, artefactos y despliegue propios de PUBLIC.
 
 Los cambios durables de proyecciones se reciben desde sus owners mediante los mecanismos aprobados; esta API no consulta directamente los stores privados de BUSINESS ni de otros backends.

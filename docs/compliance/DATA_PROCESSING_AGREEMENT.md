@@ -53,7 +53,7 @@ Anexos esperados de una versión final: inventario de operaciones; instrucciones
 
 | Aprobación | Responsable que falta |
 |---|---|
-| Determinación de roles y bases por operación | Abogado competente / responsable de privacidad designado |
+| Determinación de roles y bases por operación | Abogado competente distinto del responsable interno DPO/Legal; el responsable coordina el registro y seguimiento |
 | Anexo de finalidades, datos e instrucciones | Cada owner de producto/cliente contratante |
 | Medidas y prueba de controles reales | Propietario técnico / seguridad |
 | Subencargados, transferencias y retención | Legal, seguridad y owner del servicio |

@@ -147,8 +147,8 @@ UUID v7 es el estándar canónico predeterminado de ENSAMBRIA para IDs de entida
 
 BUSINESS es propietario de la operación de cada establecimiento: configuración operativa, horarios, recursos físicos, personal y reglas comerciales. CORE conserva las relaciones centrales y el contexto de seguridad; no duplica las reglas operativas de BUSINESS.
 
-### Gestión de capacidades y planes
-Construir desde el principio un sistema de entitlements o capacidades contratadas.
+### Evaluación de entitlements y capacidades contratadas (CORE)
+Construir desde el principio en CORE la evaluación runtime de entitlements y capacidades contratadas.
 
 Debe permitir:
 - Activar y desactivar módulos.
@@ -165,7 +165,7 @@ Debe permitir:
 - Gestionar excepciones comerciales autorizadas.
 
 La activación de un módulo debe validarse en el backend. Ocultar una pantalla en el frontend nunca debe considerarse una medida de seguridad suficiente.
-El catálogo y las suscripciones SaaS son propiedad de PLATFORM; CORE valida y aplica los entitlements autenticados que recibe por el contrato aprobado. El plan SaaS llamado **Franquicia** es una oferta comercial y no equivale por sí mismo al módulo funcional de gestión de franquicias/cadenas de BUSINESS.
+El catálogo de planes, las suscripciones y las excepciones comerciales son propiedad de PLATFORM; CORE no los define ni administra. CORE valida y aplica los entitlements autenticados que recibe mediante el contrato aprobado. El plan SaaS llamado **Franquicia** es una oferta comercial y no equivale por sí mismo al módulo funcional de gestión de franquicias/cadenas de BUSINESS.
 
 ### Motor de reservas y disponibilidad
 El CORE debe proporcionar la infraestructura común para gestionar disponibilidad y reservas.
@@ -291,7 +291,7 @@ El modelo es reutilizable por otros sectores sin declararlos soportados: cada ve
 | Servicios móviles, cobertura y prestación | BUSINESS posee cobertura, factibilidad de desplazamiento, reglas operativas y estado de prestación; no posee el estado común de reserva. | Consulta/versiones con CORE para reservar; ubicación/dirección minimizada; eventos solo para consumidores y cambios persistidos realmente requeridos. | Cimientos funcionales con servicios Fase 2; workforce/cobertura, asignación y operación completa Fase 4. |
 | CRM, miembros y clientes | BUSINESS posee fichas, historial y preferencias; CORE mantiene solo identidad/membresía/permiso. | Contratos autenticados por BFF; no compartir ni fusionar historial por identidad global. | CRM Fase 3. |
 | Planes y relación SaaS | PLATFORM mantiene oferta y relación comercial; CORE no asigna políticas comerciales. | Alta durable e idempotente conforme ADR-0002; cualquier plan/precio/entitlement necesita acción comercial explícita. | Inicio pendiente de onboarding en Fase 1; resto según roadmap PLATFORM. |
-| Discovery y perfil profesional público | PUBLIC posee proyecciones mínimas y autorizadas; BUSINESS conserva el contenido fuente. | Publicación/revocación versionada por contrato; nunca publicar domicilio del cliente ni datos privados. | Superficie pública según Fase 5 y Marketplace Fase 9. |
+| Discovery y perfil profesional público | PUBLIC posee proyecciones mínimas y autorizadas; BUSINESS conserva el contenido fuente. | Publicación/revocación versionada por contrato; nunca publicar domicilio del cliente ni datos privados. | Páginas públicas tenant y proyección base en Fase 5.3; directorio/Discovery/Marketplace en Fase 9.1 sobre esa proyección. |
 
 Fase 0 documenta el diseño y los casos, sin implementar formularios, esquemas, APIs, eventos, contratos ejecutables ni infraestructura. La aceptación futura debe incluir, como mínimo: titular natural que crea tenant sin persona jurídica, dirección comercial ni establecimiento; tenant que inicia sin sucursal y luego agrega establecimiento sin cambiar IDs; profesional que agrega colaboradores y permisos acotados; organización que agrega sucursales sin duplicar cuenta, tenant o historial; combinación de modalidades permitidas/prohibidas; cobertura no elegible, zona excluida y dato geográfico insuficiente; dos reservas simultáneas incompatibles o con desplazamiento imposible; reintentos/duplicados y fallo en cada frontera CORE–BUSINESS–PLATFORM; transición de prestación no autorizada; cliente y dirección ajenos; ubicación privada ausente de Discovery, logs y eventos; revocación, cancelación, cambio de cobertura y recuperación por cursor/snapshot. Los tests reales se ejecutan en las fases propietarias y con las dependencias correspondientes; esta lista no afirma que estén escritos o ejecutados.
 
@@ -835,7 +835,7 @@ Debe permitir:
 
 La gestión de tenants en esta consola es comercial y administrativa, no un proceso de alta manual de cuentas. El operador registra su tenant mediante el flujo de autoservicio cuyo owner de identidad/tenancy es CORE; el hecho confirmado inicia automáticamente el registro de relación comercial de PLATFORM conforme a ADR-0002. El administrador de PLATFORM no crea manualmente tenants, identidades de operadores ni cuentas de clientes de los establecimientos. La administración global tampoco sustituye el registro de clientes que realizan estos en sus páginas asociadas al tenant.
 
-El catálogo inicial de planes SaaS incluye **Básico, Profesional, Empresarial y Franquicia**. PLATFORM posee la definición/versionado de planes, precios, contratos, suscripciones y facturación SaaS. CORE valida y aplica los entitlements efectivos y ejecuta los pagos/ledger solicitados por PLATFORM. BUSINESS y PUBLIC no administran suscripciones SaaS. El plan comercial Franquicia no equivale al módulo funcional de cadenas de BUSINESS.
+El catálogo inicial de planes SaaS incluye **Básico, Profesional, Empresarial y Franquicia**. PLATFORM posee la definición/versionado de planes, precios, contratos, suscripciones y facturación SaaS. CORE valida y aplica los entitlements efectivos y ejecuta los pagos/ledger solicitados por PLATFORM. BUSINESS y PUBLIC no administran suscripciones SaaS. El plan comercial Franquicia no equivale al módulo funcional de cadenas de BUSINESS. El catálogo versionado y el ciclo contractual completo de suscripción se implementan en Fase 1 mediante operaciones autorizadas por el BFF; los cambios persistidos visibles requieren sincronización durable/realtime y recuperación. La consola de administración global permanece en Fase 5 y el billing, cobro y facturación SaaS en Fase 7. Los términos, precios, elegibilidad y transiciones concretos requieren aprobación de Producto/Finanzas antes de activar cada oferta.
 
 Separar completamente la administración del SaaS de la administración de los establecimientos.
 
@@ -1035,13 +1035,13 @@ La arquitectura y criterios SEO se fijan en Fase 0 según [ENSAMBRIA_Open_Graph_
 
 CORE es el único propietario del procesamiento de pagos y del registro transaccional financiero. Atiende operaciones iniciadas por PLATFORM (suscripciones SaaS) y BUSINESS (ventas, servicios y reservas de establecimientos), siempre con contextos de cuenta, titularidad, credenciales, callbacks e idempotencia separados. PLATFORM conserva la regla comercial y facturación SaaS; BUSINESS conserva pedidos, caja y facturación comercial tenant.
 
-Verificar la documentación oficial vigente y las capacidades disponibles antes de integrar; no asumir soporte para operaciones que no estén documentadas. Implementar adapters y configuración separados por backend/dominio, con credenciales, cuentas/conexiones, callbacks, auditoría, idempotencia, estados y registros financieros aislados. Una operación de tenant nunca puede modificar, consultar ni liquidar como una operación de ENSAMBRIA y viceversa. No acoplar las reglas de negocio al SDK ni al modelo de Wompi.
+Wompi es el proveedor inicial previsto, no exclusivo. Verificar la documentación oficial vigente y las capacidades disponibles antes de integrar; no asumir soporte para operaciones que no estén documentadas. Implementar adapters y configuración separados por backend/dominio, con credenciales, cuentas/conexiones, callbacks, auditoría, idempotencia, estados y registros financieros aislados. Una operación de tenant nunca puede modificar, consultar ni liquidar como una operación de ENSAMBRIA y viceversa. No acoplar las reglas de negocio al SDK ni al modelo de Wompi; permitir incorporar otros proveedores mediante adapters.
 
 La titularidad de las cuentas de liquidación y el modelo de credenciales para los cobros de los tenants se definirá según los productos/condiciones de Wompi vigentes; no se presume que los tenants compartan la cuenta de ENSAMBRIA.
 
 ## 11.2 Facturación electrónica con Factus
 
-Usar Factus en dos bounded contexts separados: PLATFORM emite los documentos correspondientes a obligaciones de ENSAMBRIA; BUSINESS emite las facturas electrónicas de cada establecimiento. La integración de un establecimiento no reutiliza la configuración, credenciales, callbacks, documentos ni historial fiscal de ENSAMBRIA.
+Factus es el proveedor inicial previsto, no exclusivo. Usarlo en dos bounded contexts separados: PLATFORM emite los documentos correspondientes a obligaciones de ENSAMBRIA; BUSINESS emite las facturas electrónicas de cada establecimiento. La integración de un establecimiento no reutiliza la configuración, credenciales, callbacks, documentos ni historial fiscal de ENSAMBRIA. Los adapters deben permitir agregar otros proveedores sin acoplar las reglas del dominio a Factus.
 
 Debe contemplar:
 - Credenciales/conexiones, configuración tributaria, datos del emisor y resoluciones independientes por dueño y emisor.
@@ -1052,6 +1052,8 @@ Debe contemplar:
 Verificar documentación oficial, responsabilidades y capacidades de Factus para cada ámbito; no inventar capacidades ni reutilizar las credenciales, callbacks, datos o estados de otra integración.
 
 La facturación electrónica debe ser configurable por país y jurisdicción para facilitar futuras expansiones.
+
+PLATFORM puede comercializar a sus tenants capacidad de facturación electrónica Factus como una oferta/capacidad de producto. PLATFORM mantiene la oferta y las condiciones comerciales aprobadas; BUSINESS conserva la operación fiscal y los documentos de cada establecimiento. La reventa no convierte a ENSAMBRIA en emisor ni centraliza credenciales o configuración de emisores. Antes de habilitarla, verificar la capacidad contractual/técnica de partner o reventa con Factus y aprobar las condiciones comerciales y fiscales aplicables; no asumir cuotas, precios, capacidad agrupada ni un modelo de credenciales no documentado. La separación y las condiciones de esta capacidad se rigen por [ADR-0009](adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md).
 
 ## 11.3 Separación financiera
 
@@ -1476,8 +1478,9 @@ Estas condiciones son obligatorias.
 15. No marcar funcionalidades como terminadas sin evidencia verificable.
 
 Para Rust:
-- Preferir archivos de menos de 200 líneas.
-- Ningún archivo debe superar 400 líneas salvo excepción técnicamente justificada y documentada.
+- Mantener cada archivo `.rs` en un máximo de 200 líneas con código.
+- Un archivo puede superar 200 y llegar como máximo a 300 líneas con código solo mediante una excepción técnicamente justificada y documentada.
+- Ningún archivo `.rs` puede superar 300 líneas con código. Para este límite se cuentan las líneas no vacías que contienen código; se excluyen líneas en blanco y las que contienen únicamente comentarios.
 - Aplicar formato.
 - Clippy sin warnings.
 - Pruebas completas.
@@ -1645,7 +1648,7 @@ La Fase 0 define la topología objetivo completa; no exige implementar simultán
 - Organizaciones.
 - Sucursales.
 - Capacidades.
-- Catálogo de planes SaaS y suscripciones en PLATFORM (Básico, Profesional, Empresarial y Franquicia); CORE evalúa/aplica los entitlements efectivos según su contrato. El plan comercial Franquicia no reemplaza el módulo de cadenas de BUSINESS de la Fase 10.
+- Catálogo versionado de planes y ciclo contractual completo de suscripciones en PLATFORM (Básico, Profesional, Empresarial y Franquicia); CORE evalúa/aplica los entitlements efectivos según su contrato. La suscripción requiere una acción explícita autorizada y nunca se asigna por el evento de alta del tenant. Las transiciones visibles se sincronizan con mecanismos durables/realtime y recuperación autorizada. Billing, cobros y facturas SaaS permanecen en Fase 7; la consola global, en Fase 5. El plan comercial Franquicia no reemplaza el módulo de cadenas de BUSINESS de la Fase 10.
 - Motor de disponibilidad.
 - Reservas comunes.
 - Abstracción de pagos.
@@ -1720,11 +1723,11 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 ## FASE 5 — Web y aplicaciones
 
 - Incorporar el onboarding progresivo de las tres modalidades descritas en §2.2; permitir guardar y reanudar el progreso, recuperación idempotente y configuración sin datos de local/sociedad/equipo innecesarios. Completar la superficie por BFF y owners reales; no declarar un formulario aislado como flujo aceptado.
-- ENSAMBRIA Business (Flutter) y ENSAMBRIA Tenant Portal (Next.js) exponen las capacidades empresariales implementadas sobre los mismos BFF, contratos, roles y autorización; entregar y probar paridad por caso de uso, sin duplicar reglas.
+- ENSAMBRIA Tenant Portal (Next.js) entrega la experiencia empresarial web en 5.2. ENSAMBRIA Business (Flutter) se entrega en 5.4; ambos exponen las capacidades empresariales implementadas sobre el mismo BFF, contratos, roles y autorización, y prueban paridad por caso de uso sin duplicar reglas.
 - ENSAMBRIA Platform Admin (Next.js) ofrece la administración global privada mediante PLATFORM y su BFF integrado; no es una consola tenant.
 - Portal de empleados.
 - Vistas privadas de agenda, reservas asignadas, comisiones, metas y resultados según rol.
-- ENSAMBRIA Marketplace (Next.js) ofrece páginas públicas/Discovery desde proyecciones autorizadas de PUBLIC; BUSINESS conserva el contenido fuente.
+- En 5.3, las páginas públicas tenant consumen proyecciones autorizadas de PUBLIC; BUSINESS conserva el contenido fuente y el control de publicación. Esta subfase entrega la publicación y proyección base versionada y durable necesarias para esas páginas, incluyendo Outbox/JetStream, señal realtime y recuperación REST por cursor/snapshot autorizado para cambios visibles; no entrega el directorio, Discovery ni la experiencia Marketplace.
 - ENSAMBRIA Corporate (Next.js) presenta contenido institucional/comercial público propiedad de PLATFORM; contenido dinámico requiere contrato público autorizado y no accede directamente a backend.
 - ENSAMBRIA App (Flutter) ofrece los recorridos móviles de clientes aprobados, sin capacidades administrativas de tenant.
 - SEO técnico completo desde el primer despliegue de cada web pública, incluida la web tenant: renderizado rastreable, metadatos por ruta, canonical/dominio, sitemap/robots, Open Graph y datos estructurados autorizados.
@@ -1749,8 +1752,8 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 
 ## FASE 7 — Facturación e integraciones
 
-- Integración de pagos Wompi mediante CORE para pagos SaaS solicitados por PLATFORM y ventas/reservas solicitadas por BUSINESS, con contextos de cuenta, credenciales, callbacks y ledger aislados.
-- Integración de facturación electrónica Factus en PLATFORM para documentos SaaS de ENSAMBRIA y en BUSINESS para cada establecimiento, con emisores/configuraciones separados.
+- Integración inicial de pagos Wompi mediante CORE para pagos SaaS solicitados por PLATFORM y ventas/reservas solicitadas por BUSINESS, con contextos de cuenta, credenciales, callbacks y ledger aislados; adapters extensibles a otros proveedores.
+- Integración inicial de facturación electrónica Factus en PLATFORM para documentos SaaS de ENSAMBRIA y en BUSINESS para cada establecimiento, con emisores/configuraciones separados y adapters extensibles a otros proveedores; comercialización de capacidad Factus conforme a ADR-0009 y tras validar sus condiciones oficiales.
 - DIAN.
 - API pública.
 - Webhooks.
@@ -1773,7 +1776,8 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 
 ## FASE 9 — Marketplace y comercio electrónico
 
-- PUBLIC: directorio, geolocalización, páginas y proyecciones públicas autorizadas, reseñas verificadas, búsqueda y atribución del canal.
+- ENSAMBRIA Marketplace (Next.js) y PUBLIC: directorio, Discovery, búsqueda, geolocalización, fichas públicas, reseñas verificadas y atribución del canal. Se construyen sobre las proyecciones tenant autorizadas y aceptadas en Fase 5.3; esta dependencia es unidireccional y no requiere una superficie Marketplace previa.
+- Ampliar en PUBLIC las proyecciones autorizadas de BUSINESS para las fichas, filtros y datos de Marketplace; BUSINESS conserva el contenido fuente y puede retirar la publicación conforme al contrato versionado.
 - Publicar perfiles y modalidades móviles solo con autorización explícita y campos minimizados; nunca exponer domicilios de clientes, ubicaciones privadas de profesionales o direcciones no autorizadas. Revalidar cobertura/disponibilidad con los owners antes de reservar.
 - BUSINESS: tiendas, catálogo comercial, carritos, pedidos, inventario y reglas de venta.
 - BUSINESS: mostrar recomendaciones de venta cruzada elegibles en el flujo comercial y validar precio, compatibilidad, disponibilidad y existencias al confirmar; una recomendación no incorpora artículos ni genera pedidos/cobros sin acción explícita.

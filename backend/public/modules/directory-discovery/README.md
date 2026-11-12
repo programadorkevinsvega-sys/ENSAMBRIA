@@ -5,7 +5,7 @@
 - **Tipo:** bounded context de PUBLIC.
 - **Ubicación:** `backend/public/modules/directory-discovery/`.
 - **Estado:** diseño documentado; no hay implementación funcional.
-- **Fase prevista:** directorio y Discovery de Marketplace en Fase 9; SEO y metadata se implementan desde Fase 1 para cada ruta pública introducida.
+- **Fase prevista:** directorio y Discovery de Marketplace en Fase 9.1, sobre la proyección tenant autorizada y aceptada en Fase 5.3; SEO y metadata se implementan desde Fase 1 para cada ruta pública introducida.
 
 ## Propósito y responsabilidad
 

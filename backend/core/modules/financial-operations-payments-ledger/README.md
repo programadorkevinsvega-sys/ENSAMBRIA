@@ -18,9 +18,9 @@ Iniciar, confirmar o revertir una operación y consultar el ledger autorizado. L
 ## Límites e integraciones
 
 - gRPC atiende solicitudes que requieren respuesta inmediata; Outbox distribuye hechos persistidos cuando haya consumidores durables.
-- Adapters de proveedores permanecen desacoplados, separados por proveedor, workload y caso de uso.
+- Wompi es el proveedor inicial previsto, no exclusivo; los adapters permanecen desacoplados y separados por proveedor, workload y caso de uso.
 - BUSINESS y PLATFORM no escriben el ledger ni acceden a sus tablas.
-- Un proveedor solo se integra tras verificar documentación oficial, contrato, sandbox y autorizaciones requeridas.
+- Wompi no está configurado ni integrado. Cualquier proveedor solo se integra tras verificar documentación oficial, contrato, sandbox y autorizaciones requeridas.
 
 ## Seguridad e integridad
 
@@ -36,4 +36,5 @@ Solo existe la estructura de capas. No hay proveedor, credenciales, contratos ej
 
 - [Modelo de dominios](../../../../docs/arquitectura-dominios.md)
 - [Requerimiento y roadmap](../../../../docs/requerimiento.md)
+- [ADR-0009: proveedores iniciales y reventa Factus](../../../../docs/adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md)
 - [Reglas de arquitectura](../../../../ARCHITECTURE_RULES.md)

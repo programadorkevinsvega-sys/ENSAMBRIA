@@ -119,19 +119,13 @@ En ENSAMBRIA, los adaptadores externos para facturación, notificaciones, pagos 
 
 Estas reglas aplican al coordinador y a todo agente/subagente que trabaje en ENSAMBRIA. Son instrucciones operativas y no sustituyen las fuentes normativas del proyecto.
 
-### Precedencia
+### Flujo de consulta y resolución de conflictos
 
-Sujeta a las instrucciones de plataforma, seguridad y políticas superiores, aplica este orden:
+Estas instrucciones operativas dirigen al agente a [ARCHITECTURE_RULES.md](ARCHITECTURE_RULES.md). El contrato arquitectónico dirige al agente a [docs/requerimiento.md](docs/requerimiento.md) para visión, alcance, fases y aceptación del producto, y a [docs/arquitectura-dominios.md](docs/arquitectura-dominios.md) para ownership y diseño de dominios. Antes de planificar o realizar cualquier cambio, el agente debe consultar todos los documentos aplicables de [`docs/rules/`](docs/rules/); cada uno es normativo y obligatorio dentro de su materia. También debe revisar los ADR y documentación de fase que afecten el alcance.
 
-1. Instrucciones explícitas del propietario para la tarea vigente y decisiones del propietario expresamente aprobadas y formalmente registradas.
-2. ADR ratificados y contratos formalmente aprobados.
-3. [ARCHITECTURE_RULES.md](ARCHITECTURE_RULES.md).
-4. Reglas técnicas obligatorias aplicables de `docs/rules/`, dentro de su ámbito; las reglas de monolito modular Rust complementan el contrato central para detalles de implementación y no redefinen topología ni ownership.
-5. Requisitos y criterios de aceptación de la fase en [docs/requerimiento.md](docs/requerimiento.md) y su documentación de fase.
-6. Instrucciones específicas de la tarea.
-7. Procedimientos operativos de las Skills.
+Esta ruta de consulta no establece una precedencia global entre las fuentes. Se aplican conjuntamente dentro de su autoridad y ámbito: `ARCHITECTURE_RULES.md` define topología, fronteras y responsabilidades de ENSAMBRIA; `docs/requerimiento.md` define el producto, su alcance, fases y aceptación; `docs/arquitectura-dominios.md` detalla dominios y ownership; cada documento de `docs/rules/` establece requisitos obligatorios especializados; ADR aprobados registran decisiones en su alcance. El roadmap organiza la secuencia, sin anular ni reemplazar esas fuentes.
 
-Una propuesta de ADR no es una decisión aprobada. Una instrucción de tarea establece el objetivo y las restricciones del trabajo, pero no modifica por sí sola una fuente normativa. Para cambiar una norma, la instrucción debe identificar explícitamente la decisión aprobada por el propietario; esta se registra en el ADR/contrato y las fuentes afectadas mediante el proceso de gobierno antes de implementar el alcance dependiente. Mientras eso no ocurra, se conserva el requisito vigente y se detiene el alcance en conflicto. Ningún agente puede conceder aprobación legal o especializada en nombre de su responsable.
+Si una instrucción específica del propietario propone cambiar una decisión normativa, solo puede hacerlo cuando identifique explícitamente la decisión aprobada; esta debe registrarse y reflejarse, mediante el proceso de gobierno, en las fuentes afectadas antes de implementar el alcance dependiente. Una propuesta de ADR no equivale a aprobación. Si dos fuentes aplicables presentan una contradicción real que no pueda resolverse por sus ámbitos, el agente debe documentarla, detener únicamente el trabajo afectado y solicitar una decisión del propietario; luego se armonizan las fuentes correspondientes. No se descarta silenciosamente ninguna regla ni se presume que una fuente prevalece globalmente por su posición en el flujo de consulta. Ningún agente puede conceder aprobación legal o especializada en nombre de su responsable.
 
 ### Ciclo y estados de trabajo
 

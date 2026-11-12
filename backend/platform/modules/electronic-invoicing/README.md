@@ -4,7 +4,7 @@
 
 - **Tipo:** bounded context de PLATFORM.
 - **Ubicación:** `backend/platform/modules/electronic-invoicing/`.
-- **Estado:** diseño documentado; no hay implementación funcional ni proveedor configurado.
+- **Estado:** diseño documentado; Factus es el proveedor inicial previsto, no exclusivo; no hay implementación funcional ni proveedor configurado.
 - **Fase prevista:** Fase 7.
 
 ## Propósito y responsabilidad
@@ -13,7 +13,7 @@ Transmitir y dar seguimiento técnico a documentos SaaS autorizados mediante un 
 
 ## Operaciones previstas
 
-Recibir por contrato una solicitud referenciada a [`saas-invoices`](../saas-invoices/README.md), transmitirla cuando el proveedor y el emisor estén validados y devolver el resultado técnico correspondiente. La documentación oficial vigente de Factus y los requisitos aplicables se verifican durante la implementación.
+Recibir por contrato una solicitud referenciada a [`saas-invoices`](../saas-invoices/README.md), transmitirla cuando el proveedor y el emisor estén validados y devolver el resultado técnico correspondiente. Factus es el proveedor inicial previsto; se pueden agregar otros proveedores mediante adapters. La documentación oficial vigente de Factus y los requisitos aplicables se verifican durante la implementación.
 
 ## Límites e integraciones
 
@@ -21,6 +21,7 @@ Recibir por contrato una solicitud referenciada a [`saas-invoices`](../saas-invo
 - No comparte credenciales, callbacks, documentos o historial con la integración Factus de BUSINESS.
 - No procesa pagos ni modifica el ledger de CORE.
 - No declara soporte de proveedor, endpoints, estados o conformidad DIAN antes de su verificación.
+- PLATFORM puede comercializar capacidad Factus; esta oferta no transfiere a PLATFORM la propiedad de facturas de BUSINESS ni permite compartir emisores o credenciales.
 
 ## Seguridad e integridad
 
@@ -36,5 +37,6 @@ Solo existe la estructura de capas. No hay adapter, credenciales, callback o emi
 
 - [Modelo de dominios](../../../../docs/arquitectura-dominios.md)
 - [ADR-0007: separación de contextos SaaS](../../../../docs/adr/ADR-0007-separacion-contextos-facturacion-saas.md)
+- [ADR-0009: proveedores iniciales y reventa Factus](../../../../docs/adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md)
 - [Requerimiento y roadmap](../../../../docs/requerimiento.md)
 - [Reglas de arquitectura](../../../../ARCHITECTURE_RULES.md)

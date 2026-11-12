@@ -15,7 +15,7 @@ Esta matriz se relaciona con [LEGAL_JURISDICTIONS.md](LEGAL_JURISDICTIONS.md), [
 | Backend → Redis/NATS/observabilidad | Claves TTL, hechos minimizados, métricas/logs/trazas | Infraestructura no desplegada | Clasificación/payload minimizado, región, retención y ACL por entorno/workload; no PII/secretos en fan-out/logs. |
 | Backend → almacenamiento R2 u otro objeto | Archivos, exportaciones e imágenes | Cloudflare R2 es adapter inicial previsto en la arquitectura, no configurado | Confirmar contrato, regiones, subprocesadores, acceso, lifecycle, borrado y salvaguardas antes de enviar archivos reales. |
 | Frontend → Sentry/analítica | Errores, release, datos técnicos potencialmente identificables | Sentry frontend requerido por norma; proyecto/región/contrato/configuración no verificados; analítica/replay sin aprobación | Minimizar/redactar, validar ubicación/retención, transferencias, términos, DPA y acceso; replay permanece deshabilitado. |
-| Servicio → email/SMS/pagos/otros | Contacto, operación o referencia financiera | Proveedores no seleccionados ni integrados | Evaluación de subencargado y sandbox, datos transmitidos, ubicación, eliminación y base contractual/legal. |
+| Servicio → email/SMS/pagos/otros | Contacto, operación o referencia financiera | Wompi y Factus son proveedores iniciales previstos; no hay integraciones ni ubicaciones/regiones verificadas. Otros proveedores aún no seleccionados. | Evaluación de subencargado y sandbox, datos transmitidos, ubicación, eliminación y base contractual/legal. |
 
 ## Reglas de diseño
 

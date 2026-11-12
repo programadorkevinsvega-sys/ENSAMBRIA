@@ -14,7 +14,7 @@ Cada documento mantiene estados distintos, versionados y auditables:
 
 - **Preparación documental:** investigación de fuentes oficiales aplicables y redacción vinculada a las funciones reales conocidas. Los hechos de producto, comerciales o jurídicos todavía desconocidos se registran como pendientes; no se completan mediante conjeturas.
 - **Integración técnica:** contenido completo para el alcance aprobado, disponible en las superficies correspondientes y conectado con versionado, consulta, aceptación/consentimiento y evidencia cuando aplique. La revisión de un abogado no es una precondición general para desarrollar o integrar el mecanismo. No se marca este estado hasta que las rutas, formularios, permisos y pruebas correspondientes existan y pasen.
-- **Revisión profesional:** revisión posterior por abogado competente y responsable de privacidad designado, registrada por jurisdicción, documento, versión, fecha, alcance y resultado. No se infiere aprobación ni certificación del mero hecho de integrar o aceptar una versión.
+- **Revisión profesional:** revisión posterior por abogado competente distinto del propietario que asumió la responsabilidad interna DPO/Legal, registrada por jurisdicción, documento, versión, fecha, alcance y resultado. La responsabilidad interna DPO/Legal y la revisión profesional son funciones distintas; la primera no sustituye la segunda. No se infiere aprobación ni certificación del mero hecho de integrar o aceptar una versión.
 
 Mientras la revisión profesional de la versión publicada esté pendiente, cada página legal y punto de interacción pertinente debe mostrar, de manera visible y accesible, el aviso siguiente, sin impedir la consulta:
 

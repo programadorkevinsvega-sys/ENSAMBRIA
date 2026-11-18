@@ -1,9 +1,9 @@
 # ADR-0010: Gestión de dependencias con Dependabot y Rulesets como complemento de Branch Protection
 
 **Estado:** decisión de gobierno aceptada en el corte anterior; configuración actual del repositorio **NO VERIFICADA**
-**Fecha:** 2026-11-16  
-**Autores:** Equipo de ingeniería ENSAMBRIA  
-**Revisores:** `@programadorkevinsvega-sys`  
+**Fecha:** 2026-11-16
+**Autores:** Equipo de ingeniería ENSAMBRIA
+**Revisores:** `@programadorkevinsvega-sys`
 **Reglas aplicables:** §11, §12, §13 de `ENSAMBRIA_github_repository_governance_and_engineering_rules.md`
 
 > Este ADR registra decisiones y configuración del repositorio anterior. El reinicio no revoca la política documental, pero el `Cargo.lock`, el workflow y la configuración remota descritos aquí no se consideran vigentes sin una verificación nueva. El Ruleset e ID mencionados son evidencia histórica, no prueba de que sigan activos en el repositorio actual.

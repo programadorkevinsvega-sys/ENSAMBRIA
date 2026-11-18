@@ -1,9 +1,9 @@
 # ADR-0011: Estrategia de migración a Organización GitHub, adopción de Rulesets organizacionales y plan de deprecación de Branch Protection clásica
 
 **Estado:** propuesta de gobierno aceptada documentalmente en el corte anterior; situación y aplicabilidad actuales **NO VERIFICADAS**
-**Fecha:** 2026-11-16  
-**Autores:** Equipo de ingeniería ENSAMBRIA  
-**Revisores:** `@programadorkevinsvega-sys`  
+**Fecha:** 2026-11-16
+**Autores:** Equipo de ingeniería ENSAMBRIA
+**Revisores:** `@programadorkevinsvega-sys`
 **Reglas aplicables:** §4, §8.1, §11, §12, §14, §21 de `ENSAMBRIA_github_repository_governance_and_engineering_rules.md`
 
 > Este ADR conserva una hoja de ruta de migración basada en el repositorio y la configuración GitHub de un corte previo. No afirma que la organización, equipos, Branch Protection o Rulesets descritos estén vigentes, ni autoriza ejecutar los comandos propuestos. Verificar el propietario y la configuración remota actuales antes de adoptar o ejecutar el plan.
@@ -141,9 +141,9 @@ Una vez confirmado que el Organization Ruleset está activo y aplicando los bloq
 - **Escalabilidad nativa:** Cualquier nuevo crate o servicio que requiera un repositorio satélite heredará automáticamente el estándar de calidad y seguridad sin configuración manual.
 
 ### Riesgos y mitigaciones
-- **Riesgo:** Bloqueo inadvertido de PRs automáticos de Dependabot.  
+- **Riesgo:** Bloqueo inadvertido de PRs automáticos de Dependabot.
   *Mitigación:* Configurar Dependabot como actor autorizado en la lista de bypass del Ruleset exclusivamente para la creación de PRs y actualización de sus ramas, manteniendo la obligatoriedad de que los checks de CI (`repository-quality` y `security-dependencies`) pasen exitosamente antes del merge.
-- **Riesgo:** Incompatibilidad temporal de nombres de checks en GitHub Actions.  
+- **Riesgo:** Incompatibilidad temporal de nombres de checks en GitHub Actions.
   *Mitigación:* La fase de evaluación previa (`evaluate` mode) detecta discrepancias de nombres de contexto antes de que se conviertan en bloqueos operativos.
 
 ---

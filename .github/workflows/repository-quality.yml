@@ -64,4 +64,5 @@ jobs:
 
       - name: Report Rust dependency audit as not applicable
         if: steps.cargo_manifests.outputs.present != 'true'
-        run: echo "Skipped Rust dependency audits: root Cargo.toml and Cargo.lock are not both present."
+        run: |
+          echo "Skipped Rust dependency audits: root Cargo.toml and Cargo.lock are not both present."

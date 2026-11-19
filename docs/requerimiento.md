@@ -223,6 +223,8 @@ CORE es propietario del procesamiento de pagos, idempotencia, cargos transaccion
 
 ENSAMBRIA admite personas naturales y jurídicas, actividades profesionales individuales, negocios sin sede física, negocios con establecimientos y organizaciones que prestan servicios en una o varias modalidades. Todos utilizan la misma identidad, tenancy, seguridad y topología de cuatro backends. La modalidad declarada durante el registro guía la incorporación inicial; no fija el tipo del tenant ni limita su evolución.
 
+El modelo cubre cuentas propias del proveedor SaaS, propietarios externos, cadenas, negocios independientes y profesionales independientes. Son perfiles de uso, no tipos de tenant ni niveles de autorización.
+
 ### Jerarquía empresarial y contexto obligatorio
 
 Toda operación empresarial requiere un tenant autenticado y un `product_id` validado, además del actor responsable. El producto procede del contexto autorizado de la operación: conocer o enviar un `product_id` no concede acceso. Los demás niveles y referencias se incluyen solo cuando existan y el actor esté autorizado; no se crean entidades ficticias para completar una ruta.
@@ -231,16 +233,20 @@ La jerarquía de referencia es:
 
 `tenant → grupo empresarial (opcional) → empresa legal (opcional) → marca del negocio (opcional) → sucursal (opcional) → establecimiento (opcional) → área (opcional) → caja, terminal y bodega (cuando apliquen)`
 
-Esta secuencia no impone una cadena de parentesco obligatoria. El tenant puede tener varios grupos, empresas, marcas y sucursales; las relaciones entre ellos son explícitas y tenant-scoped. Una sucursal no requiere pertenecer a una marca. La organización operativa definida más abajo es un concepto distinto, opcional y no es un nivel fiscal ni un alias de empresa legal.
+Esta secuencia no impone una cadena de parentesco obligatoria. Un tenant puede contener varios grupos empresariales, empresas legales, marcas del negocio y sucursales. Un grupo puede agrupar varias empresas legales; una empresa legal puede operar varias marcas y sucursales, y una marca puede operar varias sucursales. Una sucursal no requiere pertenecer a una marca. Todas las relaciones son explícitas y tenant-scoped; la pertenencia o un ID por sí solos no conceden permisos. La organización operativa definida más abajo es un concepto distinto, opcional y no es un nivel fiscal ni un alias de empresa legal.
 
 - **Tenant:** ámbito técnico estable de aislamiento. Puede contener la actividad individual o varias estructuras empresariales. Es obligatorio para cualquier operación empresarial.
 - **Grupo empresarial:** agrupación opcional de empresas relacionadas bajo un mismo propietario. Puede habilitar consolidación solo según permisos; no reemplaza la identidad fiscal de cada empresa. La agrupación y consolidación operativa pertenecen a BUSINESS; CORE mantiene el contexto de tenant y autorización sin duplicar la entidad de negocio.
 - **Empresa legal:** entidad fiscal y contable opcional, con identidad y datos tributarios propios. Puede operar varias marcas y sucursales, y mantener libros, documentos y cuentas según su configuración. La empresa legal y sus datos fiscales operativos pertenecen a BUSINESS; la identidad global de una persona natural titular continúa perteneciendo a CORE.
 - **Marca del negocio:** nombre comercial o formato opcional, propiedad de BUSINESS. Puede corresponder a una empresa legal y operar varias sucursales; un catálogo central y el uso compartido de recursos requieren relaciones autorizadas dentro del tenant. No es la marca/configuración de producto SaaS de PLATFORM.
 - **Área:** división interna genérica y opcional de una sucursal o establecimiento que puede contener recursos. Los tipos y reglas de recursos específicos de una industria pertenecen a su vertical BUSINESS.
-- **Caja, terminal y bodega:** recursos operativos de BUSINESS, creados solo cuando el dominio los requiere. CORE es propietario de la identidad/autenticación del dispositivo o terminal cuando actúa como workload; BUSINESS mantiene la configuración y asignación operativa, usando referencias autorizadas sin duplicar esa identidad.
+- **Bodega:** ubicación de almacenamiento opcional que puede vincularse a una sucursal y organizar productos o insumos y ubicaciones internas según el caso. BUSINESS posee su configuración, existencias y responsables.
+- **Caja:** punto operativo de cobro que puede vincularse a una sucursal y a uno o más terminales cuando el dominio lo requiere. BUSINESS posee sus sesiones y movimientos; los efectos financieros siguen bajo CORE.
+- **Terminal:** dispositivo operativo asociado al tenant y, cuando aplique, a una sucursal y caja. CORE posee su identidad/autenticación cuando actúa como workload; BUSINESS mantiene su configuración y asignación operativa mediante referencias autorizadas, sin duplicar esa identidad.
 
 La empresa legal no es requisito para operar. La jerarquía mantiene separadas sucursal (ámbito organizativo/operativo) y establecimiento (lugar físico), conforme a sus definiciones actuales. Las cardinalidades y relaciones no determinadas aquí se fijan por su owner antes de implementar el caso dependiente, sin inferir permisos por parentesco.
+
+Un terminal puede admitir operación offline únicamente cuando esa capacidad esté habilitada por configuración. Antes de implementarla en Fase 4.1, BUSINESS y CORE deben definir las acciones permitidas, autorización/idempotencia durante la desconexión, recuperación y conciliación. Esto no autoriza por sí solo capturas o liquidaciones financieras offline ni emisión fiscal offline. La reserva de numeración fiscal por terminal es una capacidad condicional de Fase 7.2: requiere confirmar las reglas aplicables y las capacidades oficiales del proveedor/autoridad; no se presume que Factus u otro proveedor la soporte.
 
 Para una operación fiscal, la empresa legal efectiva se resuelve en este orden: (1) excepción de sucursal, solo si está permitida por configuración; (2) empresa legal predeterminada de la marca; (3) empresa legal predeterminada del tenant; (4) si ninguna existe, el titular persona natural del tenant. La excepción de sucursal debe tener autorización, condición de uso y auditoría explícitas antes de habilitarse. El emisor utilizado se conserva en cada documento fiscal como snapshot reproducible; cambios posteriores de configuración no reescriben documentos emitidos.
 
@@ -256,6 +262,8 @@ El backend dueño valida que una operación no mezcle empresas legales, marcas, 
 - **Organización:** es una estructura operativa opcional dentro del tenant, no una afirmación de personalidad jurídica ni una etapa obligatoria de la jerarquía fiscal. Puede representar una actividad profesional individual, un negocio de persona natural o una empresa. CORE posee sus identificadores y relaciones estructurales; BUSINESS posee el perfil y las reglas de operación. La información de persona jurídica, titularidad o representación se modela separadamente cuando sea necesaria y autorizada. No se crea una organización diferente por sucursal automáticamente.
 - **Sucursal:** es un ámbito organizativo/operativo opcional, con permisos y configuración propios. No se crea una sucursal predeterminada o ficticia para que un profesional sin local pueda operar. CORE mantiene su identidad/relación estructural y BUSINESS sus recursos, agendas, equipos y reglas.
 - **Establecimiento:** es un lugar físico donde se prestan servicios, opcional y distinto de la sucursal. BUSINESS posee sus datos operativos; la relación estructural o de seguridad aplicable referencia el identificador de CORE. Una sucursal puede operar con un establecimiento cuando corresponda, pero sus identificadores y reglas no se intercambian ni se confunden. El domicilio del cliente, una zona de cobertura, una ubicación temporal acordada y una ubicación remota tampoco son establecimientos.
+
+Una cuenta propia de ENSAMBRIA no constituye un tipo especial de tenant ni obtiene acceso cruzado a otros tenants. Los privilegios de administración del proveedor pertenecen a PLATFORM y requieren autorización global explícita, separada de las membresías empresariales de CORE.
 
 Ningún dato enviado por el cliente, identificador, nombre de empresa, dominio o dirección demuestra titularidad ni concede acceso. Los mecanismos de verificación de identidad, representación o datos fiscales se determinan por mercado y caso; no se exige universalmente una persona jurídica, NIT de persona jurídica, matrícula, dirección comercial, organización, marca, sucursal, establecimiento, empleado o inventario.
 
@@ -1765,6 +1773,7 @@ La aceptación de los módulos de spa/estética verifica el historial y seguimie
 - Pagos, transacciones, comisiones de pagos y ledger inmutable en CORE.
 - Caja, terminales operativos, ventas, comisiones de empleados y operaciones financieras propias del establecimiento en BUSINESS. CORE conserva la identidad de workload del dispositivo/terminal cuando aplique.
 - POS, caja, ventas, pagos e inventario aplican claves idempotentes, autorizaciones por acción/scope, límites aprobados y transacciones locales; el resultado del proveedor actualiza la venta por Outbox/Inbox sin duplicar la operación financiera, conforme a [ADR-0014](adr/ADR-0014-coordinacion-ventas-pagos-inventario.md).
+- Los terminales pueden operar offline solo si se habilita esa configuración y se definen previamente las acciones permitidas, idempotencia, autorización, recuperación y conciliación. Los cambios persistidos visibles a otros actores usan Outbox/JetStream y sincronización realtime del owner, recuperable por cursor/snapshot autorizado. La operación offline no implica que se autoricen cobros/liquidaciones ni emisión fiscal sin conexión.
 - Productos.
 - Inventario.
 - Compras.
@@ -1818,7 +1827,7 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 ## FASE 7 — Facturación e integraciones
 
 - Integración inicial de pagos Wompi mediante CORE para pagos SaaS solicitados por PLATFORM y ventas/reservas solicitadas por BUSINESS, con contextos de cuenta, credenciales, callbacks y ledger aislados; adapters extensibles a otros proveedores.
-- Integración inicial de facturación electrónica Factus en PLATFORM para documentos SaaS de ENSAMBRIA y en BUSINESS para cada emisor tenant (empresa legal o persona natural), con configuración separada por emisor, resolución fiscal de sucursal/marca/tenant y snapshot del emisor en cada documento. La ausencia de emisor bloquea solo la emisión que lo requiere. Adapters extensibles a otros proveedores; comercialización de capacidad Factus conforme a ADR-0009 y tras validar sus condiciones oficiales y requisitos aplicables.
+- Integración inicial de facturación electrónica Factus en PLATFORM para documentos SaaS de ENSAMBRIA y en BUSINESS para cada emisor tenant (empresa legal o persona natural), con configuración separada por emisor, resolución fiscal de sucursal/marca/tenant y snapshot del emisor en cada documento. La ausencia de emisor bloquea solo la emisión que lo requiere. La numeración fiscal reservada por terminal solo se habilita si las reglas aplicables y las capacidades oficiales del proveedor/autoridad se verifican. Adapters extensibles a otros proveedores; comercialización de capacidad Factus conforme a ADR-0009 y tras validar sus condiciones oficiales y requisitos aplicables.
 - DIAN.
 - API pública.
 - Webhooks.

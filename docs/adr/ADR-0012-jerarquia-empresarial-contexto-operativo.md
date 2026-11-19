@@ -6,7 +6,7 @@
 
 El tenant es el ámbito técnico estable de aislamiento, pero no equivale a una empresa legal ni a una sucursal. La actividad individual y los negocios sin entidad legal deben poder operar sin crear organizaciones, marcas, establecimientos u otros registros ficticios. El modelo existente distingue sucursal operativa y establecimiento físico, y ADR-0005 ya acepta que son opcionales y diferentes.
 
-El requerimiento necesita precisar además la relación opcional entre entidades empresariales, la selección de emisor fiscal y el contexto con que se autorizan operaciones. Debe conservarse la propiedad única de los cuatro backends, el aislamiento entre tenants y la separación fiscal establecida en ADR-0007 y ADR-0009.
+El modelo también cubre la cuenta propia del proveedor SaaS, propietarios externos, cadenas, negocios independientes y profesionales independientes sin convertirlos en tipos distintos de tenant. Se precisan las cardinalidades empresariales expresamente decididas, la selección de emisor fiscal, los recursos de operación y el contexto de autorización. Se conserva la propiedad única de los cuatro backends, el aislamiento entre tenants y la separación fiscal establecida en ADR-0007 y ADR-0009.
 
 ## Decisión
 
@@ -16,7 +16,7 @@ Se adopta la siguiente secuencia de referencia:
 
 `tenant → grupo empresarial (opcional) → empresa legal (opcional) → marca del negocio (opcional) → sucursal (opcional) → establecimiento (opcional) → área (opcional) → caja, terminal y bodega (cuando apliquen)`
 
-La secuencia no impone una cadena obligatoria de pertenencia. Solo el tenant es requerido para toda operación empresarial; `product_id` validado y actor responsable son obligatorios en su contexto. Los demás niveles son opcionales y se representan únicamente mediante relaciones explícitas existentes y autorizadas. Una sucursal no requiere marca. Una persona profesional puede operar sin grupo, empresa legal, marca ni sucursal.
+La secuencia no impone una cadena obligatoria de pertenencia. Solo el tenant es requerido para toda operación empresarial; `product_id` validado y actor responsable son obligatorios en su contexto. Los demás niveles son opcionales y se representan únicamente mediante relaciones explícitas existentes y autorizadas. Un tenant puede contener varios grupos, empresas legales, marcas y sucursales; un grupo puede agrupar varias empresas legales; una empresa legal puede operar varias marcas y sucursales; y una marca puede operar varias sucursales. Una sucursal no requiere marca. Una persona profesional puede operar sin grupo, empresa legal, marca ni sucursal.
 
 Los términos se mantienen diferenciados:
 
@@ -26,8 +26,11 @@ Los términos se mantienen diferenciados:
 - **Marca del negocio:** nombre comercial/formato, distinto de la marca/configuración de producto SaaS de PLATFORM.
 - **Sucursal:** ámbito organizativo/operativo.
 - **Establecimiento:** lugar físico; la relación estructural de CORE no sustituye los datos y operación cuyo owner es BUSINESS.
+- **Área:** división interna genérica y opcional; sus recursos y reglas sectoriales pertenecen al vertical BUSINESS correspondiente.
+- **Bodega:** ubicación de almacenamiento opcional, con productos/insumos y ubicaciones internas según el caso; BUSINESS posee existencias, configuración y responsables.
+- **Caja y terminal:** recursos operativos opcionales de BUSINESS; CORE mantiene la identidad del terminal cuando actúa como workload. Un terminal puede asociarse a una caja/sucursal y admitir operación offline si se habilita mediante configuración.
 
-El tenant puede contener más de una estructura empresarial dentro de sus límites autorizados. No se infieren cardinalidades, permisos, herencia de configuración ni filiación fiscal a partir de un ID o parentesco no documentado.
+Las cardinalidades descritas son relaciones posibles, no herencia automática de permisos, configuración o filiación fiscal. Toda relación adicional debe ser explícita y tenant-scoped. Un ID o parentesco no concede acceso.
 
 ### Emisor fiscal y continuidad histórica
 
@@ -66,9 +69,9 @@ La Fase 0 contiene solo diseño, ownership, ADR, trazabilidad y criterios de ace
 | Tenant, producto validado, estructura y contexto base | Fase 1, especialmente 1.2 | CORE; relaciones estructurales y autorización, no entidades fiscales/operativas ficticias. |
 | Áreas genéricas de sucursal/establecimiento | Fase 2.1, solo al requerirlas un caso operativo | BUSINESS; tipos específicos permanecen en el vertical correspondiente. |
 | Marca del negocio y perfil inicial que la requiera | Fase 5.1; proyección pública autorizada en 5.3 | BUSINESS posee la fuente; PUBLIC solo recibe proyecciones permitidas. La asociación fiscal se completa con la capacidad de emisor de Fase 7. |
-| Cajas y terminales operativos | Fase 4.1 | BUSINESS para operación; CORE para identidad de terminal/workload cuando aplique. |
+| Cajas y terminales operativos, incluida la operación offline configurable | Fase 4.1 | BUSINESS para operación; CORE para identidad de terminal/workload cuando aplique. Las acciones offline, autorización, idempotencia, recuperación y conciliación se definen antes de implementar; esto no habilita cobros/liquidaciones ni emisión fiscal offline. |
 | Bodegas y proveedores | Fase 4.2 | BUSINESS. |
-| Empresa legal, datos fiscales y emisor de persona natural/legal; resolución del emisor para facturación electrónica | Fase 7.2 | BUSINESS para emisor tenant; PLATFORM conserva por separado sus documentos SaaS. Verificar requisitos y proveedor oficial en el alcance aplicable. |
+| Empresa legal, datos fiscales y emisor de persona natural/legal; resolución del emisor para facturación electrónica y eventual numeración reservada por terminal | Fase 7.2 | BUSINESS para emisor tenant; PLATFORM conserva por separado sus documentos SaaS. La numeración por terminal depende de reglas aplicables y capacidades oficiales verificadas. |
 | Grupo empresarial y consolidación | Fase 10.1–10.2 | BUSINESS; pertenencia a grupo no amplía permisos sin concesión explícita. |
 
 Las capacidades se completan en la fase indicada y solo para los casos que las requieren. Los cambios de fase no crean dependencias que impidan la operación básica de un tenant sin empresa legal.
@@ -81,6 +84,7 @@ Las capacidades se completan en la fase indicada y solo para los casos que las r
 4. **Asignar toda la jerarquía a CORE o PLATFORM:** rechazada porque CORE posee tenancy/seguridad y PLATFORM la relación SaaS, mientras que BUSINESS posee las reglas y datos operativos tenant.
 5. **Actualizar retroactivamente documentos al cambiar el emisor:** rechazada porque destruye la reproducibilidad del documento originalmente emitido.
 6. **Bloquear toda operación por falta de emisor fiscal:** rechazada; la ausencia de emisor condiciona únicamente el documento fiscal que lo requiera.
+7. **Crear un tipo de tenant privilegiado para la cuenta propia de ENSAMBRIA:** rechazado; se mantiene el mismo aislamiento tenant y los privilegios de proveedor SaaS se autorizan separadamente en PLATFORM.
 
 ## Pendientes y alcance condicionado
 
@@ -89,7 +93,9 @@ Las capacidades se completan en la fase indicada y solo para los casos que las r
 | Quién puede autorizar una excepción fiscal por sucursal, cuándo se permite y cómo se audita. | Owner BUSINESS con aprobación de Finanzas y revisión competente de Legal cuando aplique. | Habilitar excepciones fiscales por sucursal; no bloquea la operación sin excepciones. |
 | Datos mínimos de persona natural requeridos para emitir documentos fiscales por mercado. | Legal/Finanzas, con evidencia de fuentes oficiales aplicables. | Emisión dependiente de esos datos en el mercado correspondiente; no bloquea operación ni reservas. |
 | Si un tenant permite más de un titular persona natural, cómo seleccionar el emisor titular cuando no existe empresa legal. | CORE y BUSINESS antes del flujo de selección que lo requiera. | Solo la emisión afectada si el producto admite multiplicidad de titulares; no se presume la multiplicidad. |
-| Cardinalidades y relaciones entre entidades más allá de las expresamente descritas. | BUSINESS para relaciones de negocio; CORE para las estructurales/de autorización. | Solo el vínculo o comportamiento que dependa de la relación no definida. |
+| Relaciones adicionales no definidas entre organización, sucursal, establecimiento, área y recursos; las cardinalidades tenant→grupo/empresa/marca/sucursal, grupo→empresa, empresa→marca/sucursal y marca→sucursal sí quedan documentadas como posibles relaciones múltiples. | BUSINESS para relaciones de negocio; CORE para las estructurales/de autorización. | Solo el vínculo o comportamiento que dependa de la relación no definida; no se infieren permisos por jerarquía. |
+| Acciones permitidas en modo offline, autoridad local durante la desconexión, recuperación/reconciliación e interacción con pagos. | BUSINESS para la operación de terminal/venta y CORE para efectos financieros; Producto/Finanzas resuelven la política operativa antes del alcance correspondiente. | Solo operación offline del terminal y cualquier efecto de pago que dependa de esas reglas; modo conectado y operaciones independientes no se bloquean. |
+| Si la numeración fiscal puede reservarse por terminal, con qué autoridad/proveedor, alcance, unicidad y auditoría. | BUSINESS con Finanzas y revisión competente de Legal cuando aplique; verificar capacidad oficial del proveedor/autoridad. | Solo la reserva/uso de numeración por terminal; no bloquea facturación que pueda operar por un mecanismo validado diferente. |
 
 Ninguna de estas decisiones se aprueba mediante este ADR. La revisión profesional jurídica y la investigación jurisdiccional mantienen su estado separado; este documento no afirma su realización ni bloquea alcance independiente.
 
@@ -106,13 +112,16 @@ La aplicación debe propagar contexto validado en cada backend owner y rechazar 
 7. Una sucursal hereda correctamente la empresa legal predeterminada de la marca y una excepción permitida prevalece sobre la herencia.
 8. El documento fiscal conserva su emisor original tras cambios posteriores.
 
-Estos son criterios documentados para sus fases propietarias; no se afirma que estén implementados, escritos como pruebas o ejecutados.
+También se documentan para sus fases propietarias: cada cardinalidad aprobada admite relaciones múltiples sin herencia implícita de permisos; una cuenta propia de ENSAMBRIA permanece aislada como cualquier otro tenant y sus privilegios SaaS provienen de roles PLATFORM; un terminal offline solo ejecuta las acciones que una política aprobada permita y recupera/reconcilia sin duplicar operaciones; una reserva de numeración fiscal por terminal se rechaza o mantiene deshabilitada si la capacidad oficial y las reglas aplicables no se verifican. Estos son criterios documentados, no pruebas implementadas o ejecutadas.
 
 ## Relación con ADR existentes
 
 - **ADR-0002:** conserva el hecho durable de alta de tenant CORE→PLATFORM y su referencia a `product_id`. No crea entidades BUSINESS, asigna emisor fiscal ni convierte el alta técnica en una relación comercial o fiscal.
 - **ADR-0005:** este ADR lo complementa; conserva tenant estable, opcionalidad y distinción entre sucursal, establecimiento y modalidades. No lo sustituye ni reabre sus decisiones aceptadas.
 - **ADR-0009:** conserva la separación de proveedores y contextos fiscales SaaS/tenant, con Factus como proveedor inicial previsto no exclusivo. Este ADR añade el diseño de emisor para BUSINESS, sin asumir capacidades del proveedor, requisitos legales aprobados ni comercialización automática.
+- **ADR-0014:** conserva el ownership de ventas/caja/terminal en BUSINESS y de pagos/ledger en CORE; concreta que el modo offline requiere reglas y recuperación propias, y que la numeración fiscal por terminal no se presume.
+
+La ampliación documental de 2026-11-18 registra las cardinalidades y los requisitos de cuenta propia/terminal comunicados expresamente por el propietario; no cambia el ownership aprobado ni afirma que el modo offline o la numeración fiscal por terminal estén implementados. Los límites de ambos comportamientos quedan pendientes para sus fases propietarias.
 
 ## Referencias
 
@@ -123,3 +132,4 @@ Estos son criterios documentados para sus fases propietarias; no se afirma que e
 - [ADR-0002](ADR-0002-outbox-alta-tenant-core-platform.md)
 - [ADR-0005](ADR-0005-tenancy-multimodal-y-servicios-moviles.md)
 - [ADR-0009](ADR-0009-proveedores-iniciales-y-reventa-factus.md)
+- [ADR-0014](ADR-0014-coordinacion-ventas-pagos-inventario.md)

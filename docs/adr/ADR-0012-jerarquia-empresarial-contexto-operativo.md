@@ -32,6 +32,14 @@ Los términos se mantienen diferenciados:
 
 Las cardinalidades descritas son relaciones posibles, no herencia automática de permisos, configuración o filiación fiscal. Toda relación adicional debe ser explícita y tenant-scoped. Un ID o parentesco no concede acceso.
 
+### Configuración operativa y herencia explícita
+
+La configuración operativa pertenece a BUSINESS y no se hereda de forma implícita por pertenecer a un grupo, empresa legal, marca o sucursal. Cada clave declara si admite herencia, sus scopes y excepciones permitidos, versión y vigencia. No se heredan permisos, scopes de autorización ni afiliaciones fiscales desde la configuración. La resolución específica del emisor fiscal permanece como se define en este ADR.
+
+Para una clave heredable, el valor efectivo debe exponer su origen/scope, versión y vigencia. Los cambios centrales no sobrescriben excepciones locales sin autorización explícita; la aplicación a varias entidades debe poder previsualizarse, limitarse a las que aún heredan, programarse y revertirse con una nueva versión auditada. No se adopta un motor universal ni una precedencia común: BUSINESS define y prueba la precedencia por clave antes de habilitar el caso.
+
+Este complemento registra requisitos del propietario para configuración multi-sucursal; no decide la precedencia entre grupo, empresa legal, marca y sucursal ni declara runtime. Los casos que dependan de esa precedencia permanecen bloqueados hasta su resolución.
+
 ### Emisor fiscal y continuidad histórica
 
 Cuando una operación necesita un emisor fiscal, su resolución es:
@@ -71,6 +79,7 @@ La Fase 0 contiene solo diseño, ownership, ADR, trazabilidad y criterios de ace
 | Marca del negocio y perfil inicial que la requiera | Fase 5.1; proyección pública autorizada en 5.3 | BUSINESS posee la fuente; PUBLIC solo recibe proyecciones permitidas. La asociación fiscal se completa con la capacidad de emisor de Fase 7. |
 | Cajas y terminales operativos, incluida la operación offline configurable | Fase 4.1 | BUSINESS para operación; CORE para identidad de terminal/workload cuando aplique. Las acciones offline, autorización, idempotencia, recuperación y conciliación se definen antes de implementar; esto no habilita cobros/liquidaciones ni emisión fiscal offline. |
 | Bodegas y proveedores | Fase 4.2 | BUSINESS. |
+| Configuración operativa centralizada y excepciones autorizadas | En los dominios que introducen la clave; configuración transversal multi-sucursal en Fase 10.2 | BUSINESS; sin herencia de permisos y con precedencia por clave definida antes de habilitarla. |
 | Empresa legal, datos fiscales y emisor de persona natural/legal; resolución del emisor para facturación electrónica y eventual numeración reservada por terminal | Fase 7.2 | BUSINESS para emisor tenant; PLATFORM conserva por separado sus documentos SaaS. La numeración por terminal depende de reglas aplicables y capacidades oficiales verificadas. |
 | Grupo empresarial y consolidación | Fase 10.1–10.2 | BUSINESS; pertenencia a grupo no amplía permisos sin concesión explícita. |
 
@@ -94,6 +103,7 @@ Las capacidades se completan en la fase indicada y solo para los casos que las r
 | Datos mínimos de persona natural requeridos para emitir documentos fiscales por mercado. | Legal/Finanzas, con evidencia de fuentes oficiales aplicables. | Emisión dependiente de esos datos en el mercado correspondiente; no bloquea operación ni reservas. |
 | Si un tenant permite más de un titular persona natural, cómo seleccionar el emisor titular cuando no existe empresa legal. | CORE y BUSINESS antes del flujo de selección que lo requiera. | Solo la emisión afectada si el producto admite multiplicidad de titulares; no se presume la multiplicidad. |
 | Relaciones adicionales no definidas entre organización, sucursal, establecimiento, área y recursos; las cardinalidades tenant→grupo/empresa/marca/sucursal, grupo→empresa, empresa→marca/sucursal y marca→sucursal sí quedan documentadas como posibles relaciones múltiples. | BUSINESS para relaciones de negocio; CORE para las estructurales/de autorización. | Solo el vínculo o comportamiento que dependa de la relación no definida; no se infieren permisos por jerarquía. |
+| Precedencia por clave, fuentes elegibles, conflictos y reversión de valores heredados entre grupo, empresa legal, marca y sucursal. | Owner BUSINESS de cada configuración, con Producto/Finanzas u otros responsables funcionales según la clave. | Solo los cambios centralizados y su cálculo de valor efectivo; no bloquea la configuración local ni la operación independiente. |
 | Acciones permitidas en modo offline, autoridad local durante la desconexión, recuperación/reconciliación e interacción con pagos. | BUSINESS para la operación de terminal/venta y CORE para efectos financieros; Producto/Finanzas resuelven la política operativa antes del alcance correspondiente. | Solo operación offline del terminal y cualquier efecto de pago que dependa de esas reglas; modo conectado y operaciones independientes no se bloquean. |
 | Si la numeración fiscal puede reservarse por terminal, con qué autoridad/proveedor, alcance, unicidad y auditoría. | BUSINESS con Finanzas y revisión competente de Legal cuando aplique; verificar capacidad oficial del proveedor/autoridad. | Solo la reserva/uso de numeración por terminal; no bloquea facturación que pueda operar por un mecanismo validado diferente. |
 

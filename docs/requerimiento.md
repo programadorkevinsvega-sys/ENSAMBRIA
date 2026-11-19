@@ -254,6 +254,16 @@ La ausencia de empresa legal nunca bloquea la operación empresarial o las reser
 
 El backend dueño valida que una operación no mezcle empresas legales, marcas, sucursales o recursos sin una relación explícita y autorizada. Las restricciones de integridad de la base de datos y las pruebas negativas de esos cruces complementan la autorización de aplicación y el aislamiento RLS por tenant.
 
+### Configuración empresarial centralizada
+
+BUSINESS posee la configuración operativa del tenant y sus entidades empresariales; PLATFORM conserva por separado la configuración comercial del producto SaaS. Cada clave configurable declara su owner, scopes válidos, si admite herencia, excepciones permitidas, vigencia y versión. No se heredan permisos, acceso a datos ni afiliaciones fiscales por la jerarquía. La precedencia fiscal de emisor descrita arriba permanece específica y no se reemplaza por una regla genérica.
+
+Una configuración solo se hereda cuando su owner lo permite explícitamente. Para los casos autorizados, se puede administrar un valor central y permitir excepciones por empresa legal, marca o sucursal, mostrando el valor efectivo, su origen, scope, versión y vigencia. Al cambiar una versión central, se recalcula el valor efectivo de las entidades que aún la heredan; se conservan las excepciones locales y un cambio central no las sobrescribe sin autorización explícita. Los cambios masivos deben poder limitarse a entidades seleccionadas o a entidades que aún heredan el valor, previsualizar su impacto antes de confirmarse, programarse y revertirse mediante una nueva versión auditada, preservando quién solicitó/aprobó el cambio y el historial.
+
+No se establece una precedencia universal entre grupo, empresa legal, marca y sucursal. El owner debe definir y probar la resolución y los conflictos de cada tipo de configuración antes de habilitarlo; solo el caso dependiente queda condicionado. La relación de grupo no crea herencia implícita. Los cambios persistidos visibles se entregan por el mecanismo durable/realtime aplicable al owner y se recuperan mediante REST autorizado, conforme a la arquitectura.
+
+La administración operativa puede configurar datos fiscales, moneda, impuestos, horarios, áreas y recursos de trabajo/almacenamiento, cajas, terminales, impresoras, objetivos y capacidades por tenant, marca o sucursal cuando el caso aplique. La activación de una modalidad o capacidad no la implementa ni sustituye entitlements, autorización, políticas comerciales o controles del backend dueño.
+
 ### Persona, tenant, organización y establecimiento
 
 - **Persona:** una persona natural es un sujeto humano cuya identidad global y autenticación pertenecen a CORE. Una persona jurídica es una entidad legal distinta de la cuenta de cualquier usuario humano; sus datos de identificación y representación solo se recogen cuando los requieran el mercado, la operación o una obligación aplicable. CORE conserva la referencia estructural y la relación de representación/autorización pertinentes; los atributos legales/fiscales los posee el dominio que los necesita (BUSINESS en la operación tenant, PLATFORM en la relación SaaS), sin duplicarlos. La persona que inicia sesión no se transforma por ello en la organización ni en el tenant.
@@ -611,6 +621,8 @@ Debe incluir:
 
 Las operaciones de inventario deben mantener integridad transaccional y trazabilidad. BUSINESS coordina el costo de materiales con sus reglas y registros de comisiones laborales mediante contratos internos del dominio; no accede a tablas de otros módulos ni modifica el ledger de CORE. Los ajustes de consumos, costos, comisiones o reglas deben ser autorizados y auditables, y los reportes deben distinguir importes calculados de importes efectivamente registrados.
 
+El abastecimiento debe soportar proveedores con datos fiscales/contactos requeridos, productos suministrados, condiciones de pago, historial/comparación de precios, evaluación, contratos y documentos; solicitudes de compra, cotizaciones comparables, selección/aprobación de proveedor, órdenes, recepciones parciales/completas, conciliación de cantidades/precios, facturas recibidas y obligaciones/vencimientos. Las recepciones se vinculan a la orden, bodega, sucursal y empresa legal autorizadas, y registran diferencias, lotes, vencimientos y costos adicionales cuando apliquen. Se admiten compras centralizadas para varias sucursales y compras locales, con aprobaciones y límites por scope. Los pagos parciales/programados requieren una obligación autorizada y se ejecutan mediante contratos de CORE. El documento/obligación de compra permanece separado del pago; cualquier efecto financiero cruza contratos autorizados, no SQL ni transacciones distribuidas. El ownership completo de cuentas por pagar y contabilidad tenant queda pendiente en §4.11.
+
 ## 4.4 Marketing y automatización comercial
 
 Debe incluir:
@@ -692,6 +704,8 @@ Implementar:
 La IA no debe inventar resultados, realizar cobros, modificar registros financieros ni ejecutar operaciones críticas sin autorización.
 
 ## 4.6 Analítica y BI
+
+Los reportes pueden filtrarse y consolidarse por tenant, empresa legal, grupo, marca y sucursal únicamente con autorización explícita para cada scope. Deben indicar moneda, zona horaria y hora/frescura de actualización, distinguir resultados reales de estimados y conservar definiciones/versiones reproducibles. Las exportaciones y reportes programados requieren autorización, minimización y auditoría; no pueden eludir los límites del dato fuente.
 
 Debe incluir:
 - Dashboard ejecutivo.
@@ -841,6 +855,18 @@ Preparar integraciones futuras con sistemas contables, plataformas comerciales, 
 
 ---
 
+## 4.11 Finanzas y contabilidad del tenant
+
+El producto requiere gestionar finanzas y contabilidad de las entidades empresariales, incluyendo tesorería, ingresos y gastos, cuentas por cobrar/pagar, centros de costos, plan de cuentas, asientos y ajustes autorizados, cierres/reaperturas de periodos, conciliaciones y estados financieros. Los reportes pueden separarse por sucursal y empresa legal y consolidarse por marca, grupo o tenant solo con permisos explícitos. Las reglas fiscales y exportaciones contables dependen del mercado, la entidad legal y la validación aplicable; no se presumen obligaciones ni plazos aprobados.
+
+Este alcance no crea un segundo procesador o ledger de pagos: CORE conserva pagos, cargos transaccionales aprobados, ledger, liquidaciones y conciliación de pagos; PLATFORM conserva facturación SaaS; BUSINESS conserva ventas, inventario, compras y facturación del establecimiento. La propiedad y frontera del libro contable tenant, tesorería, conciliación de caja/bancos, cuentas por cobrar/pagar y sus contratos con CORE aún requieren una decisión arquitectónica explícita. BUSINESS es candidato por su ownership de la operación empresarial, pero esa asignación no se considera aprobada ni autoriza implementación hasta registrarse en un ADR y actualizar la matriz de dominios. Ningún owner accede a tablas de otro backend.
+
+Workforce conserva los datos operativos laborales que ya le corresponden. El nuevo requisito propone que Finanzas/Payroll gestione el cálculo y pago de nómina, bonos y distribución de comisiones; esto entra en conflicto con la arquitectura aceptada que asigna las comisiones de empleados a BUSINESS. Hasta que un ADR resuelva la frontera, se mantiene vigente el owner aceptado de comisiones; la contabilidad y nómina tenant, bonos y cualquier cambio de ownership permanecen pendientes, sin cálculos, asientos o desembolsos habilitados por inferencia.
+
+La definición de cuentas, moneda y escala, fuente de cada importe, atribución, vigencia, evidencia, autorización, auditoría, retención y trazabilidad debe permitir reproducir cada asiento sin modificar registros históricos. Los pagos a proveedores o personas se solicitan a CORE por contratos cuando correspondan; el proveedor se invoca fuera de transacciones SQL. Los hechos persistidos que necesiten integración durable usan Outbox/Inbox por owner, y los cambios visibles siguen la recuperación realtime/cursor requerida. La fase propietaria, contratos y aceptación de la contabilidad tenant quedan pendientes; Fases 4.1/4.2 mantienen sus alcances de caja/pagos y compras, Fase 7 los documentos fiscales y Fase 8 la analítica/reporting, sin implicar que estas fases implementen por sí solas un libro contable.
+
+---
+
 # 5. ADMINISTRACIÓN GLOBAL SAAS
 
 ENSAMBRIA debe tener un panel administrativo global independiente de los paneles de los establecimientos.
@@ -907,7 +933,7 @@ Cada tenant debe tener un panel propio con:
 - Facturación electrónica del establecimiento con Factus.
 - Productos.
 - Inventario.
-- Compras.
+- Compras y proveedores: solicitudes, cotizaciones comparables, aprobaciones, órdenes, recepción parcial/completa, conciliación con facturas, lotes/vencimientos, obligaciones y costos, compras locales/centrales y transferencias con trazabilidad por sucursal.
 - Marketing.
 - Analítica.
 - Configuración.
@@ -1266,7 +1292,7 @@ Las capacidades reutilizables mantienen el ownership actual: CRM, workforce, cat
 | Capacidad | Decisión arquitectónica y ownership | Implementación funcional |
 |---|---|---|
 | Multi-tenant avanzado | CORE autentica y valida actor, tenant, membresía, `product_id` y contexto; cada owner evalúa permisos RBAC/ABAC de su acción/recurso y RLS refuerza el aislamiento. BUSINESS posee configuración operativa por negocio y overrides autorizados por sucursal. Cada módulo debe aislar sus datos, cachés, índices/búsquedas, objetos, jobs, eventos y telemetría. Un ID recibido no concede acceso; la identidad global y las membresías tenant-scoped son distintas. | Fase 0 define amenazas, matriz de autorización, datos/sistemas derivados y pruebas negativas. Fase 1 implementa la base CORE de identidad/contexto; RBAC/ABAC y sus fronteras se completan y prueban en el dominio propietario de cada acción. |
-| Multi-sucursal | CORE es dueño de las relaciones estructurales organización/sucursal y propaga el scope autenticado autorizado. BUSINESS es dueño de horarios, catálogo operativo, profesionales, recursos, inventario, caja y reglas por sucursal. Permisos/scopes de grupo, empresa legal, marca, sucursal, área, caja y terminal son explícitos y no se heredan por jerarquía. | Fase 0 define jerarquía, permisos, defaults, herencia/override, visibilidad y escenarios de aislamiento. Fase 1 establece relaciones/contexto; cada dominio implementa autorización por scope al introducir recursos; Fase 4 workforce, inventario, caja y operación; Fase 10 consolida cadenas/franquicias. |
+| Multi-sucursal | CORE es dueño de las relaciones estructurales organización/sucursal y propaga el scope autenticado autorizado. BUSINESS es dueño de la configuración operativa por tenant, entidad legal, marca y sucursal; permisos/scopes son explícitos y nunca se heredan por configuración. Cada clave declara si hereda, su origen/version, vigencia y excepciones. | Fase 0 diseña herencia de valores, overrides, visibilidad del valor efectivo, vista previa, programación, auditoría y recuperación; la precedencia para cada clave la decide su owner antes de habilitarla. Fase 1 establece relaciones/contexto; Fases 4 y 10 implementan configuración en sus dominios propietarios. |
 | Multi-país y multi-moneda | PLATFORM administra mercados habilitados y sus condiciones comerciales; CORE verifica contexto operativo regional y procesa transacciones con moneda explícita; cada backend conserva importes en moneda original. Usar códigos ISO 3166-1/ISO 4217 y zonas IANA. No convertir importes implícitamente ni usar punto flotante; una conversión exige fuente, tasa, instante, precisión y regla aprobados y persistidos. Impuestos y obligaciones por país requieren decisión de Legal/Finanzas. | Fase 0 inventaría mercados iniciales, owners, moneda de cada flujo, zonas, dependencias de proveedores y decisiones legales/comerciales pendientes. Fase 1 define tipos/contratos compatibles; operación internacional y monedas adicionales se habilitan en Fase 10 tras pruebas y aprobaciones aplicables. |
 | Multi-idioma | Contratos transportan códigos estables, no texto de interfaz traducido. Normalizar locales con BCP 47 y documentar selección, fallback, contenido sin traducción, fechas/números/monedas y mensajes de error. Español, inglés y portugués son idiomas iniciales. Cada frontend/backend localiza su propia presentación; el owner de contenido controla las traducciones editoriales. | Fase 0 define locales, ownership, fallback, contenido traducible y pruebas. Fase 1 establece compatibilidad de contexto/contratos; cada ruta pública se entrega localizada y probada desde su primera publicación; activación integral e internacionalización en Fase 10. |
 | Motor de reglas | No crear un motor central que posea políticas de múltiples dominios ni permitir expresiones/código arbitrario. CORE posee estado/transiciones y aplicación de políticas autorizadas de reserva/pago; BUSINESS posee reglas operativas/comerciales de establecimientos, membresías, inventario y comisiones laborales; PLATFORM posee planes, entitlements y políticas comerciales ENSAMBRIA. Reglas tipadas, acotadas por tenant/sucursal, deterministas, versionadas, auditables, con precedencia y vigencia explícitas. Toda decisión financiera debe poder explicarse con la versión de regla aplicada. | Fase 0 registra catálogo de reglas, propietario, entradas, precedencia, estados, excepciones y conflictos. Fase 1 implementa solo reglas de CORE necesarias; cada regla se entrega con el dominio propietario (reservas desde Fase 1, verticales Fase 2, fidelización Fase 3, comercio/workforce Fase 4, políticas SaaS según PLATFORM). |
@@ -1845,6 +1871,7 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 - Analítica por profesional.
 - Rentabilidad por servicio, empleado y sucursal; métricas de ocupación y demanda.
 - Reportes de costo real por servicio/tratamiento que distingan materiales consumidos, comisión laboral, otros cargos, ingresos y margen, y permitan diferenciar resultados estimados de reales con la base y versión de cálculo correspondientes.
+- Reportes financieros/contables únicamente desde fuentes autorizadas por contrato y después de ratificar owner, definiciones y scopes; no implementar un ledger duplicado ni asumir que esta fase incluye el libro contable tenant.
 - Modelos de predicción de demanda e inasistencias, con evaluación de calidad y límites por tenant.
 - Informes.
 
@@ -1874,7 +1901,7 @@ La aceptación del Marketplace cubre resultados por ubicación elegida/autorizad
 - Internacionalización.
 - Reglas regionales.
 - Nuevos proveedores.
-- Administración centralizada y políticas para catálogos/precios globales o por sucursal, permisos regionales, comparativos, transferencias e informes consolidados.
+- Administración centralizada y políticas para catálogos/precios globales o por sucursal: mostrar valor efectivo y origen, preservar overrides locales, previsualizar y programar cambios, limitar su aplicación a entidades que heredan el valor, mantener auditoría/versiones y permitir reversión controlada. Definir precedencia por clave antes de habilitarla.
 - Gestión de franquiciados, regalías y liquidaciones solo con reglas comerciales y legales explícitas; el plan SaaS “Franquicia” es distinto de estas funcionalidades.
 - Caja por establecimiento/sucursal, con permisos y trazabilidad de operaciones, y reportes consolidados solo para roles autorizados.
 

@@ -14,10 +14,12 @@ La Fase 1 implementará, según la secuencia del roadmap y en los owners corresp
 
 - La base técnica y composición legítima del workspace Cargo al incorporar código funcional.
 - Persistencia PostgreSQL compartida, ownership de schemas y migraciones, credenciales de mínimo privilegio y aislamiento tenant-scoped.
-- Identidad, autenticación, autorización, tenancy y contexto de producto.
+- En 1.1, precisión monetaria NUMERIC definida por dominio/moneda junto con grants mínimos, contexto transaccional y RLS; la presencia de tablas no sustituye autorización funcional.
+- En 1.2, identidad, autenticación, membresías, contexto de producto y base RBAC/ABAC; cada owner implementa los permisos de sus acciones al introducir sus casos de uso.
 - El flujo durable CORE→PLATFORM para el alta operativa del tenant, con Outbox/Inbox cuando corresponda.
 - Suscripciones SaaS y evaluación de entitlements conforme a los límites de CORE y PLATFORM.
 - Reservas y disponibilidad común bajo el ownership establecido.
+- POS, pagos, inventario, aprobaciones sensibles, soporte temporal y Commerce se entregan en sus fases propietarias posteriores; transacciones locales e integración idempotente siguen [ADR-0013](adr/ADR-0013-autorizacion-rbac-abac-y-acceso-soporte.md) y [ADR-0014](adr/ADR-0014-coordinacion-ventas-pagos-inventario.md), no se adelantan a Fase 1.
 - APIs/BFF, observabilidad, privacidad, seguridad y pruebas de aceptación aplicables a cada recorrido introducido.
 
 Este resumen no sustituye los criterios normativos del [requerimiento](requerimiento.md), el [contrato arquitectónico](../ARCHITECTURE_RULES.md), los ADR ni las reglas especializadas.

@@ -51,6 +51,17 @@ RLS se considera defensa en profundidad: PostgreSQL no autentica por sí mismo l
 
 El pool compartido por los módulos de un proceso/backend es una obligación arquitectónica, no una alternativa de ratificación. Las credenciales y grants se mantienen separados por backend y workload; el pool de un backend no accede a schemas de otro backend. Dentro del backend, la separación de módulos se aplica mediante APIs públicas internas, repositorios de propiedad exclusiva, dependencias verificables y pruebas que prohíben SQL, joins e imports de implementación cruzados. El pool compartido no es una frontera SQL entre módulos co-residentes y no debe describirse como tal.
 
+### Invariantes de datos ratificadas el 2026-11-18
+
+1. Las entidades principales conservan UUID v7 canónico conforme a esta ADR; el identificador no sustituye autorización.
+2. Los registros tenant-scoped almacenan `tenant_id`; `branch_id` aplica cuando el recurso tiene alcance de sucursal. No usar `location_id` como identificador ambiguo de sucursal y establecimiento.
+3. Las cantidades monetarias persistidas usan `NUMERIC(precision, scale)` con precisión y escala definidas por el dominio/moneda. Se prohíbe `FLOAT`, `REAL`, `DOUBLE PRECISION` y cualquier cálculo monetario de punto flotante. En contratos puede usarse entero en unidades menores o una representación decimal exacta; la moneda y su escala hacen reversible la conversión.
+4. Operaciones de inventario, pagos y registros contables conservan historial trazable bajo su owner. Estados y eliminación lógica se aplican cuando el ciclo de vida lo requiera, sin reemplazar obligaciones de acceso, rectificación, supresión, retención o conservación de la guía PDLM.
+5. Los datos con vigencia o historial de configuración/precios/catálogos se versionan y registran sus intervalos de validez cuando aplique. Recetas, menús u otras definiciones sectoriales se versionan únicamente en el vertical propietario cuando existan; no se agregan al modelo genérico por esta regla. Los hechos financieros ya emitidos no se reescriben para reflejar cambios posteriores.
+6. La retención sigue la política versionada aplicable al dato, finalidad y jurisdicción; no se fijan plazos universales en esta ADR. Una configuración de tenant no puede relajar una obligación de conservación o eliminación aplicable.
+7. Las operaciones POS y los comandos de negocio reintentables usan una clave idempotente única por operación y owner. Los reintentos conservan la clave; reutilizarla con una intención/payload incompatible se rechaza.
+8. Cada owner confirma sus mutaciones dentro de transacciones locales breves. Ningún efecto externo se ejecuta manteniendo abierta una transacción SQL. Los hechos que requieren propagación durable usan Outbox/Inbox según [la guía transaccional](../rules/ENSAMBRIA_Transactional_Outbox_Inbox.md); no se usan transacciones SQL distribuidas.
+
 ## Pruebas negativas de aceptación requeridas
 
 La decisión no se considera implementada hasta que pruebas automatizadas contra PostgreSQL real, con los mismos roles no privilegiados del runtime, demuestren:
@@ -87,7 +98,7 @@ La decisión no se considera implementada hasta que pruebas automatizadas contra
 
 El requerimiento ya determina la base física compartida, ownership separado, pool por proceso/backend compartido por módulos co-residentes, credenciales segregadas, RLS en tablas tenant-scoped y contexto de seguridad transaccional. Esta ADR no propone opciones alternativas ni solicita reabrir esas decisiones.
 
-El propietario aceptó expresamente este diseño documental el 2026-11-11. La aceptación confirma coherencia con el requerimiento; no habilita otra topología, runtime ni una excepción a RLS. No hay excepciones solicitadas. Antes de la implementación, cada backend deberá completar su inventario de schemas, roles, grants, parámetros del pool y casos reales de RLS. Cualquier excepción futura —por ejemplo, una tabla sin alcance tenant o una política distinta de `FORCE ROW LEVEL SECURITY`— requiere justificación concreta, owner y aprobación previa conforme a las fuentes normativas. El dimensionamiento requiere datos del entorno y no es una decisión arquitectónica alternativa.
+El propietario aceptó expresamente el diseño base el 2026-11-11 y las invariantes de datos añadidas el 2026-11-18. La aceptación confirma coherencia con el requerimiento; no habilita otra topología, runtime ni una excepción a RLS. No hay excepciones solicitadas. Antes de la implementación, cada backend deberá completar su inventario de schemas, roles, grants, parámetros del pool y casos reales de RLS. Cualquier excepción futura —por ejemplo, una tabla sin alcance tenant o una política distinta de `FORCE ROW LEVEL SECURITY`— requiere justificación concreta, owner y aprobación previa conforme a las fuentes normativas. El dimensionamiento requiere datos del entorno y no es una decisión arquitectónica alternativa.
 
 No hay PostgreSQL runtime ni pruebas reales ejecutadas.
 
@@ -96,4 +107,6 @@ No hay PostgreSQL runtime ni pruebas reales ejecutadas.
 - [Requerimiento ENSAMBRIA](../requerimiento.md)
 - [Contrato de arquitectura](../../ARCHITECTURE_RULES.md)
 - [Guía de pooling PostgreSQL](../rules/ENSAMBRIA_Connection_Pooling_PostgreSQL.md)
+- [ADR-0013: autorización RBAC/ABAC y acceso de soporte](ADR-0013-autorizacion-rbac-abac-y-acceso-soporte.md)
+- [ADR-0014: coordinación idempotente de ventas, pagos e inventario](ADR-0014-coordinacion-ventas-pagos-inventario.md)
 - [Registro de Fase 0](../registro-fase-0-descubrimiento-arquitectura.md)

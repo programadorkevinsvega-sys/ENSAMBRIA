@@ -30,7 +30,6 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.1
       CORE_STAGING_HOST: ${{ vars.CORE_STAGING_HOST }}
       CORE_STAGING_SSH_USER: ubuntu
-      CORE_PACKAGE: ${{ runner.temp }}/ensambria-core-staging.tar.gz
 
     steps:
       - name: Check out the exact CI-validated commit
@@ -61,6 +60,7 @@ jobs:
         id: package
         shell: bash
         run: |
+          core_package="${RUNNER_TEMP}/ensambria-core-staging.tar.gz"
           artifact_directory="$(mktemp -d "${RUNNER_TEMP}/core-artifacts.XXXXXX")"
           trap 'rm -rf -- "$artifact_directory"' EXIT
           install -m 0750 \
@@ -77,9 +77,9 @@ jobs:
           for migration_file in "${migration_files[@]}"; do
             install -m 0640 "$migration_file" "$artifact_directory/migrations/"
           done
-          tar --create --gzip --file "$CORE_PACKAGE" \
+          tar --create --gzip --file "$core_package" \
             --directory "$artifact_directory" core core-migrate migrations
-          echo "path=$CORE_PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "path=$core_package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings
         env:
@@ -110,6 +110,7 @@ jobs:
       - name: Deploy CORE and create its systemd services
         env:
           REMOTE_DIRECTORY: /tmp/ensambria-core-${{ github.run_id }}-${{ github.run_attempt }}
+          CORE_PACKAGE: ${{ steps.package.outputs.path }}
         run: |
           cleanup_remote_directory() {
             ssh \

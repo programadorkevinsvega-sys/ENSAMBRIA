@@ -119,7 +119,7 @@ ensure_user "$migrator_user" "$migrator_group"
 ensure_directory /opt/apps root 755
 ensure_directory "$install_root" "$artifact_group" 750
 ensure_directory "$release_root" "$artifact_group" 750
-ensure_directory /etc/apps root 755
+ensure_directory /etc/apps ubuntu 750
 ensure_directory /etc/apps/ensambria root 755
 ensure_directory "$environment_directory" root 755
 

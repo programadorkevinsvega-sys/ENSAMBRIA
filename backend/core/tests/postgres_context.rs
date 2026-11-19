@@ -502,3 +502,109 @@ async fn core_process_serves_health_and_metrics_then_stops_cleanly() {
     assert!(!stdout.contains(&database_url));
     assert!(!stderr.contains(&database_url));
 }
+
+#[tokio::test]
+async fn core_process_correlates_readiness_failure_when_postgres_is_unavailable() {
+    let database_listener =
+        StdTcpListener::bind("127.0.0.1:0").expect("a PostgreSQL test port must be available");
+    let database_address = database_listener
+        .local_addr()
+        .expect("the PostgreSQL test listener must expose its address");
+    let health_listener =
+        StdTcpListener::bind("127.0.0.1:0").expect("a health test port must be available");
+    let health_address = health_listener
+        .local_addr()
+        .expect("the health test listener must expose its address");
+    let metrics_listener =
+        StdTcpListener::bind("127.0.0.1:0").expect("a metrics test port must be available");
+    let metrics_address = metrics_listener
+        .local_addr()
+        .expect("the metrics test listener must expose its address");
+    let database_url = format!("postgres://core_runtime@{database_address}/ensambria_core_test");
+    drop(database_listener);
+    drop(health_listener);
+    drop(metrics_listener);
+    let mut process = CoreProcessGuard {
+        child: Command::new(env!("CARGO_BIN_EXE_core"))
+            .env("DATABASE_URL", &database_url)
+            .env("CORE_DATABASE_MAX_CONNECTIONS", "1")
+            .env("CORE_DATABASE_ACQUIRE_TIMEOUT_MS", "1000")
+            .env("CORE_HEALTH_LISTEN_ADDRESS", health_address.to_string())
+            .env("CORE_HEALTH_CHECK_INTERVAL_MS", "50")
+            .env("CORE_HEALTH_CHECK_TIMEOUT_MS", "500")
+            .env("CORE_METRICS_LISTEN_ADDRESS", metrics_address.to_string())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("CORE process must start while PostgreSQL is unavailable"),
+    };
+
+    let health_endpoint = format!("http://{health_address}");
+    let channel = timeout(Duration::from_secs(5), async {
+        loop {
+            match Endpoint::from_shared(health_endpoint.clone())
+                .expect("health endpoint must be a valid URI")
+                .connect()
+                .await
+            {
+                Ok(channel) => break channel,
+                Err(_) => sleep(Duration::from_millis(20)).await,
+            }
+        }
+    })
+    .await
+    .expect("CORE health listener must remain available");
+    let mut client = HealthClient::new(channel);
+    let readiness = client
+        .check(HealthCheckRequest {
+            service: READINESS_SERVICE.to_owned(),
+        })
+        .await
+        .expect("CORE readiness must respond when PostgreSQL is unavailable")
+        .into_inner();
+    assert_eq!(
+        HealthServingStatus::try_from(readiness.status)
+            .expect("CORE readiness must return a known gRPC health status"),
+        HealthServingStatus::NotServing
+    );
+    sleep(Duration::from_millis(100)).await;
+
+    let process_id = process.child().id().to_string();
+    let signal_status = Command::new("kill")
+        .arg("-TERM")
+        .arg(process_id)
+        .status()
+        .expect("SIGTERM must be deliverable to the CORE test process");
+    assert!(signal_status.success(), "CORE process must accept SIGTERM");
+
+    let exit_status = timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(status) = process
+                .child()
+                .try_wait()
+                .expect("CORE process status must be inspectable")
+            {
+                break status;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("CORE process must stop within the shutdown timeout");
+    assert!(exit_status.success(), "CORE process must stop successfully");
+
+    let (stdout, stderr) = process.read_logs();
+    let failure_event = stdout
+        .lines()
+        .find(|line| line.contains("service.readiness.failed"))
+        .expect("CORE must log PostgreSQL readiness failures");
+    assert!(failure_event.contains("correlation_id"));
+    assert!(failure_event.contains("trace_id"));
+    assert!(
+        failure_event.contains("\"failure_class\":\"dependency\"")
+            || failure_event.contains("\"failure_class\":\"timeout\""),
+        "readiness failure must have a stable classified error: {failure_event}"
+    );
+    assert!(!stdout.contains(&database_url));
+    assert!(!stderr.contains(&database_url));
+}

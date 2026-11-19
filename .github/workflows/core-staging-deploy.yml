@@ -60,7 +60,7 @@ jobs:
         id: package
         shell: bash
         run: |
-          core_package="${RUNNER_TEMP}/ensambria-core-staging.tar.gz"
+          core_package="${RUNNER_TEMP}/core-staging.tar.gz"
           artifact_directory="$(mktemp -d "${RUNNER_TEMP}/core-artifacts.XXXXXX")"
           trap 'rm -rf -- "$artifact_directory"' EXIT
           install -m 0750 \

@@ -3,7 +3,7 @@
 - **Estado:** flujo base de onboarding ratificado; contexto de producto documentado según ADR-0004; implementación pendiente
 - **Fecha:** 2026-11-10
 - **Ámbito:** creación de tenant en CORE y recepción de la solicitud de onboarding por PLATFORM
-- **Requisito:** flujo durable CORE→PLATFORM para cada alta operativa de tenant, desde el primer corte ejecutable de Fase 1
+- **Requisito:** flujo durable CORE→PLATFORM para cada alta operativa de tenant, implementado en la subfase 1.3 conforme a la secuencia ratificada
 - **Fuentes normativas:** [contrato arquitectónico](../../ARCHITECTURE_RULES.md), [reglas de Outbox/Inbox](../rules/ENSAMBRIA_Transactional_Outbox_Inbox.md)
 
 ## Contexto y caso de negocio ratificado
@@ -87,7 +87,7 @@ Estas pruebas no se ejecutaron: aún no hay flujo, runtime, schemas, JetStream n
 - El procesamiento es at-least-once; idempotencia por `event_id` es obligatoria. No se promete exactly-once.
 - La disponibilidad comercial puede ser eventualmente consistente respecto del alta de identidad; las pantallas y APIs deben distinguir “tenant creado” de “onboarding comercial revisado/activado”.
 - La publicación/consumo produce trazabilidad durable, pero no resuelve reglas comerciales ni una operación fuera de línea indefinida.
-- El flujo se implementa en el primer corte ejecutable de Fase 1 que crea tenants operativos. No se debe retrasar ni reemplazar por un evento artificial. El alcance no determina cómo tratar otros propósitos de creación de tenant.
+- El flujo se implementa en la subfase 1.3, una vez que 1.2 haya establecido sus prerrequisitos de identidad, autorización, tenant y producto. Las subfases 1.1 y 1.2 no habilitan altas operativas de tenant ni se sustituyen por un evento artificial. Si antes de 1.3 aparece otro caso real que necesite entrega durable, ese mismo corte debe incluir Outbox/Inbox completo conforme a la guía. El alcance no determina cómo tratar otros propósitos de creación de tenant.
 
 ## Decisiones y límites restantes
 

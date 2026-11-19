@@ -18,6 +18,7 @@ Eventos durables, productores, consumidores, Outbox/Inbox, idempotencia, orden, 
 - Obligatoria cuando un cambio requiere propagar de forma asíncrona y durable un hecho persistido, o modifica productor, consumidor, Outbox/Inbox o replay.
 - Desde Fase 0, participa en la definición del catálogo de hechos/consumidores, los canales (RPC vs. evento durable vs. realtime efímero), los contratos y la recuperación para las capacidades de eventos/webhooks de la sección 14 del requerimiento.
 - En ENSAMBRIA, consulta además el requisito de Fase 1 y las obligaciones realtime aplicables en [ARCHITECTURE_RULES.md](../../../ARCHITECTURE_RULES.md).
+- En ENSAMBRIA, el primer flujo durable ratificado es el alta operativa CORE→PLATFORM de la subfase 1.3; no se crean eventos artificiales en 1.1 ni se habilita el alta operativa antes de contar con el flujo completo. Un caso durable real anterior debe incluir Outbox/Inbox en el mismo corte.
 - En otros proyectos, actívala solo si su arquitectura requiere mensajería durable.
 
 ## Referencias normativas obligatorias
@@ -67,4 +68,4 @@ Si el caso no necesita entrega durable, registra la justificación exigida por e
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Si cambian las garantías o contratos fuente, actualiza la Skill en el mismo PR. No inventes versiones ni contratos de ejemplo como si fueran reales.
+Revisada el 2026-11-18. Si cambian las garantías o contratos fuente, actualiza la Skill en el mismo PR. No inventes versiones ni contratos de ejemplo como si fueran reales.

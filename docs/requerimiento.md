@@ -142,10 +142,10 @@ UUID v7 es el estándar canónico predeterminado de ENSAMBRIA para IDs de entida
 `BIGINT` solo se admite como dato local adicional cuando mediciones demuestren una ventaja técnica concreta; no se expone en APIs/eventos ni se considera secreto o control de autorización. No se duplican IDs por convención. Un identificador público distinto (slug u otra representación) requiere necesidad y ownership documentados; el UUID público tampoco reemplaza la autorización. Cada entidad tiene una sola autoridad de generación: por defecto, la aplicación Rust del backend propietario. Generación en PostgreSQL depende de verificar la versión exacta desplegada y documentar su soporte. UUID v4 u otra excepción requiere justificación específica, como ocultar temporalidad en una presentación.
 
 ### Organización y sucursales
-- Identidades centrales de organizaciones, establecimientos y sucursales, así como sus relaciones estructurales.
+- CORE posee los identificadores estructurales de organizaciones y sucursales y sus relaciones autorizadas. Para establecimientos conserva solo las referencias estructurales/de seguridad que correspondan; BUSINESS es propietario de su identidad operativa y sus datos.
 - Ubicaciones y jerarquía organizacional de referencia.
 
-BUSINESS es propietario de la operación de cada establecimiento: configuración operativa, horarios, recursos físicos, personal y reglas comerciales. CORE conserva las relaciones centrales y el contexto de seguridad; no duplica las reglas operativas de BUSINESS.
+BUSINESS es propietario de la operación de cada establecimiento: configuración operativa, horarios, recursos físicos, personal y reglas comerciales. CORE conserva las relaciones centrales y el contexto de seguridad; no duplica las reglas operativas de BUSINESS. Ninguna identidad estructural sustituye la autorización del recurso.
 
 ### Evaluación de entitlements y capacidades contratadas (CORE)
 Construir desde el principio en CORE la evaluación runtime de entitlements y capacidades contratadas.
@@ -223,16 +223,41 @@ CORE es propietario del procesamiento de pagos, idempotencia, cargos transaccion
 
 ENSAMBRIA admite personas naturales y jurídicas, actividades profesionales individuales, negocios sin sede física, negocios con establecimientos y organizaciones que prestan servicios en una o varias modalidades. Todos utilizan la misma identidad, tenancy, seguridad y topología de cuatro backends. La modalidad declarada durante el registro guía la incorporación inicial; no fija el tipo del tenant ni limita su evolución.
 
+### Jerarquía empresarial y contexto obligatorio
+
+Toda operación empresarial requiere un tenant autenticado y un `product_id` validado, además del actor responsable. El producto procede del contexto autorizado de la operación: conocer o enviar un `product_id` no concede acceso. Los demás niveles y referencias se incluyen solo cuando existan y el actor esté autorizado; no se crean entidades ficticias para completar una ruta.
+
+La jerarquía de referencia es:
+
+`tenant → grupo empresarial (opcional) → empresa legal (opcional) → marca del negocio (opcional) → sucursal (opcional) → establecimiento (opcional) → área (opcional) → caja, terminal y bodega (cuando apliquen)`
+
+Esta secuencia no impone una cadena de parentesco obligatoria. El tenant puede tener varios grupos, empresas, marcas y sucursales; las relaciones entre ellos son explícitas y tenant-scoped. Una sucursal no requiere pertenecer a una marca. La organización operativa definida más abajo es un concepto distinto, opcional y no es un nivel fiscal ni un alias de empresa legal.
+
+- **Tenant:** ámbito técnico estable de aislamiento. Puede contener la actividad individual o varias estructuras empresariales. Es obligatorio para cualquier operación empresarial.
+- **Grupo empresarial:** agrupación opcional de empresas relacionadas bajo un mismo propietario. Puede habilitar consolidación solo según permisos; no reemplaza la identidad fiscal de cada empresa. La agrupación y consolidación operativa pertenecen a BUSINESS; CORE mantiene el contexto de tenant y autorización sin duplicar la entidad de negocio.
+- **Empresa legal:** entidad fiscal y contable opcional, con identidad y datos tributarios propios. Puede operar varias marcas y sucursales, y mantener libros, documentos y cuentas según su configuración. La empresa legal y sus datos fiscales operativos pertenecen a BUSINESS; la identidad global de una persona natural titular continúa perteneciendo a CORE.
+- **Marca del negocio:** nombre comercial o formato opcional, propiedad de BUSINESS. Puede corresponder a una empresa legal y operar varias sucursales; un catálogo central y el uso compartido de recursos requieren relaciones autorizadas dentro del tenant. No es la marca/configuración de producto SaaS de PLATFORM.
+- **Área:** división interna genérica y opcional de una sucursal o establecimiento que puede contener recursos. Los tipos y reglas de recursos específicos de una industria pertenecen a su vertical BUSINESS.
+- **Caja, terminal y bodega:** recursos operativos de BUSINESS, creados solo cuando el dominio los requiere. CORE es propietario de la identidad/autenticación del dispositivo o terminal cuando actúa como workload; BUSINESS mantiene la configuración y asignación operativa, usando referencias autorizadas sin duplicar esa identidad.
+
+La empresa legal no es requisito para operar. La jerarquía mantiene separadas sucursal (ámbito organizativo/operativo) y establecimiento (lugar físico), conforme a sus definiciones actuales. Las cardinalidades y relaciones no determinadas aquí se fijan por su owner antes de implementar el caso dependiente, sin inferir permisos por parentesco.
+
+Para una operación fiscal, la empresa legal efectiva se resuelve en este orden: (1) excepción de sucursal, solo si está permitida por configuración; (2) empresa legal predeterminada de la marca; (3) empresa legal predeterminada del tenant; (4) si ninguna existe, el titular persona natural del tenant. La excepción de sucursal debe tener autorización, condición de uso y auditoría explícitas antes de habilitarse. El emisor utilizado se conserva en cada documento fiscal como snapshot reproducible; cambios posteriores de configuración no reescriben documentos emitidos.
+
+La ausencia de empresa legal nunca bloquea la operación empresarial o las reservas. Si no hay emisor definido, solo se impide emitir el documento fiscal que requiera ese emisor, como la factura electrónica. Los datos fiscales de una persona natural se recogen únicamente cuando el mercado y el alcance lo exijan; los datos mínimos por mercado quedan pendientes de decisión de Legal/Finanzas y bloquean solo la emisión que dependa de ellos. Agregar una empresa legal más adelante conserva el tenant, sus IDs y el emisor histórico de documentos ya emitidos.
+
+El backend dueño valida que una operación no mezcle empresas legales, marcas, sucursales o recursos sin una relación explícita y autorizada. Las restricciones de integridad de la base de datos y las pruebas negativas de esos cruces complementan la autorización de aplicación y el aislamiento RLS por tenant.
+
 ### Persona, tenant, organización y establecimiento
 
 - **Persona:** una persona natural es un sujeto humano cuya identidad global y autenticación pertenecen a CORE. Una persona jurídica es una entidad legal distinta de la cuenta de cualquier usuario humano; sus datos de identificación y representación solo se recogen cuando los requieran el mercado, la operación o una obligación aplicable. CORE conserva la referencia estructural y la relación de representación/autorización pertinentes; los atributos legales/fiscales los posee el dominio que los necesita (BUSINESS en la operación tenant, PLATFORM en la relación SaaS), sin duplicarlos. La persona que inicia sesión no se transforma por ello en la organización ni en el tenant.
 - **Titular y participantes:** CORE registra la relación explícita de titularidad y las membresías/permisos pertinentes entre identidad, tenant y estructura autorizada. El titular, representante, administrador, empleado, colaborador o profesional obtiene únicamente los permisos concedidos para ese tenant, organización, sucursal, función y recurso. Una identidad puede participar en varios tenants con permisos distintos; ninguna relación concede roles globales de PLATFORM.
 - **Tenant:** es el ámbito técnico estable de aislamiento y autorización. Puede ser operado por una persona natural o una persona jurídica; no representa necesariamente una persona jurídica, una sucursal, un local, una plantilla de empleados ni una modalidad operativa. CORE conserva su identidad, pertenencia y contexto; la relación comercial SaaS corresponde a PLATFORM. Abrir locales, incorporar personas o cambiar modalidades no sustituye ni duplica el tenant.
-- **Organización:** es una estructura operativa dentro del tenant, no una afirmación de personalidad jurídica. Puede representar una actividad profesional individual, un negocio de persona natural o una empresa. CORE posee sus identificadores y relaciones estructurales; BUSINESS posee el perfil y las reglas de operación. La información de persona jurídica, titularidad o representación se modela separadamente cuando sea necesaria y autorizada. No se crea una organización diferente por sucursal automáticamente.
+- **Organización:** es una estructura operativa opcional dentro del tenant, no una afirmación de personalidad jurídica ni una etapa obligatoria de la jerarquía fiscal. Puede representar una actividad profesional individual, un negocio de persona natural o una empresa. CORE posee sus identificadores y relaciones estructurales; BUSINESS posee el perfil y las reglas de operación. La información de persona jurídica, titularidad o representación se modela separadamente cuando sea necesaria y autorizada. No se crea una organización diferente por sucursal automáticamente.
 - **Sucursal:** es un ámbito organizativo/operativo opcional, con permisos y configuración propios. No se crea una sucursal predeterminada o ficticia para que un profesional sin local pueda operar. CORE mantiene su identidad/relación estructural y BUSINESS sus recursos, agendas, equipos y reglas.
 - **Establecimiento:** es un lugar físico donde se prestan servicios, opcional y distinto de la sucursal. BUSINESS posee sus datos operativos; la relación estructural o de seguridad aplicable referencia el identificador de CORE. Una sucursal puede operar con un establecimiento cuando corresponda, pero sus identificadores y reglas no se intercambian ni se confunden. El domicilio del cliente, una zona de cobertura, una ubicación temporal acordada y una ubicación remota tampoco son establecimientos.
 
-Ningún dato enviado por el cliente, identificador, nombre de empresa, dominio o dirección demuestra titularidad ni concede acceso. Los mecanismos de verificación de identidad, representación o datos fiscales se determinan por mercado y caso; no se exige universalmente una persona jurídica, NIT de persona jurídica, matrícula, dirección comercial, sucursal, empleado o inventario.
+Ningún dato enviado por el cliente, identificador, nombre de empresa, dominio o dirección demuestra titularidad ni concede acceso. Los mecanismos de verificación de identidad, representación o datos fiscales se determinan por mercado y caso; no se exige universalmente una persona jurídica, NIT de persona jurídica, matrícula, dirección comercial, organización, marca, sucursal, establecimiento, empleado o inventario.
 
 ### Incorporación autoservicio y evolución
 
@@ -294,6 +319,17 @@ El modelo es reutilizable por otros sectores sin declararlos soportados: cada ve
 | Discovery y perfil profesional público | PUBLIC posee proyecciones mínimas y autorizadas; BUSINESS conserva el contenido fuente. | Publicación/revocación versionada por contrato; nunca publicar domicilio del cliente ni datos privados. | Páginas públicas tenant y proyección base en Fase 5.3; directorio/Discovery/Marketplace en Fase 9.1 sobre esa proyección. |
 
 Fase 0 documenta el diseño y los casos, sin implementar formularios, esquemas, APIs, eventos, contratos ejecutables ni infraestructura. La aceptación futura debe incluir, como mínimo: titular natural que crea tenant sin persona jurídica, dirección comercial ni establecimiento; tenant que inicia sin sucursal y luego agrega establecimiento sin cambiar IDs; profesional que agrega colaboradores y permisos acotados; organización que agrega sucursales sin duplicar cuenta, tenant o historial; combinación de modalidades permitidas/prohibidas; cobertura no elegible, zona excluida y dato geográfico insuficiente; dos reservas simultáneas incompatibles o con desplazamiento imposible; reintentos/duplicados y fallo en cada frontera CORE–BUSINESS–PLATFORM; transición de prestación no autorizada; cliente y dirección ajenos; ubicación privada ausente de Discovery, logs y eventos; revocación, cancelación, cambio de cobertura y recuperación por cursor/snapshot. Los tests reales se ejecutan en las fases propietarias y con las dependencias correspondientes; esta lista no afirma que estén escritos o ejecutados.
+
+Los siguientes casos de aceptación de la jerarquía son futuros; se documentan aquí, no se afirma que estén implementados, escritos como pruebas o ejecutados:
+
+- Un tenant sin empresa legal puede operar y crear reservas con normalidad.
+- Un tenant sin emisor definido no puede emitir factura electrónica, pero sí operar.
+- Agregar una empresa legal posteriormente no altera IDs ni el emisor de documentos históricos.
+- Una excepción fiscal de sucursal no permitida por configuración se rechaza en el backend.
+- Una operación que mezcla empresas legales, marcas o sucursales sin relación autorizada se rechaza.
+- Un ID válido perteneciente a otro tenant no concede acceso.
+- La sucursal hereda correctamente la empresa legal predeterminada de la marca y una excepción permitida prevalece sobre esa herencia.
+- Cada documento fiscal conserva el emisor original tras cambios posteriores.
 
 ---
 
@@ -1345,6 +1381,8 @@ Las tareas internas deben contar con autenticación y autorización entre servic
 
 La autorización debe distinguir actor, tenant, organización, sucursal, producto, acción y recurso según corresponda. Ser titular u operador de un tenant no concede permisos globales ni acceso automático a todas las sucursales. La aplicación de este aislamiento al modelo de persona natural, organización operativa, establecimientos opcionales y ubicaciones de atención se especifica en [§2.2](#22-modelo-empresarial-multimodal-y-servicios-móviles); las direcciones privadas y coordenadas se tratan como datos protegidos, nunca como información pública por defecto.
 
+Toda operación empresarial debe recibir un contexto autenticado que incluya `tenant_id`, `product_id` validado y actor responsable. El backend dueño verifica las referencias opcionales de grupo, empresa legal, marca, sucursal, establecimiento, área, caja, terminal y bodega; no basta con que sus IDs existan ni con que la operación esté aislada por RLS. Usuarios y roles, sucursales, configuraciones, catálogos y precios, inventarios y bodegas, clientes, proveedores, reportes y analítica, integraciones y credenciales deben quedar aislados por tenant y por los scopes internos autorizados. Los accesos cruzados se impiden mediante autorización, integridad de datos y pruebas negativas en el owner de cada dato; ningún backend consulta tablas ajenas.
+
 ---
 
 # 16. CONCURRENCIA E INTEGRIDAD OPERATIVA
@@ -1573,8 +1611,8 @@ Los estándares y reglas obligatorias de [`docs/rules/`](rules/) son requisitos 
 - Matriz de propiedad única de los cuatro backends y contratos entre dominios, incluidas las fronteras entre CORE, BUSINESS, PLATFORM y PUBLIC.
 - Diseño documental multiproducto/multivertical separado de C01–C10: modelo de producto/industria/vertical/marca, catálogo comercial y owner PLATFORM, asociación técnica tenant–producto en CORE, composición de capacidades, matrices de candidatos, frontends/BFF, contratos, dominios, aislamiento, despliegue, dependencias, fase y aceptación. No crear runtime ni implementaciones ficticias en Fase 0.
 - Matriz de arquitectura y trazabilidad para las diez capacidades transversales de la sección 14, indicando para cada una: alcance y términos, propietario técnico y de producto, actores/datos, límites de confianza, integraciones y contratos requeridos, dependencias, amenazas/controles, decisiones pendientes y aprobadores, N/A justificados, fase de cada comportamiento, pruebas y evidencia de aceptación. Mantener el detalle de producto en la sección 14; la matriz de Fase 0 puede referenciarla, no duplicarla.
-- Definir explícitamente para multitenancy y multi-sucursal la jerarquía tenant/organización/sucursal, pertenencia, autorización, herencia/override y escenarios de aislamiento; para multi-país/moneda/idioma los mercados/locale iniciales, owners, formato de importes, zona horaria, fallback de localización, condiciones de activación y bloqueos legales/comerciales.
-- Diseñar por separado el modelo empresarial multimodal de [§2.2](#22-modelo-empresarial-multimodal-y-servicios-móviles): personas naturales/jurídicas, titularidad, tenant estable, organización operativa, sucursal, establecimiento físico opcional, ubicaciones de atención, modalidades de servicio, onboarding progresivo, workforce, CRM, cobertura, desplazamiento y aceptación por fase. Mantener el ownership de los cuatro backends, registrar las decisiones en [ADR-0005](adr/ADR-0005-tenancy-multimodal-y-servicios-moviles.md) y no crear runtime, entidades físicas ni datos ficticios en Fase 0.
+- Para multi-tenancy/multi-sucursal, documentar contexto obligatorio tenant/producto/actor, relaciones estructurales y empresariales, scopes, autorización, herencia fiscal, límites de aislamiento y casos negativos sin inferir permisos por parentesco. Para multi-país/moneda/idioma registrar mercados/locale, owners, formato de importes, zona horaria, fallback, condiciones de activación y bloqueos legales/comerciales.
+- Diseñar por separado el modelo empresarial multimodal de [§2.2](#22-modelo-empresarial-multimodal-y-servicios-móviles): tenant y producto obligatorios por operación; grupo, empresa legal, marca del negocio, sucursal, establecimiento, área y recursos opcionales; organización operativa separada; reglas de emisor fiscal, scope, aislamiento, casos y fases. Mantener el ownership de los cuatro backends, registrar la decisión complementaria en ADR-0012 sin sustituir [ADR-0005](adr/ADR-0005-tenancy-multimodal-y-servicios-moviles.md), y no crear runtime, entidades físicas ni datos ficticios en Fase 0.
 - Definir los límites entre reglas tipadas por dominio y cualquier capacidad técnica común; catálogo inicial de hechos y consumidores para eventos; contrato/ciclo de vida de auditoría; modelo de confianza de API pública y webhooks; y modelo de revisión, permisos, compatibilidad y revocación del Marketplace de extensiones. Documentar la integración de sistemas contables/corporativos mediante contratos autorizados, nunca acceso directo a tablas.
 - Acordar la matriz requisito→capacidad→dominio/backend owner→decisión/contrato→control→caso de uso/prueba→fase→responsable→evidencia. Cada decisión no aprobada permanece marcada como pendiente, con responsable y alcance bloqueado; la documentación no aprueba por sí sola precios, políticas comerciales, términos de proveedor ni obligaciones legales.
 - Modelo de tenancy.
@@ -1626,6 +1664,7 @@ La Fase 0 define la topología objetivo completa; no exige implementar simultán
 - Implementar desde el primer corte ejecutable la capacidad base de metadatos públicos Open Graph/SEO: contratos y generación SSR/prerender que permitan entregar metadata inicial rastreable, política de URL/canonical y privacidad/indexación, y validación automatizada. Si Fase 1 introduce una ruta/contenido público, completar ahí su SEO, metadata social, JSON-LD/sitemap/robots aplicables y pruebas; no introducir contenido público incompleto para completarlo después. Las fases posteriores deben implementar SEO completo en el mismo cambio que introduce cada nueva superficie pública. Aplicar [ENSAMBRIA_Open_Graph_SEO_Metadata.md](rules/ENSAMBRIA_Open_Graph_SEO_Metadata.md); no indexar paneles, rutas autenticadas, borradores ni datos privados.
 - Implementar Outbox/Inbox desde el primer corte ejecutable de Fase 1: la fundación CORE debe incluir al menos un flujo real de negocio que requiera integración durable, con mutación + Outbox atómicos, publicación recuperable por JetStream e Inbox/idempotencia en cada consumidor persistente aplicable. La guía [ENSAMBRIA_Transactional_Outbox_Inbox.md](rules/ENSAMBRIA_Transactional_Outbox_Inbox.md) es normativa. No se permite dejarlo solo diseñado, reemplazarlo por publicación directa, ni aplazarlo a otra fase; las fases posteriores lo aplican desde el primer cambio que requiera entregar un hecho durable.
 - Implementar y probar el aislamiento multi-tenant efectivo, el contexto autenticado tenant/sucursal, autorización, RLS y auditoría de seguridad que corresponden a CORE; impedir acceso cruzado aun con identificadores válidos de otros tenants/sucursales.
+- Toda operación empresarial autenticada incluye `tenant_id` y `product_id`; CORE valida el contexto estructural y cada backend dueño aplica las relaciones autorizadas de su dominio. Ni el producto ni los IDs estructurales sustituyen la autorización.
 - Implementar las identidades globales y las membresías tenant-scoped bajo ownership de CORE, usando UUID v7 canónicos de forma consistente. Probar que una misma identidad pueda tener relaciones autorizadas independientes con varios tenants, que IDs preservados entre contratos no confieran acceso y que IDs desconocidos o pertenecientes a otro tenant no permitan operaciones no autorizadas. Cualquier `BIGINT` adicional o identificador de presentación debe tener justificación previa y no sustituir la autorización.
 - Definir contratos regionales compatibles con país, moneda, zona horaria y locale, usando identificadores normalizados y montos enteros asociados a moneda. No habilitar conversión automática, tributación internacional ni políticas comerciales/legal no aprobadas.
 - Definir la propagación y precedencia del contexto regional/configuración de tenant y sucursal, sin trasladar a CORE las reglas operativas de BUSINESS ni el catálogo comercial de PLATFORM.
@@ -1661,6 +1700,7 @@ Entregable: núcleo funcional, persistente y probado, con la infraestructura com
 ## FASE 2 — Primeros verticales
 
 Implementar:
+- En 2.1, áreas genéricas opcionales de sucursales/establecimientos solo cuando un caso operativo las requiera; los recursos y reglas específicos siguen en los módulos/verticales BUSINESS propietarios.
 - Catálogo de servicios con modalidades permitidas por servicio: establecimiento, domicilio del cliente, otra ubicación acordada o remoto cuando la actividad lo admita. Un servicio no se duplica solo por cambiar modalidad y se rechazan combinaciones no admitidas en backend.
 - Barberías: cortes/barba, barberos, sillas, turnos y recursos propios.
 - Peluquerías y tratamientos capilares: estilistas, fórmulas y productos usados, lavacabezas, tiempos de exposición y estaciones.
@@ -1701,7 +1741,7 @@ La aceptación de los módulos de spa/estética verifica el historial y seguimie
 ## FASE 4 — Operaciones comerciales
 
 - Pagos, transacciones, comisiones de pagos y ledger inmutable en CORE.
-- Caja, ventas, comisiones de empleados y operaciones financieras propias del establecimiento en BUSINESS.
+- Caja, terminales operativos, ventas, comisiones de empleados y operaciones financieras propias del establecimiento en BUSINESS. CORE conserva la identidad de workload del dispositivo/terminal cuando aplique.
 - Productos.
 - Inventario.
 - Compras.
@@ -1713,7 +1753,7 @@ La aceptación de los módulos de spa/estética verifica el historial y seguimie
 - Definir y probar las transiciones autorizadas del estado operativo de la prestación en BUSINESS, separado del ciclo de vida común de la reserva de CORE; profesionales pueden operar en ubicaciones y modalidades autorizadas sin crear otro tenant.
 - Separar precio del servicio, desplazamiento, cargos autorizados, descuentos, impuestos aplicables y total. No introducir valores ni reglas fiscales/comerciales por defecto; los efectos financieros siguen pasando por CORE.
 - Comisiones por servicios/productos, bonificaciones y liquidaciones auditables integradas con el ledger dueño.
-- Inventario de productos de venta e insumos internos, consumos por servicio, lotes/vencimientos, recetas, mermas y costos por sucursal.
+- Inventario de productos de venta e insumos internos, bodegas, proveedores, consumos por servicio, lotes/vencimientos, recetas, mermas y costos por sucursal, todo tenant-scoped.
 - Costeo real unitario por servicio/tratamiento que sume consumos materiales efectivamente registrados y la comisión laboral aplicable calculada por BUSINESS con la regla/base vigente; guardar la base y versiones usadas para reproducir el resultado histórico, sin doble conteo ni mezcla con cargos de pasarela o comisiones comerciales de ENSAMBRIA.
 - Reservas grupales/recurrentes, lista de espera, multi-profesional/multi-recurso y reasignación autorizada, conforme a los casos de uso habilitados.
 - Preparar campos editoriales SEO, slug y estado de publicación para productos de BUSINESS; no hacer indexable el catálogo privado ni exponer datos hasta que sus páginas públicas y SEO completo estén disponibles.
@@ -1723,6 +1763,7 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 ## FASE 5 — Web y aplicaciones
 
 - Incorporar el onboarding progresivo de las tres modalidades descritas en §2.2; permitir guardar y reanudar el progreso, recuperación idempotente y configuración sin datos de local/sociedad/equipo innecesarios. Completar la superficie por BFF y owners reales; no declarar un formulario aislado como flujo aceptado.
+- La marca del negocio es opcional; BUSINESS la incorpora en el perfil/onboarding cuando el caso la requiera. Su asociación a emisor fiscal corresponde a Fase 7; PUBLIC solo recibe proyección autorizada en 5.3.
 - ENSAMBRIA Tenant Portal (Next.js) entrega la experiencia empresarial web en 5.2. ENSAMBRIA Business (Flutter) se entrega en 5.4; ambos exponen las capacidades empresariales implementadas sobre el mismo BFF, contratos, roles y autorización, y prueban paridad por caso de uso sin duplicar reglas.
 - ENSAMBRIA Platform Admin (Next.js) ofrece la administración global privada mediante PLATFORM y su BFF integrado; no es una consola tenant.
 - Portal de empleados.
@@ -1753,7 +1794,7 @@ La aceptación de los costos comprueba, con datos transaccionales reales, costos
 ## FASE 7 — Facturación e integraciones
 
 - Integración inicial de pagos Wompi mediante CORE para pagos SaaS solicitados por PLATFORM y ventas/reservas solicitadas por BUSINESS, con contextos de cuenta, credenciales, callbacks y ledger aislados; adapters extensibles a otros proveedores.
-- Integración inicial de facturación electrónica Factus en PLATFORM para documentos SaaS de ENSAMBRIA y en BUSINESS para cada establecimiento, con emisores/configuraciones separados y adapters extensibles a otros proveedores; comercialización de capacidad Factus conforme a ADR-0009 y tras validar sus condiciones oficiales.
+- Integración inicial de facturación electrónica Factus en PLATFORM para documentos SaaS de ENSAMBRIA y en BUSINESS para cada emisor tenant (empresa legal o persona natural), con configuración separada por emisor, resolución fiscal de sucursal/marca/tenant y snapshot del emisor en cada documento. La ausencia de emisor bloquea solo la emisión que lo requiere. Adapters extensibles a otros proveedores; comercialización de capacidad Factus conforme a ADR-0009 y tras validar sus condiciones oficiales y requisitos aplicables.
 - DIAN.
 - API pública.
 - Webhooks.
@@ -1790,7 +1831,7 @@ La aceptación del Marketplace cubre resultados por ubicación elegida/autorizad
 
 ## FASE 10 — Franquicias y expansión
 
-- Gestión de cadenas.
+- Grupos empresariales opcionales y gestión de cadenas.
 - Franquicias.
 - Jerarquías.
 - Consolidación.
@@ -1803,7 +1844,7 @@ La aceptación del Marketplace cubre resultados por ubicación elegida/autorizad
 - Gestión de franquiciados, regalías y liquidaciones solo con reglas comerciales y legales explícitas; el plan SaaS “Franquicia” es distinto de estas funcionalidades.
 - Caja por establecimiento/sucursal, con permisos y trazabilidad de operaciones, y reportes consolidados solo para roles autorizados.
 
-La aceptación de cadenas prueba permisos suficientes/insuficientes por sucursal, aislamiento entre sucursales y tenants, consistencia de catálogos/precios globales y locales, transferencias autorizadas, visibilidad de caja por rol y exactitud de reportes consolidados frente a los registros de cada establecimiento.
+La aceptación de grupos y cadenas prueba permisos suficientes/insuficientes por sucursal, aislamiento entre sucursales y tenants, consistencia de catálogos/precios globales y locales, transferencias autorizadas, visibilidad de caja por rol y exactitud de reportes consolidados frente a los registros de cada establecimiento. La pertenencia a un grupo no concede acceso transversal sin una relación y permiso explícitos.
 
 ## FASE 11 — Inteligencia artificial y ecosistema abierto
 

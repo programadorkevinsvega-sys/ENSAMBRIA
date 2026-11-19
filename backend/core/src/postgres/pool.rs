@@ -92,9 +92,33 @@ pub async fn create_pool(
     }
 }
 
+pub fn create_pool_lazy(
+    connect_options: PgConnectOptions,
+    configuration: PgPoolConfiguration,
+) -> PgPool {
+    tracing::info!(
+        event = "database.pool.create.lazy",
+        component = "backend-core",
+        operation = "pool.create",
+        dependency = "postgresql",
+        result = "success"
+    );
+
+    PgPoolOptions::new()
+        .max_connections(configuration.max_connections)
+        .acquire_timeout(configuration.acquire_timeout)
+        .idle_timeout(configuration.idle_timeout)
+        .max_lifetime(configuration.max_lifetime)
+        .connect_lazy_with(connect_options)
+}
+
 impl PgDatabaseConfiguration {
     pub async fn connect(self) -> Result<PgPool, PgPoolConnectError> {
         create_pool(self.connect_options, self.pool).await
+    }
+
+    pub fn connect_lazy(self) -> PgPool {
+        create_pool_lazy(self.connect_options, self.pool)
     }
 }
 

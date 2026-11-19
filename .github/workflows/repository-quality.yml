@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 20
     env:
       CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
       RUSTUP_TOOLCHAIN: 1.99.1
     services:
       postgres:
@@ -57,15 +58,27 @@ jobs:
           cargo check --locked --workspace --all-targets
           cargo clippy --locked --workspace --all-targets -- -D warnings
 
-      - name: Create restricted PostgreSQL test role
+      - name: Create isolated PostgreSQL test roles and CORE schema
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: |
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE core_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT core_schema_owner TO core_migrator;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime;"
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
 
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''

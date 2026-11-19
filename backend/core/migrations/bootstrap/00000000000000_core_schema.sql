@@ -1,0 +1,1 @@
+CREATE SCHEMA IF NOT EXISTS core AUTHORIZATION core_schema_owner;

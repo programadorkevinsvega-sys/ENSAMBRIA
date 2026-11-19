@@ -1,0 +1,31 @@
+[Unit]
+Description=Apply ENSAMBRIA CORE database migrations
+After=network.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=300
+TimeoutStopSec=30
+User=ensambria-core-migrator
+Group=ensambria-core-migrator
+SupplementaryGroups=ensambria-core-artifacts
+WorkingDirectory=/opt/apps/ensambria
+EnvironmentFile=/etc/apps/ensambria/core/.env
+UnsetEnvironment=DATABASE_URL
+ExecStart=/opt/apps/ensambria/current/core-migrate /opt/apps/ensambria/current/migrations
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

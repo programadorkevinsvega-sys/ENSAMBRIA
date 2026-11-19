@@ -1,4 +1,11 @@
-use std::{env, error::Error, fmt, str::FromStr, time::Instant};
+use std::{
+    env,
+    error::Error,
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Instant,
+};
 
 use sqlx::{
     Connection,
@@ -100,6 +107,14 @@ pub fn migration_database_url_from_env() -> Result<String, CoreMigrationError> {
 }
 
 pub async fn run_core_migrations(database_url: &str) -> Result<(), CoreMigrationError> {
+    let migrations_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    run_core_migrations_from_path(database_url, &migrations_path).await
+}
+
+pub async fn run_core_migrations_from_path(
+    database_url: &str,
+    migrations_path: &Path,
+) -> Result<(), CoreMigrationError> {
     let correlation_id = Uuid::now_v7();
     let trace_id = Uuid::now_v7();
     let span = tracing::info_span!(
@@ -235,7 +250,15 @@ pub async fn run_core_migrations(database_url: &str) -> Result<(), CoreMigration
             ));
         }
 
-        let mut migrator = sqlx::migrate!("./migrations");
+        let mut migrator = sqlx::migrate::Migrator::new(migrations_path)
+            .await
+            .map_err(|source| {
+                CoreMigrationError::new(
+                    CoreMigrationFailureKind::Migration,
+                    "CORE migration files could not be loaded",
+                    Some(Box::new(source)),
+                )
+            })?;
         migrator.dangerous_set_table_name("core._sqlx_migrations");
         migrator.run(&mut connection).await.map_err(|source| {
             CoreMigrationError::new(

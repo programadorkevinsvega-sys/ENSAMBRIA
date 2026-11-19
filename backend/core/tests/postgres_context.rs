@@ -7,7 +7,7 @@ use std::{
 };
 
 use ensambria_core::{
-    core_migrations::run_core_migrations,
+    core_migrations::run_core_migrations_from_path,
     health::{
         LIVENESS_SERVICE, READINESS_SERVICE, check_database, initialize_health_status,
         monitor_database_readiness,
@@ -150,10 +150,11 @@ async fn migrations_use_a_restricted_identity_and_runtime_cannot_own_core_schema
     let migration_database_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL").expect(
         "CORE_TEST_MIGRATOR_DATABASE_URL must point to an isolated PostgreSQL test database",
     );
-    run_core_migrations(&migration_database_url)
+    let migrations_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    run_core_migrations_from_path(&migration_database_url, &migrations_path)
         .await
         .expect("CORE migrations must apply with the dedicated migration identity");
-    run_core_migrations(&migration_database_url)
+    run_core_migrations_from_path(&migration_database_url, &migrations_path)
         .await
         .expect("CORE migrations must be safe to run again");
 

@@ -6,7 +6,7 @@
 **Revisores:** `@programadorkevinsvega-sys`
 **Reglas aplicables:** §11, §12, §13 de `ENSAMBRIA_github_repository_governance_and_engineering_rules.md`
 
-> Este ADR registra decisiones y configuración del repositorio anterior. El reinicio no revoca la política documental, pero el `Cargo.lock`, el workflow y la configuración remota descritos aquí no se consideran vigentes sin una verificación nueva. El Ruleset e ID mencionados son evidencia histórica, no prueba de que sigan activos en el repositorio actual.
+> Este ADR registra decisiones de gobierno y configuración histórica. El reinicio no revoca la política documental; el estado remoto del Ruleset sigue sin verificarse.
 
 ---
 
@@ -37,7 +37,8 @@ Se habilita Dependabot para dos ecosistemas:
 - Las actualizaciones de seguridad (CVE) eluden el horario semanal y se abren inmediatamente.
 
 **Limitaciones conocidas:**
-- Dependabot no ejecuta `cargo audit` ni `cargo deny`. Ambas herramientas se añadirán en una tarea futura de security hardening para escanear el árbol completo de dependencias transitivas.
+- Dependabot no ejecuta `cargo audit` ni `cargo deny`; el workflow actual del repositorio ejecuta ambos controles cuando existen el workspace y su lockfile.
+- [`deny.toml`](../../deny.toml) mantiene una lista explícita de licencias SPDX observadas en el árbol bloqueado y rechaza nuevas licencias no incluidas. La lista es una política automatizada de dependencias, no una aprobación o dictamen jurídico. Los crates propios `publish = false` se excluyen del chequeo de licencias externas; su licencia de producto permanece gobernada por el archivo [`LICENSE`](../../LICENSE).
 - No se añade `flutter` ni `dart` porque los proyectos de aplicaciones mobile no existen aún (Fase 5+).
 
 ### GitHub Rulesets como complemento de Branch Protection clásica
@@ -85,10 +86,9 @@ Ambos mecanismos se mantienen activos de forma complementaria. Las reglas del Ru
 ### Negativas / Riesgos
 - Dependabot genera PRs automáticos que requieren revisión. Con `open-pull-requests-limit: 5` (Cargo) y 3 (Actions) se controla el volumen.
 - La coexistencia de Branch Protection y Ruleset implica que ambas capas deben mantenerse sincronizadas si se modifica una; documentar cambios en ADR o issue.
-- `cargo audit` y `cargo deny` quedan pendientes; Dependabot no cubre dependencias transitivas con la misma profundidad.
+- La política SPDX deberá revisarse cuando cambie el árbol de dependencias; no implica aprobación legal de ENSAMBRIA ni autoriza licencias nuevas automáticamente.
 
 ### Acciones futuras requeridas
-- [ ] Añadir `cargo audit` / `cargo deny` en el workflow CI (tarea futura de security hardening).
 - [ ] Revisar y decidir merge de PRs de Dependabot según se abran.
 - [ ] Al incorporar más colaboradores, actualizar `required_approving_review_count` a ≥1 y reevaluar §8.1.
 - [ ] Al migrar a organización GitHub, evaluar Rulesets de organización y deprecar Branch Protection clásica.

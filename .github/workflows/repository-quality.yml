@@ -21,9 +21,29 @@ jobs:
     name: repository-quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
+      RUSTUP_TOOLCHAIN: 1.99.1
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ensambria_core_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_USER: core_admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U core_admin -d ensambria_core_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt
 
       - name: Validate engineering skills and agent profiles
         run: |
@@ -36,7 +56,20 @@ jobs:
           cargo fmt --all -- --check
           cargo check --locked --workspace --all-targets
           cargo clippy --locked --workspace --all-targets -- -D warnings
-          cargo test --locked --workspace
+
+      - name: Create restricted PostgreSQL test role
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: |
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime;"
+
+      - name: Run Rust tests against PostgreSQL
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo test --locked --workspace
 
   security-dependencies:
     name: security-dependencies

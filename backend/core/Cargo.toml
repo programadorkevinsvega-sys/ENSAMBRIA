@@ -2,7 +2,12 @@
 name = "ensambria-core"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.94"
 publish = false
 
 [dependencies]
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

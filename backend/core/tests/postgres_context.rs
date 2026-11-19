@@ -28,7 +28,7 @@ async fn test_pool_with_timeout(acquire_timeout: Duration) -> PgPool {
 }
 
 async fn current_tenant(pool: &PgPool) -> Option<String> {
-    sqlx::query_scalar("SELECT current_setting('app.tenant_id', true)")
+    sqlx::query_scalar("SELECT NULLIF(current_setting('app.tenant_id', true), '')")
         .fetch_one(pool)
         .await
         .expect("the transaction-local tenant setting must be readable")

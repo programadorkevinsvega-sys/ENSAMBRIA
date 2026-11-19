@@ -1,0 +1,155 @@
+name: CORE staging deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Repository quality
+    types:
+      - completed
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: core-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: core-staging
+    permissions:
+      contents: read
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+      CORE_STAGING_HOST: ${{ vars.CORE_STAGING_HOST }}
+      CORE_STAGING_SSH_USER: ubuntu
+      CORE_PACKAGE: ${{ runner.temp }}/ensambria-core-staging.tar.gz
+
+    steps:
+      - name: Check out the exact CI-validated commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Verify the checked-out commit
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Install the pinned Rust toolchain and musl target
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y musl-tools
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup target add x86_64-unknown-linux-musl --toolchain 1.99.1
+
+      - name: Build CORE and its migration runner
+        run: >-
+          cargo build --locked --release --package ensambria-core
+          --bin core --bin core-migrate --target x86_64-unknown-linux-musl
+
+      - name: Package only binaries and migration SQL
+        id: package
+        shell: bash
+        run: |
+          artifact_directory="$(mktemp -d "${RUNNER_TEMP}/core-artifacts.XXXXXX")"
+          trap 'rm -rf -- "$artifact_directory"' EXIT
+          install -m 0750 \
+            target/x86_64-unknown-linux-musl/release/core \
+            "$artifact_directory/core"
+          install -m 0750 \
+            target/x86_64-unknown-linux-musl/release/core-migrate \
+            "$artifact_directory/core-migrate"
+          mkdir "$artifact_directory/migrations"
+          mapfile -d '' -t migration_files < <(
+            find backend/core/migrations -maxdepth 1 -type f -name '*.sql' -print0 | sort -z
+          )
+          test "${#migration_files[@]}" -gt 0
+          for migration_file in "${migration_files[@]}"; do
+            install -m 0640 "$migration_file" "$artifact_directory/migrations/"
+          done
+          tar --create --gzip --file "$CORE_PACKAGE" \
+            --directory "$artifact_directory" core core-migrate migrations
+          echo "path=$CORE_PACKAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Validate staging connection settings
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+        run: |
+          [[ -n "$CORE_STAGING_HOST" ]]
+          [[ "$CORE_STAGING_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+          [[ -n "$DEPLOY_SSH_KEY" ]]
+          [[ -n "$TS_OAUTH_CLIENT_ID" ]]
+          [[ -n "$TS_OAUTH_SECRET" ]]
+          install -m 0700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+
+      - name: Connect runner to the staging tailnet
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:core-staging-deployer
+          version: 1.104.4
+          hostname: github-core-staging
+          ping: ${{ vars.CORE_STAGING_HOST }}
+
+      - name: Deploy CORE and create its systemd services
+        env:
+          REMOTE_DIRECTORY: /tmp/ensambria-core-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          cleanup_remote_directory() {
+            ssh \
+              -i "$HOME/.ssh/id_ed25519" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o ConnectTimeout=20 \
+              -o StrictHostKeyChecking=accept-new \
+              "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
+              "rm -rf -- '${REMOTE_DIRECTORY}'"
+          }
+          trap cleanup_remote_directory EXIT
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=accept-new \
+            "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
+            "mkdir -m 0700 '${REMOTE_DIRECTORY}'"
+          scp \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=accept-new \
+            "$CORE_PACKAGE" \
+            backend/core/deployment/deploy-staging.sh \
+            backend/core/deployment/ensambria-core.service \
+            backend/core/deployment/ensambria-core-migrate.service \
+            "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}:${REMOTE_DIRECTORY}/"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=accept-new \
+            "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
+            "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
+
+      - name: Remove deployment SSH key
+        if: always()
+        run: rm -f -- "$HOME/.ssh/id_ed25519"

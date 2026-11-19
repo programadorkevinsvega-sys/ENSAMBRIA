@@ -1,4 +1,4 @@
-use std::{error::Error, io};
+use std::{error::Error, io, time::Duration};
 
 use ensambria_core::{
     health::{
@@ -11,14 +11,37 @@ use ensambria_core::{
 use tokio::{
     net::TcpListener,
     sync::{oneshot, watch},
+    time::timeout,
 };
 use tokio_stream::wrappers::TcpListenerStream;
-use tonic::transport::Server;
+use tonic::transport::{Endpoint, Server};
+use tonic_health::pb::{HealthCheckRequest, health_client::HealthClient};
 use tonic_health::{ServingStatus, server::health_reporter};
 use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args_os().skip(1);
+    match arguments.next() {
+        None => run_service().await,
+        Some(option) if option == "--healthcheck" => {
+            let address = arguments
+                .next()
+                .ok_or_else(|| io::Error::other("--healthcheck requires a gRPC address"))?;
+            if arguments.next().is_some() {
+                return Err(io::Error::other("unexpected health-check argument").into());
+            }
+            let address = address
+                .to_str()
+                .ok_or_else(|| io::Error::other("health-check address is invalid"))?
+                .parse()?;
+            health_check(address).await
+        }
+        Some(_) => Err(io::Error::other("unsupported command-line argument").into()),
+    }
+}
+
+async fn run_service() -> Result<(), Box<dyn Error>> {
     initialize_tracing()?;
     if let Err(error) = run().await {
         tracing::error!(
@@ -30,6 +53,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
         return Err(error);
     }
+    Ok(())
+}
+
+async fn health_check(address: std::net::SocketAddr) -> Result<(), Box<dyn Error>> {
+    let endpoint = Endpoint::from_shared(format!("http://{address}"))
+        .map_err(|_| io::Error::other("health-check address is invalid"))?;
+    let channel = timeout(Duration::from_secs(3), endpoint.connect()).await??;
+    let mut client = HealthClient::new(channel);
+
+    for service in [LIVENESS_SERVICE, READINESS_SERVICE] {
+        let response = timeout(
+            Duration::from_secs(3),
+            client.check(HealthCheckRequest {
+                service: service.to_owned(),
+            }),
+        )
+        .await??
+        .into_inner();
+        if response.status != ServingStatus::Serving as i32 {
+            return Err(
+                io::Error::other(format!("CORE health service {service} is not serving")).into(),
+            );
+        }
+    }
+
     Ok(())
 }
 

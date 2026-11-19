@@ -1,0 +1,33 @@
+[Unit]
+Description=ENSAMBRIA CORE runtime
+After=network.target
+
+[Service]
+Type=simple
+User=ensambria-core
+Group=ensambria-core
+WorkingDirectory=/opt/apps/ensambria
+EnvironmentFile=/etc/apps/ensambria/core/.env
+UnsetEnvironment=MIGRATIONS_DATABASE_URL
+ExecStart=/opt/apps/ensambria/current/core
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s
+TimeoutStopSec=30s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+SupplementaryGroups=ensambria-core-artifacts
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,68 @@
+name: Repository quality
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-quality:
+    name: repository-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Validate engineering skills and agent profiles
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 scripts/validate_engineering_skills.py
+
+  security-dependencies:
+    name: security-dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Detect Cargo workspace manifests
+        id: cargo_manifests
+        shell: bash
+        run: |
+          if [ -f Cargo.toml ] && [ -f Cargo.lock ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install cargo-audit and cargo-deny
+        if: steps.cargo_manifests.outputs.present == 'true'
+        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519
+        with:
+          tool: cargo-audit,cargo-deny
+
+      - name: Audit dependencies for vulnerabilities (cargo audit)
+        if: steps.cargo_manifests.outputs.present == 'true'
+        run: cargo audit
+
+      - name: Validate supply chain and license compliance (cargo deny)
+        if: steps.cargo_manifests.outputs.present == 'true'
+        run: cargo deny check
+
+      - name: Report Rust dependency audit as not applicable
+        if: steps.cargo_manifests.outputs.present != 'true'
+        run: |
+          echo "Skipped Rust dependency audits: root Cargo.toml and Cargo.lock are not both present."

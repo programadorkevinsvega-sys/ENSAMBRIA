@@ -1,0 +1,59 @@
+# Dependabot configuration — ENSAMBRIA
+#
+# §11 ENSAMBRIA_github_repository_governance_and_engineering_rules.md:
+# Secret scanning, dependency review, and Dependabot are required security controls.
+#
+# §13 ibid.: Dependencies must use controlled versions, lockfiles must be maintained,
+# and vulnerabilities must be reviewed. Cargo.lock is required for Rust applications.
+#
+# Ecosystems monitored:
+#   - cargo   : Rust workspace (Cargo.toml / Cargo.lock at repo root)
+#   - github-actions : all workflows under .github/workflows/
+
+version: 2
+
+updates:
+  # ── Rust / Cargo ───────────────────────────────────────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/"           # Workspace root where Cargo.lock lives
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    # Group all patch-level updates into a single PR to reduce noise.
+    # Minor and major updates are opened individually for visibility.
+    groups:
+      cargo-patch-updates:
+        applies-to: version-updates
+        update-types:
+          - "patch"
+    labels:
+      - "dependencies"
+      - "cargo"
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+    # Dependabot cannot run cargo audit; treat as complementary to
+    # `cargo audit` / `cargo deny` added in a future security task.
+    # Security-only updates bypass the weekly schedule automatically.
+
+  # ── GitHub Actions ─────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"
+    # Actions are pinned to full commit SHAs per §12 governance rules.
+    # Dependabot will propose SHA-pinned updates while preserving the
+    # version comment that documents the semantic version.

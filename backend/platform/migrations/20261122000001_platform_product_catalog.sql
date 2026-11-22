@@ -42,7 +42,7 @@ CREATE TABLE platform.product_domains (
     verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (product_id, domain_name),
-    CHECK ((status = 'pending_verification') = (verified_at IS NULL))
+    CHECK ((status = 'active') = (verified_at IS NOT NULL))
 );
 
 CREATE TABLE platform.product_markets (

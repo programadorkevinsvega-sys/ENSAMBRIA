@@ -4,3 +4,4 @@ pub mod identity_authentication;
 pub mod observability;
 pub mod postgres;
 pub mod runtime_config;
+pub mod platform_product_policy;

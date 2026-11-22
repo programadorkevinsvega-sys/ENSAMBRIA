@@ -202,7 +202,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let (token, token_hash) =
             SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
         let issued: bool =
-            sqlx::query_scalar("SELECT core.auth_issue_verification_token($1, $2, $3, $4)")
+            sqlx::query_scalar("SELECT core.auth_issue_verification_token($1, $2, $3, to_timestamp($4::double precision))")
                 .bind(identity_id)
                 .bind(Uuid::now_v7())
                 .bind(token_hash.as_bytes())
@@ -294,7 +294,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                     .bind(Uuid::now_v7())
                     .bind(identity_id)
                     .bind(challenge_hash.as_bytes())
-                    .bind(expires_at)
+                   .bind(unix_timestamp(expires_at)?)
                     .fetch_one(&self.pool)
                     .await
                     .map_err(|_| AuthenticationError::Storage)?;
@@ -824,9 +824,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .bind(session_id)
                 .bind(identity_id)
                 .bind(access_hash.as_bytes())
-                .bind(access_expiry)
+               .bind(unix_timestamp(access_expiry)?)
                 .bind(refresh_hash.as_bytes())
-                .bind(refresh_expiry)
+               .bind(unix_timestamp(refresh_expiry)?)
                 .fetch_one(&mut **transaction)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;

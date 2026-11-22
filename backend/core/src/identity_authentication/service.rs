@@ -662,6 +662,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     pub async fn begin_totp_enrollment(
         &self,
         access_token: &str,
+        current_password: &str,
     ) -> Result<String, AuthenticationError> {
         let identity_id = self.authenticate_access_token(access_token).await?;
         let secret = TotpSecret::generate().map_err(|_| AuthenticationError::Cryptography)?;
@@ -678,6 +679,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .establish(&mut transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.verify_current_password_in_transaction(identity_id, current_password, &mut transaction)
+            .await?;
         let row = sqlx::query(
             "INSERT INTO core.identity_mfa_totp (identity_id, encrypted_secret, encryption_key_version) VALUES ($1, $2, $3) ON CONFLICT (identity_id) DO UPDATE SET encrypted_secret = EXCLUDED.encrypted_secret, encryption_key_version = EXCLUDED.encryption_key_version, confirmed_at = NULL, last_accepted_step = NULL, updated_at = clock_timestamp() WHERE core.identity_mfa_totp.confirmed_at IS NULL RETURNING identity_id",
         )
@@ -709,6 +712,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     pub async fn confirm_totp_enrollment(
         &self,
         access_token: &str,
+        current_password: &str,
         code: &str,
     ) -> Result<Vec<String>, AuthenticationError> {
         let identity_id = self.authenticate_access_token(access_token).await?;
@@ -722,6 +726,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .establish(&mut transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.verify_current_password_in_transaction(identity_id, current_password, &mut transaction)
+            .await?;
         let row = sqlx::query(
             "SELECT encrypted_secret, encryption_key_version FROM core.identity_mfa_totp WHERE identity_id = $1 AND confirmed_at IS NULL",
         )
@@ -798,20 +804,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .establish(&mut transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        let encoded: String = sqlx::query_scalar(
-            "SELECT password_hash FROM core.identity_credentials WHERE identity_id = $1",
-        )
-        .bind(identity_id)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(|_| AuthenticationError::Storage)?;
-        let verifier =
-            PasswordHash::from_phc(&encoded).map_err(|_| AuthenticationError::Storage)?;
-        if !verify_password(current_password, &verifier)
-            .map_err(|_| AuthenticationError::Cryptography)?
-        {
-            return Err(AuthenticationError::InvalidCredentials);
-        }
+        self.verify_current_password_in_transaction(identity_id, current_password, &mut transaction)
+            .await?;
         sqlx::query("DELETE FROM core.identity_mfa_recovery_codes WHERE identity_id = $1")
             .bind(identity_id)
             .execute(&mut *transaction)
@@ -885,6 +879,29 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .map_err(|_| AuthenticationError::Storage)?;
         self.record_audit(Some(identity_id), "auth.sessions.revoked_all", "success", Some("identity"), Some(identity_id))
             .await?;
+        Ok(())
+    }
+
+    async fn verify_current_password_in_transaction(
+        &self,
+        identity_id: Uuid,
+        current_password: &str,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<(), AuthenticationError> {
+        let encoded: String = sqlx::query_scalar(
+            "SELECT password_hash FROM core.identity_credentials WHERE identity_id = $1",
+        )
+        .bind(identity_id)
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
+        let verifier =
+            PasswordHash::from_phc(&encoded).map_err(|_| AuthenticationError::Storage)?;
+        if !verify_password(current_password, &verifier)
+            .map_err(|_| AuthenticationError::Cryptography)?
+        {
+            return Err(AuthenticationError::InvalidCredentials);
+        }
         Ok(())
     }
 

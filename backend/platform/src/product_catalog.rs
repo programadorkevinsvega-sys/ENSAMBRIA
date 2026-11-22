@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct ProductCatalog {
     pool: PgPool,
+    cache: Option<TtlCache>,
 }
 
 impl ProductCatalog {
@@ -17,7 +18,11 @@ impl ProductCatalog {
         Self { pool, cache: None }
     }
 
-    pub fn with_cache(pool: PgPool, cache: TtlCache) -> Self {\n        Self { pool, cache: Some(cache) }\n    }\n\n    pub async fn get_active_product(
+    pub fn with_cache(pool: PgPool, cache: TtlCache) -> Self {
+        Self { pool, cache: Some(cache) }
+    }
+
+    pub async fn get_active_product(
         &self,
         product_id: Uuid,
     ) -> Result<Option<ProductCatalogEntry>, ProductCatalogError> {

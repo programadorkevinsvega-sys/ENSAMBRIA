@@ -232,6 +232,15 @@ fn authentication_service(
 #[tokio::test]
 async fn transactional_email_delivery_failures_are_reported_to_callers() {
     let pool = test_pool().await;
+    let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
+        .expect("isolated PostgreSQL migration URL must be configured");
+    let inspection_pool = PgPool::connect(&migration_url)
+        .await
+        .expect("migration identity must connect for privileged test inspection");
+    sqlx::query("SET ROLE core_schema_owner")
+        .execute(&inspection_pool)
+        .await
+        .expect("migration identity must assume the CORE schema owner for test inspection");
     let failing_service = failing_authentication_service(pool.clone());
     let registration_email = format!("{}@example.test", Uuid::now_v7());
 
@@ -279,7 +288,7 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
         "SELECT count(*) FROM core.identity_verification_tokens t JOIN core.identities i ON i.id = t.identity_id WHERE i.email_normalized = $1 AND t.consumed_at IS NULL",
     )
     .bind(&pending_email)
-    .fetch_one(&pool)
+    .fetch_one(&inspection_pool)
     .await
     .expect("inspect pending verification token");
     assert_eq!(
@@ -314,13 +323,14 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
         "SELECT count(*) FROM core.account_recovery_tokens t JOIN core.identities i ON i.id = t.identity_id WHERE i.email_normalized = $1",
     )
     .bind(&recovery_email)
-    .fetch_one(&pool)
+    .fetch_one(&inspection_pool)
     .await
     .expect("inspect failed recovery enqueue");
     assert_eq!(
         persisted_failed_recovery, 0,
         "failed transactional enqueue must roll back the recovery token"
     );
+    inspection_pool.close().await;
     pool.close().await;
 }
 
@@ -480,17 +490,27 @@ async fn totp_enrollment_mfa_challenge_recovery_code_and_disable_complete() {
         Ok(LoginOutcome::MfaRequired { challenge_token }) => challenge_token,
         _ => panic!("subsequent login must still require MFA"),
     };
+    let recovery_session = service
+        .verify_mfa_challenge(&next_challenge, &recovery_codes[0])
+        .await
+        .expect("an unused recovery code must complete the MFA challenge");
+    assert_eq!(recovery_session.identity_id, identity_id);
+
+    let replay_challenge = match service.login(&email, password).await {
+        Ok(LoginOutcome::MfaRequired { challenge_token }) => challenge_token,
+        _ => panic!("MFA must remain enabled after recovery-code authentication"),
+    };
     assert_eq!(
         service
-            .verify_mfa_challenge(&next_challenge, &recovery_codes[0])
+            .verify_mfa_challenge(&replay_challenge, &recovery_codes[0])
             .await
             .unwrap_err(),
         ensambria_core::identity_authentication::service::AuthenticationError::InvalidMfaFactor,
-        "consumed MFA recovery code must not be reusable"
+        "a consumed MFA recovery code must not be reusable"
     );
 
     service
-        .disable_totp(&mfa_session.access_token, password)
+        .disable_totp(&recovery_session.access_token, password)
         .await
         .expect("current password and authenticated session must disable TOTP");
     assert!(matches!(

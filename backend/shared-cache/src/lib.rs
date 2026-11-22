@@ -133,12 +133,16 @@ impl TtlCache {
         }
         let mut clients = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
-            let redis_info = RedisConnectionInfo::default()
-                .set_username(username.clone())
-                .set_password(password.clone());
-            let node_info = SentinelNodeConnectionInfo::default()
-                .set_tls_mode(TlsMode::Secure)
-                .set_redis_connection_info(redis_info);
+            let redis_info = RedisConnectionInfo {
+                db: 0,
+                username: Some(username.clone()),
+                password: Some(password.clone()),
+                ..RedisConnectionInfo::default()
+            };
+            let node_info = SentinelNodeConnectionInfo {
+                tls_mode: Some(TlsMode::Secure),
+                redis_connection_info: Some(redis_info),
+            };
             let mut client = SentinelClient::build(
                 nodes.clone(),
                 master.clone(),

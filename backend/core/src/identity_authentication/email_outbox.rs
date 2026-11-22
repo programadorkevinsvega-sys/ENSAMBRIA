@@ -38,6 +38,26 @@ impl EmailDelivery for OutboxEmailDelivery {
             Ok(())
         })
     }
+
+    fn send_in_transaction<'a>(
+        &'a self,
+        connection: &'a mut sqlx::PgConnection,
+        message: EmailMessage,
+    ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
+        Box::pin(async move {
+            sqlx::query(
+                "INSERT INTO core.email_outbox (id, recipient, subject, text_body) VALUES ($1, $2, $3, $4)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(message.recipient)
+            .bind(message.subject)
+            .bind(message.text_body)
+            .execute(connection)
+            .await
+            .map_err(|_| EmailDeliveryError)?;
+            Ok(())
+        })
+    }
 }
 
 /// Starts the production SMTP worker using CORE_SMTP_* deployment secrets.

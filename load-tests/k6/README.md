@@ -1,25 +1,49 @@
-# Functional API load tests (k6)
+# k6 performance tests
 
-This harness intentionally requires an explicit application endpoint. It refuses health, readiness, liveness, and metrics paths so that infrastructure probes cannot be mistaken for business-capacity evidence.
+## CI smoke: real BUSINESS authentication boundary
 
-## Run
+The Redis HA integration job starts the compiled BUSINESS HTTP binary against the
+ephemeral GitHub Actions PostgreSQL and Redis topology. For each Redis mode
+(Sentinel, Sentinel after failover, Cluster, and Cluster after failover), the
+runtime check executes:
 
 ```sh
-k6 run load-tests/k6/functional-api.js \
-  -e TARGET_URL='https://staging.example.test/<real-functional-route>' \
-  -e METHOD=POST \
-  -e BODY_JSON='{"example":"replace-with-real-contract"}' \
-  -e BEARER_TOKEN="$ENSAMBRIA_STAGING_TEST_TOKEN" \
-  -e ARRIVAL_RATE=100 \
-  -e PREALLOCATED_VUS=100 \
-  -e MAX_VUS=1000 \
-  -e DURATION=5m
+docker run --rm --network host -v "$PWD:/work:ro" -w /work \
+  grafana/k6:0.54.0 run --quiet load-tests/k6/business-auth-boundary-smoke.js
 ```
 
-Optional `HEADERS_JSON` supplies additional JSON headers. Use dedicated synthetic tenants/accounts and non-production data. Never put credentials directly in source control or command history; inject them through the CI secret manager.
+This is deliberately one unauthenticated, read-only request to
+`GET /v1/business/establishments`. It must return HTTP 401. The test verifies
+that the actual BUSINESS HTTP router enforces its authentication boundary while
+Redis is configured and after failover. It creates no accounts, does not send
+email, and does not mutate tenant data.
 
-The default gates are fewer than 1% failed requests, p95 below 500 ms, and p99 below 1 s. Tune them to the service SLO and environment before a capacity run. Record the tested commit, endpoint contract, arrival rate, achieved throughput, p95/p99, error rate, CPU/memory, PostgreSQL pool saturation, Redis connections/latency, and replica count.
+This is a functional smoke check, **not** a capacity, throughput, load, stress,
+spike, soak, or production-readiness result. It has no latency SLO because no
+approved performance objective has been supplied.
 
-## Current limitation
+## Functional API load harness
 
-CORE currently exposes health checks but does not yet expose a functional authentication HTTP/gRPC API runtime, and the BUSINESS runtime is not present in this branch. Therefore this harness is not wired into CI and cannot honestly produce an ENSAMBRIA business-capacity result yet. Add the real route contract and staging secrets before executing it; do not substitute `/health`.
+`functional-api.js` is retained for a future explicitly authorized target. It
+requires a real application endpoint and credentials injected by the approved
+secret manager. It rejects health, readiness, liveness, and metrics endpoints.
+Do not run it until the target, owner authorization, synthetic data lifecycle,
+workload, thresholds, duration, observability, and stop conditions are approved.
+
+The previous externally hosted staging workflow has been removed because this
+repository currently has no deployed VM or authorized external staging target.
+No external target is inferred from repository secrets.
+
+## Evidence required before capacity testing
+
+Before enabling load, stress, spike, breakpoint, or soak profiles, record:
+
+- Authorized target and owning environment.
+- Business flow and synthetic test-data creation/cleanup procedure.
+- Closed/open workload model and justified VUs or arrival rate.
+- Approved p50/p95/p99 and error-rate thresholds.
+- Duration, ramp profile, maximum load, and stop conditions.
+- Application, PostgreSQL pool, Redis, and runner saturation signals.
+- Integrity checks, cleanup result, and post-test recovery.
+
+Never treat a successful smoke check as evidence of supported capacity.

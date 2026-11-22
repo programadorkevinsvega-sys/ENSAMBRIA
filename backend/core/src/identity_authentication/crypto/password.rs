@@ -139,7 +139,7 @@ impl Error for PasswordHashError {}
 
 #[cfg(test)]
 mod tests {
-    use super::{PasswordHash, hash_password, verify_password};
+    use super::{PHC_PREFIX, PasswordHash, hash_password, verify_password};
 
     #[test]
     fn password_hash_verifies_only_the_original_password_and_redacts_debug() {

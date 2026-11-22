@@ -491,3 +491,37 @@ async fn totp_enrollment_mfa_challenge_recovery_code_and_disable_complete() {
     ));
     pool.close().await;
 }
+
+
+#[tokio::test]
+async fn repeated_password_failures_lock_the_identity_even_with_the_correct_password() {
+    let pool = test_pool().await;
+    let delivery = CapturingEmailDelivery::default();
+    let service = authentication_service(pool.clone(), delivery.clone());
+    let email = format!("{}@example.test", Uuid::now_v7());
+    let password = "correct horse battery staple";
+
+    service
+        .register(&email, Some("Lockout Test"), password)
+        .await
+        .expect("registration must complete");
+    let verification_token = delivery.token_from_latest_message("verify-email?token=");
+    service
+        .verify_email(&verification_token)
+        .await
+        .expect("identity must be verified");
+
+    for _ in 0..5 {
+        assert_eq!(
+            service.login(&email, "incorrect password").await.unwrap_err(),
+            ensambria_core::identity_authentication::service::AuthenticationError::InvalidCredentials
+        );
+    }
+    assert_eq!(
+        service.login(&email, password).await.unwrap_err(),
+        ensambria_core::identity_authentication::service::AuthenticationError::TemporarilyLocked,
+        "the correct password must not bypass an active lockout"
+    );
+
+    pool.close().await;
+}

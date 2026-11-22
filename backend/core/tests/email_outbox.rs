@@ -143,3 +143,57 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
     runtime_pool.close().await;
     worker_pool.close().await;
 }
+
+#[tokio::test]
+async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
+    let (runtime_pool, worker_pool) = test_pools().await;
+    let outbox = OutboxEmailDelivery::new(runtime_pool.clone());
+    let recipient = format!("{}@example.test", Uuid::now_v7());
+
+    let mut rolled_back = runtime_pool.begin().await.expect("transaction must begin");
+    outbox
+        .send_in_transaction(
+            &mut *rolled_back,
+            EmailMessage {
+                recipient: recipient.clone(),
+                subject: "rollback test".into(),
+                text_body: "one-time token [REDACTED]".into(),
+            },
+        )
+        .await
+        .expect("outbox insert must join the caller transaction");
+    rolled_back.rollback().await.expect("transaction must roll back");
+
+    let after_rollback: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM core.email_outbox WHERE recipient = $1")
+            .bind(&recipient)
+            .fetch_one(&worker_pool)
+            .await
+            .expect("inspect rolled-back outbox row");
+    assert_eq!(after_rollback, 0);
+
+    let mut committed = runtime_pool.begin().await.expect("second transaction must begin");
+    outbox
+        .send_in_transaction(
+            &mut *committed,
+            EmailMessage {
+                recipient: recipient.clone(),
+                subject: "commit test".into(),
+                text_body: "one-time token [REDACTED]".into(),
+            },
+        )
+        .await
+        .expect("outbox insert must join the caller transaction");
+    committed.commit().await.expect("transaction must commit");
+
+    let after_commit: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM core.email_outbox WHERE recipient = $1")
+            .bind(&recipient)
+            .fetch_one(&worker_pool)
+            .await
+            .expect("inspect committed outbox row");
+    assert_eq!(after_commit, 1);
+
+    runtime_pool.close().await;
+    worker_pool.close().await;
+}

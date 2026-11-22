@@ -38,6 +38,46 @@ impl PlatformProductPolicy {
         Ok(product)
     }
 
+    /// Enforces both CORE's tenant association and PLATFORM's published capability contract.
+    /// Tenant RLS is applied inside the transaction; product IDs remain opaque cross-service references.
+    pub async fn require_tenant_capability(
+        &self,
+        pool: &sqlx::PgPool,
+        tenant_id: Uuid,
+        product_id: Uuid,
+        capability_code: &str,
+        contract_version: &str,
+    ) -> Result<ProductCatalogEntry, PlatformContractError> {
+        let mut transaction = pool.begin().await
+            .map_err(|_| PlatformContractError::CoreUnavailable)?;
+        sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
+            .bind(tenant_id.to_string())
+            .execute(&mut *transaction)
+            .await
+            .map_err(|_| PlatformContractError::CoreUnavailable)?;
+
+        let association: Option<i32> = sqlx::query_scalar(
+            "SELECT product_config_version FROM core.tenant_products              WHERE tenant_id = $1 AND product_id = $2 AND association_status = 'active'",
+        )
+        .bind(tenant_id)
+        .bind(product_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(|_| PlatformContractError::CoreUnavailable)?;
+
+        transaction.rollback().await
+            .map_err(|_| PlatformContractError::CoreUnavailable)?;
+        let configuration_version = association
+            .ok_or(PlatformContractError::TenantProductNotActive)?;
+
+        self.require_capability(
+            product_id,
+            capability_code,
+            contract_version,
+            configuration_version,
+        ).await
+    }
+
     /// Resolves a verified active domain using PLATFORM's canonical domain resolver.
     pub async fn resolve_domain(
         &self,
@@ -51,6 +91,8 @@ impl PlatformProductPolicy {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PlatformContractError {
     ProductUnavailable,
+    TenantProductNotActive,
+    CoreUnavailable,
     CapabilityUnavailable,
     ConfigurationVersionMismatch,
     ContractVersionMismatch,
@@ -61,6 +103,8 @@ impl std::fmt::Display for PlatformContractError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::ProductUnavailable => "PLATFORM product is not active or published",
+            Self::TenantProductNotActive => "CORE tenant does not have an active association with this product",
+            Self::CoreUnavailable => "CORE tenant product association could not be read",
             Self::CapabilityUnavailable => "PLATFORM product capability is not available",
             Self::ConfigurationVersionMismatch => "PLATFORM product configuration version does not match CORE association",
             Self::ContractVersionMismatch => "PLATFORM capability contract version does not match CORE requirement",

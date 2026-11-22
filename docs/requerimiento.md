@@ -70,7 +70,7 @@ Cada producto define su propia configuración declarativa/versionada, superficie
 | Multi-tenancy | Aislamiento efectivo entre organizaciones, validado en cada frontera |
 | Escalabilidad | Cuatro backends desplegables de forma independiente y extracción selectiva de módulos solo cuando se justifique |
 | Extensibilidad | Módulos, proveedores y extensiones controladas mediante contratos desacoplados |
-| Seguridad | RLS, RBAC, TLS/mTLS, Vault, auditoría y mínimo privilegio |
+| Seguridad | RLS, RBAC, TLS/mTLS, gestor de secretos seguro, auditoría y mínimo privilegio; integración nativa Vault/KMS planificada en 11.4 |
 | Concurrencia | Transacciones, restricciones, bloqueos y control explícito de conflictos |
 | Disponibilidad | Réplicas, recuperación, reconexión y tolerancia a fallos verificadas |
 | Integridad financiera | Ledger inmutable, idempotencia, liquidaciones y conciliación |
@@ -1326,8 +1326,8 @@ Implementar:
 - Aislamiento en colas y eventos.
 - Aislamiento en búsquedas.
 - Auditoría.
-- Protección y rotación de secretos mediante HashiCorp Vault, con aislamiento de rutas, roles y políticas por proyecto, entorno y workload.
-- Emisión/renovación de certificados internos mediante PKI y TLS validado sobre la red privada.
+- Protección y rotación de secretos mediante un mecanismo seguro de custodia con aislamiento por proyecto, entorno y workload. La integración nativa con HashiCorp Vault/KMS (KV, AppRole, Agent y PKI) se difiere a la subfase 11.4 y no es requisito de aceptación de Fase 1/1.2.
+- Emisión/renovación de certificados internos mediante PKI y TLS validado sobre la red privada; la automatización con Vault PKI se implementa en 11.4.
 - Rotación de credenciales.
 - Rate limiting.
 - Protección contra abuso.
@@ -1633,11 +1633,11 @@ La Fase 0 define la topología objetivo completa; no exige implementar simultán
 - Implementar las bibliotecas técnicas compartidas requeridas por los primeros recorridos CORE, comenzando por PostgreSQL/SQLx, pool por proceso, transacciones, contexto/RLS y acceso gRPC/Protobuf.
 - Para cada flujo durable de Fase 1, implementar en el mismo módulo dueño la escritura atómica de estado + Outbox, publicación recuperable con confirmación y reintentos acotados, y consumo Inbox idempotente cuando otro módulo/proceso aplique; probar duplicados, fallos en ventanas de commit/ACK/publicación y recuperación con PostgreSQL y JetStream reales. No extender el alcance a eventos sin necesidad de integración documentada.
 - Verificar en los recorridos de implementación afectados los pools reales con PostgreSQL: límites concurrentes, timeouts, reutilización de conexiones, aislamiento de credenciales/grants, contexto RLS sin fuga entre tenants tras commit/rollback/cancelación y recuperación ante indisponibilidad/saturación. Evidenciar que los workers no agotan el presupuesto de operaciones críticas; PgBouncer, si se adopta, exige pruebas específicas de compatibilidad.
-- Integrar TLS/identidad de servicio, propagación de contexto, errores tipados, observabilidad y acceso a Vault para los procesos que lo requieran.
+- Integrar TLS/identidad de servicio, propagación de contexto, errores tipados y observabilidad desde los primeros recorridos. Para secretos, usar durante las fases previas a 11.4 un mecanismo de custodia seguro y aislado por workload; el cliente/adaptador nativo de Vault y su PKI se implementan en 11.4.
 - Implementar desde el primer corte ejecutable la instrumentación de observabilidad aplicable según [ENSAMBRIA_Observability_Monitoring_Alerting_SLO.md](rules/ENSAMBRIA_Observability_Monitoring_Alerting_SLO.md), con pruebas de propagación, correlación, redacción y degradación no bloqueante para los componentes realmente utilizados. No declarar SLI/SLO o alertas calibradas sin base y verificación.
 - Integrar Redis solo para caché con TTL, NATS Core para fan-out efímero y JetStream/Outbox para los estados/eventos durables aplicables; documentar N/A concretos antes de implementar.
 - Mantener los módulos de dominio como dueños de sus contratos, políticas, schemas, repositorios, migraciones, Outbox y reglas de negocio.
-- Probar interoperabilidad, aislamiento, autorización, fallos, recuperación y redacción con PostgreSQL, Redis y NATS reales en el entorno de desarrollo definido. La integración con Vault y certificados no se considera validada sin acceso al entorno/credenciales autorizados; no se reemplaza por simulaciones.
+- Probar interoperabilidad, aislamiento, autorización, fallos, recuperación y redacción con PostgreSQL, Redis y NATS reales en el entorno de desarrollo definido. Vault/KMS/PKI no forma parte del gate de aceptación de Fase 1/1.2: su integración se valida de extremo a extremo en 11.4, con acceso y credenciales autorizados; no se reemplaza por simulaciones.
 - Identidad.
 - Autenticación.
 - Autorización.
@@ -1656,7 +1656,7 @@ La Fase 0 define la topología objetivo completa; no exige implementar simultán
 - Persistencia.
 - Seguridad multi-tenant.
 
-Entregable: núcleo funcional, persistente y probado, con la infraestructura común efectivamente usada por los recorridos CORE aplicables, aislamiento tenant/sucursal validado y contratos arquitectónicos transversales documentados con ownership y trazabilidad hacia sus fases de implementación. La Fase 1 no se cierra si falta una prueba obligatoria con servicios reales o una integración bloqueada se declara validada.
+Entregable: núcleo funcional, persistente y probado, con la infraestructura común efectivamente usada por los recorridos CORE aplicables, aislamiento tenant/sucursal validado y contratos arquitectónicos transversales documentados con ownership y trazabilidad hacia sus fases de implementación. La Fase 1 no se cierra si falta una prueba obligatoria con servicios reales o una integración bloqueada se declara validada. La integración nativa Vault/KMS/PKI está expresamente excluida de este gate y se acepta en 11.4; esto no exime de custodiar y proteger correctamente los secretos en cada entorno desde su primera utilización.
 
 ## FASE 2 — Primeros verticales
 
@@ -1805,7 +1805,7 @@ La aceptación del Marketplace cubre resultados por ubicación elegida/autorizad
 
 La aceptación de cadenas prueba permisos suficientes/insuficientes por sucursal, aislamiento entre sucursales y tenants, consistencia de catálogos/precios globales y locales, transferencias autorizadas, visibilidad de caja por rol y exactitud de reportes consolidados frente a los registros de cada establecimiento.
 
-## FASE 11 — Inteligencia artificial y ecosistema abierto
+## FASE 11 — Inteligencia artificial, ecosistema abierto y plataforma de seguridad
 
 - Asistente empresarial con consultas autorizadas sobre datos reales del tenant y definiciones de métricas consistentes.
 - IA comercial: promociones sugeridas para baja ocupación, análisis de rentabilidad y recomendaciones de inventario.
@@ -1816,6 +1816,9 @@ La aceptación de cadenas prueba permisos suficientes/insuficientes por sucursal
 - Marketplace de extensiones.
 - API empresarial.
 - Ecosistema de integraciones.
+- **11.4 — Gestión centralizada de secretos y certificados:** integrar HashiCorp Vault/KMS como proveedor nativo de secretos y PKI para todos los workloads ENSAMBRIA, con separación estricta por entorno/backend/proceso, políticas de mínimo privilegio, bootstrap seguro, renovación de leases/certificados, rotación coordinada de credenciales y claves, auditoría, backup/restore probado y comportamiento fail-closed ante indisponibilidad. La implementación depende de autorización expresa del operador del Vault compartido y de verificar aislamiento, TLS/CA, rutas/mounts, auditoría y recuperación. Esta integración es una mejora de plataforma planificada para la última fase; no bloquea el cierre de Fase 1/1.2.
+
+Criterios de aceptación de 11.4: cada workload obtiene únicamente sus secretos autorizados; no hay lectura cruzada entre entornos/backends; ningún secreto aparece en repositorio, imágenes, logs, trazas o artefactos CI; se prueban provisión/rebootstrap, renovación, rotación sin interrupción, revocación, expiración, caída/recuperación de Vault, auditoría y restauración desde backup en entorno aislado. No se toca el Vault compartido ni recursos de otros proyectos sin autorización del operador.
 
 Las fases pueden ajustarse después del descubrimiento técnico, pero ningún requisito debe desaparecer sin una decisión explícita.
 

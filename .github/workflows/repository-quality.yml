@@ -35,12 +35,17 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_*.py'
           python3 scripts/validate_engineering_skills.py
 
-      - name: Validate Rust workspace
+      - name: Check Rust formatting (cargo fmt)
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: |
-          cargo fmt --all -- --check
-          cargo check --locked --workspace --all-targets
-          cargo clippy --locked --workspace --all-targets -- -D warnings
+        run: cargo fmt --all -- --check
+
+      - name: Compile Rust workspace (cargo check)
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo check --locked --workspace --all-targets
+
+      - name: Lint Rust workspace (cargo clippy)
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
 
   postgres-integration:

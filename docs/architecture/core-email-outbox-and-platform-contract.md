@@ -57,3 +57,9 @@ CORE must not query PLATFORM tables or create cross-schema foreign keys. Constru
 Domain resolution must use `resolve_domain`, which delegates normalization and verified-domain lookup to PLATFORM. PLATFORM and CORE pools use their respective least-privilege runtime identities.
 
 CI's PostgreSQL integration job seeds a published PLATFORM product and exercises the CORE policy against that live PostgreSQL contract, including mismatched versions, unavailable capabilities, and tenant association.
+
+## Redis shared-cache configuration
+
+The shared cache reads `PLATFORM_REDIS_URL` and optional `PLATFORM_REDIS_POOL_SIZE` (default 4, maximum 64 connections per process). Set `ENSAMBRIA_ENV=production` in production deployments. In that mode startup rejects Redis URLs unless they use `rediss://` and include both an ACL username and password. Credentials must be injected by the deployment secret manager; do not commit them or place them in logs. Non-production environments may use an isolated `redis://` service.
+
+The cache is an optimization only: PostgreSQL remains authoritative and PLATFORM falls back to PostgreSQL when Redis is unavailable. This client currently targets a Redis endpoint and does not implement Redis Sentinel discovery, Redis Cluster sharding, or managed failover orchestration; those capabilities must be supplied and tested by the deployment topology before claiming high availability or million-user capacity. Pool size is per process, so total Redis connections equal the configured pool multiplied by the number of service replicas.

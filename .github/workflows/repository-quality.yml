@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/core-identity-tenancy-1-2
   push:
     branches:
       - main

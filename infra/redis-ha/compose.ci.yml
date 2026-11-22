@@ -1,6 +1,21 @@
 name: ensambria-redis-ha
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: core_admin
+      POSTGRES_PASSWORD: ensambria-ci-only
+      POSTGRES_DB: ensambria_ci
+    networks:
+      ha:
+        ipv4_address: 172.29.0.30
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U core_admin -d ensambria_ci"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
   redis-master:
     image: redis:7.4-alpine
     command: ["sh", "-c", "exec redis-server --port 6379 --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]

@@ -291,20 +291,22 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f infra/redis-ha/compose.ci.yml stop cluster-1
-          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-2 sh -ec '
-            healthy=false
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-6 sh -ec '
+            promoted=false
             for attempt in $(seq 1 60); do
-              state="$(redis-cli -a "$REDIS_PASSWORD" -p 7002 --raw CLUSTER INFO 2>/dev/null | grep "^cluster_state:" || true)"
-              if [ "$state" = "cluster_state:ok" ]; then
-                echo "Redis Cluster recovered after master loss"
-                healthy=true
+              state="$(redis-cli -p 7006 --raw CLUSTER INFO 2>/dev/null | tr -d "\\r" | grep "^cluster_state:" || true)"
+              nodes="$(redis-cli -p 7006 --raw CLUSTER NODES 2>/dev/null || true)"
+              if [ "$state" = "cluster_state:ok" ] && printf "%s\\n" "$nodes" | grep -Eq "172.29.0.26:7006@17006 master"; then
+                echo "Replica 172.29.0.26:7006 was promoted and cluster state is healthy"
+                promoted=true
                 break
               fi
               sleep 1
             done
-            test "$healthy" = true
+            test "$promoted" = true
           '
           cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
       - name: Collect Redis HA diagnostics on failure
         if: failure()
         run: |

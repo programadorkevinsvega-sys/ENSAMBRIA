@@ -1,3 +1,3 @@
 [workspace]
-members = ["backend/core", "backend/platform", "backend/shared-cache"]
+members = ["backend/core", "backend/platform", "backend/shared-cache", "backend/business"]
 resolver = "3"

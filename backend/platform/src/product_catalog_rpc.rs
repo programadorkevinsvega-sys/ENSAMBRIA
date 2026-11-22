@@ -72,7 +72,9 @@ impl ProductCatalogService for ProductCatalogRpc {
                 .get_published_configuration(product_id, version)
                 .await
                 .map_err(map_catalog_error)?
-                .ok_or_else(|| Status::not_found("published PLATFORM configuration was not found"))?;
+                .ok_or_else(|| {
+                    Status::not_found("published PLATFORM configuration was not found")
+                })?;
             let canonical_json = serde_json::to_vec(&configuration.canonical_json)
                 .map_err(|_| Status::internal("published configuration serialization failed"))?;
             Ok(Response::new(ContractConfiguration {

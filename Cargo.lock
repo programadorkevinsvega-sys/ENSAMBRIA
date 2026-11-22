@@ -304,6 +304,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ensambria-platform"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sqlx",
+ "uuid",
+]
+
+[[package]]
 name = "ensambria-core"
 version = "0.1.0"
 dependencies = [

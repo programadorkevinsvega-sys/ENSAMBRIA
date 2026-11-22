@@ -150,8 +150,63 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     .fetch_one(&mut *tx)
     .await
     .expect("authorization evaluator must execute for another branch");
+    let denied_organization_scope: bool = sqlx::query_scalar(
+        "SELECT core.has_permission($1, $2, 'branch.manage', $3, NULL)",
+    )
+    .bind(actor)
+    .bind(tenant)
+    .bind(organization)
+    .fetch_one(&mut *tx)
+    .await
+    .expect("branch-scoped permission must not imply organization scope");
+    let denied_tenant_scope: bool = sqlx::query_scalar(
+        "SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)",
+    )
+    .bind(actor)
+    .bind(tenant)
+    .fetch_one(&mut *tx)
+    .await
+    .expect("branch-scoped permission must not imply tenant scope");
     assert!(allowed);
     assert!(!denied_wrong_branch);
+    assert!(!denied_organization_scope);
+    assert!(!denied_tenant_scope);
+
+    let organization_regional: (Option<String>, Option<String>, Option<String>, Option<String>) =
+        sqlx::query_as(
+            "SELECT country_code::text, currency_code::text, locale, time_zone FROM core.resolve_regional_context($1, $2, NULL)",
+        )
+        .bind(tenant)
+        .bind(organization)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("organization regional context must resolve");
+    assert_eq!(
+        organization_regional,
+        (
+            Some("MX".to_owned()),
+            Some("MXN".to_owned()),
+            Some("es-MX".to_owned()),
+            Some("America/Mexico_City".to_owned())
+        )
+    );
+    let tenant_regional: (Option<String>, Option<String>, Option<String>, Option<String>) =
+        sqlx::query_as(
+            "SELECT country_code::text, currency_code::text, locale, time_zone FROM core.resolve_regional_context($1, NULL, NULL)",
+        )
+        .bind(tenant)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("tenant regional context must resolve");
+    assert_eq!(
+        tenant_regional,
+        (
+            Some("CO".to_owned()),
+            Some("COP".to_owned()),
+            Some("es-CO".to_owned()),
+            Some("America/Bogota".to_owned())
+        )
+    );
 
     let regional: (Option<String>, Option<String>, Option<String>, Option<String>) =
         sqlx::query_as(
@@ -189,6 +244,29 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
             "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA".to_owned()
         ))
     );
+
+    let denied_without_context: bool = sqlx::query_scalar(
+        "SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)",
+    )
+    .bind(actor)
+    .bind(tenant)
+    .bind(organization)
+    .bind(branch)
+    .fetch_one(&pool)
+    .await
+    .expect("authorization must fail closed without transaction context");
+    assert!(!denied_without_context);
+    let regional_without_context: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> =
+        sqlx::query_as(
+            "SELECT country_code::text, currency_code::text, locale, time_zone FROM core.resolve_regional_context($1, $2, $3)",
+        )
+        .bind(tenant)
+        .bind(organization)
+        .bind(branch)
+        .fetch_optional(&pool)
+        .await
+        .expect("regional resolution must fail closed without tenant context");
+    assert_eq!(regional_without_context, None);
 
     let direct_credentials: i64 =
         sqlx::query_scalar("SELECT count(*) FROM core.identity_credentials")

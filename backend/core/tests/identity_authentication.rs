@@ -252,6 +252,37 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
 
     let capture = CapturingEmailDelivery::default();
     let working_service = authentication_service(pool.clone(), capture.clone());
+
+    let pending_email = format!("{}@example.test", Uuid::now_v7());
+    working_service
+        .register(
+            &pending_email,
+            Some("Pending Verification Test"),
+            "correct horse battery staple",
+        )
+        .await
+        .expect("pending identity must be created with a queued verification message");
+    let original_verification_token = capture.token_from_latest_message("verify-email?token=");
+    failing_service
+        .resend_verification(&pending_email)
+        .await
+        .expect("resend response must not reveal delivery or account state");
+    let pending_tokens: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core.identity_verification_tokens t JOIN core.identities i ON i.id = t.identity_id WHERE i.email_normalized = $1 AND t.consumed_at IS NULL",
+    )
+    .bind(&pending_email)
+    .fetch_one(&pool)
+    .await
+    .expect("inspect pending verification token");
+    assert_eq!(
+        pending_tokens, 1,
+        "failed resend enqueue must preserve the previous usable verification token"
+    );
+    working_service
+        .verify_email(&original_verification_token)
+        .await
+        .expect("previous verification token must remain valid after failed resend");
+
     let recovery_email = format!("{}@example.test", Uuid::now_v7());
     working_service
         .register(

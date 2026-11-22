@@ -139,7 +139,6 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
 }
 
 
-#[derive(Clone, Default)]
 struct FailingEmailDelivery;
 
 impl EmailDelivery for FailingEmailDelivery {
@@ -166,6 +165,7 @@ fn failing_authentication_service(
     .expect("test authentication service configuration must be valid")
 }
 
+#[derive(Clone, Default)]
 struct CapturingEmailDelivery {
     messages: Arc<Mutex<Vec<EmailMessage>>>,
 }

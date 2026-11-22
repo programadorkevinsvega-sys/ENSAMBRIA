@@ -120,7 +120,7 @@ jobs:
               '018f0f2a-7b3c-7abc-8def-0123456789ab',
               1,
               'product-config.v1',
-              '{"registration":{"email_verification":true},"authentication":{"mfa_totp":true}}'::jsonb,
+              '{"branding":{"displayName":"ENSAMBRIA Core","brandName":"ENSAMBRIA"},"domains":["shop.example.test"],"markets":[{"countryCode":"CO","currencyCode":"COP","locale":"es-CO"}],"surfaces":[{"code":"operator.web","configurationVersion":1}],"capabilities":[{"code":"identity.auth","contractVersion":"v1"}]}'::jsonb,
               'published',
               clock_timestamp()
           );

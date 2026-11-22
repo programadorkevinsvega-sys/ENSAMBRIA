@@ -96,7 +96,7 @@ impl TtlCache {
             return Err(CacheError::InvalidTtl);
         }
 
-        let mut connection = self.connection.clone();
+        let mut connection = self.connection();
         redis::cmd("SET")
             .arg(key)
             .arg(value)

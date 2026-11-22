@@ -59,6 +59,7 @@ jobs:
     env:
       CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
       CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+      CORE_EMAIL_WORKER_DATABASE_URL: postgres://core_email_worker@127.0.0.1:5432/ensambria_core_test
       PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
       RUSTUP_TOOLCHAIN: 1.99.1
     services:
@@ -99,7 +100,10 @@ jobs:
             -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator;"
+            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql

@@ -202,6 +202,17 @@ jobs:
       PLATFORM_REDIS_USERNAME: default
       PLATFORM_REDIS_PASSWORD: ensambria-ci-only
       PLATFORM_REDIS_POOL_SIZE: 2
+      ENSAMBRIA_REDIS_REQUIRED: "true"
+      DATABASE_URL: postgres://core_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      CORE_DATABASE_MAX_CONNECTIONS: "4"
+      CORE_DATABASE_ACQUIRE_TIMEOUT_MS: "1500"
+      CORE_MFA_ENCRYPTION_KEY_VERSION: ci-v1
+      CORE_MFA_ENCRYPTION_KEY_HEX: "1111111111111111111111111111111111111111111111111111111111111111"
+      CORE_AUTH_RATE_LIMIT_SECRET_HEX: "2222222222222222222222222222222222222222222222222222222222222222"
+      CORE_PUBLIC_BASE_URL: https://business.example.test
+      BUSINESS_DATABASE_URL: postgres://business_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      BUSINESS_DATABASE_MAX_CONNECTIONS: "4"
+      BUSINESS_HTTP_LISTEN_ADDRESS: 127.0.0.1:18080
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -244,6 +255,27 @@ jobs:
             exit 1
           '
           sudo sh -c 'printf "172.29.0.10 redis-master\\n172.29.0.11 redis-replica\\n" >> /etc/hosts'
+      - name: Prepare PostgreSQL roles for the real BUSINESS runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres sh -ec '
+            for attempt in $(seq 1 60); do
+              if pg_isready -U core_admin -d ensambria_ci; then exit 0; fi
+              sleep 1
+            done
+            exit 1
+          '
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
+            psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE core_runtime LOGIN PASSWORD '''ensambria-ci-only''';"
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
+            psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE business_runtime LOGIN PASSWORD '''ensambria-ci-only''';"
+
+      - name: Build the actual BUSINESS HTTP runtime
+        run: cargo build --locked -p ensambria-business --bin business
+
       - name: Build shared Redis runtime smoke test
         run: cargo build --locked -p ensambria-shared-cache --example redis_ha_smoke
 
@@ -253,6 +285,14 @@ jobs:
           PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
           PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
         run: cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Start BUSINESS HTTP runtime with required Sentinel caches
+        env:
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
 
       - name: Force Sentinel master failure and verify automatic failover
         shell: bash
@@ -277,11 +317,25 @@ jobs:
             test "$promoted" = true
           '
           cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+      - name: Start BUSINESS HTTP runtime after Sentinel failover
+        env:
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
       - name: Verify backend shared-cache adapter through Redis Cluster
         env:
           PLATFORM_REDIS_MODE: cluster
           PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.21:7001;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
         run: cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Start BUSINESS HTTP runtime with required Cluster caches
+        env:
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.21:7001;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
 
       - name: Force Redis Cluster master failure and verify replica promotion
         shell: bash
@@ -307,6 +361,12 @@ jobs:
             test "$promoted" = true
           '
           cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Start BUSINESS HTTP runtime after Cluster failover
+        env:
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: bash scripts/ci/check-business-redis-runtime.sh
 
       - name: Collect Redis HA diagnostics on failure
         if: failure()

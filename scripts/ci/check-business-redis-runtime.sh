@@ -45,7 +45,7 @@ done
 # One local, read-only request verifies the real HTTP auth boundary without
 # creating users, sending email, mutating tenant data, or generating load.
 mkdir -p "$(dirname "$summary_file")"
-docker run --rm --network host \
+docker run --rm --network host --user "$(id -u):$(id -g)" \
     -v "$PWD:/work" -w /work \
     "$k6_image" run --quiet --summary-export="/work/$summary_file" \
     -e "TARGET_URL=$business_url" \

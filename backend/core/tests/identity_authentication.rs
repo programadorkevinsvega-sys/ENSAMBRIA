@@ -461,10 +461,11 @@ async fn totp_enrollment_mfa_challenge_recovery_code_and_disable_complete() {
         Ok(LoginOutcome::MfaRequired { challenge_token }) => challenge_token,
         _ => panic!("enabled MFA must require a second factor"),
     };
+    let totp_challenge_code = secret.code_at_step(current_step + 1);
     let mfa_session = service
-        .verify_mfa_challenge(&challenge_token, &recovery_codes[0])
+        .verify_mfa_challenge(&challenge_token, &totp_challenge_code)
         .await
-        .expect("one-time recovery code must complete the MFA challenge");
+        .expect("valid TOTP code must complete the MFA challenge");
     assert_eq!(mfa_session.identity_id, identity_id);
 
     let next_challenge = match service.login(&email, password).await {

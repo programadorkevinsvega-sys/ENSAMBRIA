@@ -119,3 +119,17 @@ La prueba autorizada se ejecutó el 2026-11-19 con un archivo temporal root-only
 | ACEPTADO | 1.1 está aceptada por el propietario el 2026-11-22, sobre la aprobación individual previa confirmada por él y una vez implementados/validados todos sus requisitos. PR #9 no tiene revisión independiente registrada; esto no bloquea la aceptación bajo el criterio del propietario y no se presenta como revisión independiente. La excepción temporal del `.env` para CORE staging está aprobada y documentada; no satisface Vault ni autoriza producción. No se tocó el Vault compartido. RLS de datos tenant y sus pruebas negativas corresponden al primer corte que introduzca filas tenant-scoped, no son una implementación requerida en 1.1. Fase 1 permanece abierta por sus subfases posteriores. |
 
 `cargo audit` había encontrado vulnerabilidades en dependencias opcionales del lockfile anterior; se actualizó SQLx y el lockfile (`libsqlite3-sys` 0.40.0), y la auditoría final pasó. No se suprimieron los avisos de versiones duplicadas de `cargo-deny`.
+
+
+## Redis — subfase 1.2 (integración obligatoria)
+
+**Aplicabilidad: SÍ.** La decisión previa de N/A de Redis en subfase 1.1 se mantiene limitada a su alcance; no justifica omitir Redis en 1.2. El contrato técnico compartido está en [redis-cache-contract.md](architecture/redis-cache-contract.md).
+
+- **IMPLEMENTADO EN RAMA:** paquete neutral `ensambria-shared-cache` con `TtlCache`, claves acotadas/validadas, TTL obligatorio, cliente asíncrono Redis `ConnectionManager`, timeouts y reconexión exponencial acotada.
+- **IMPLEMENTADO EN RAMA:** PLATFORM puede usar caché TTL para resolución dominio→producto como pista de routing (10 s). Un hit no autoriza: la entrada activa del catálogo se vuelve a resolver y CORE mantiene la validación autoritativa de asociación tenant–producto/capability. Los fallos Redis degradan a consulta PostgreSQL.
+- **IMPLEMENTADO EN RAMA:** prueba de integración de ida/vuelta/eliminación contra Redis real; pendiente conectar el servicio Redis en CI y ejecutar la suite.
+- **NO IMPLEMENTADO / BLOQUEO DE COMPOSICIÓN:** el binario CORE actual solo expone health gRPC y PLATFORM no tiene runtime productivo. El adapter existe, pero el wiring del catálogo cacheado corresponde a la composición del servicio de catálogo cuando se implemente; no afirmar que Redis ya está activo en staging.
+- **NO SE MIGRA A REDIS:** credenciales, tokens, MFA, revocación, lockout ni rate limiting autoritativo. La limitación de autenticación continúa en PostgreSQL.
+- **PENDIENTE PARA PRODUCCIÓN:** provisioning Redis TLS/ACL por secret manager, topología HA/sharding, dimensionamiento, observabilidad, invalidación desde mutaciones de catálogo y pruebas k6. La integración standalone actual no acredita capacidad para la carga objetivo.
+
+La evidencia y los criterios completos se mantienen en [contrato Redis](architecture/redis-cache-contract.md).

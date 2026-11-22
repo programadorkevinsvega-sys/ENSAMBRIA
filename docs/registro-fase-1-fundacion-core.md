@@ -18,6 +18,11 @@ La implementación de 1.1 incluye configuración PostgreSQL por entorno, pool SQ
 
 Las descripciones de objetivos alcanzados, rutas de código, migraciones, conteos de pruebas y comandos de ejecución que aparecían en versiones anteriores de este registro quedan retiradas como evidencia vigente. No deben utilizarse para afirmar que una subfase está implementada, validada o aceptada. El estado común y los criterios de aceptación están en [ROADMAP.md](../ROADMAP.md) y [docs/requerimiento.md, §§22–23](requerimiento.md).
 
+
+### Control de evidencia y cambios documentales posteriores
+
+CI #295 valida el código del SHA `48d2444bec977a73074e6d40c770aa6134bdc8c6`; no valida por sí solo los commits documentales posteriores. La armonización documental de esta rama se incorporó después de ese SHA. El run #297 (`45079332428`) iniciado durante esa actualización terminó con jobs cancelados al recibir nuevos commits; por tanto, no se considera validación del HEAD documental final. Antes de aceptar 1.2, verificar un CI completo `success` sobre el HEAD final de la rama y comprobar sus cuatro jobs obligatorios. No reutilizar el resultado de #295 como si correspondiera a un SHA posterior.
+
 ## Alcance requerido
 
 La Fase 1 implementará, según la secuencia del roadmap y en los owners correspondientes:

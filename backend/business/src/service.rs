@@ -10,13 +10,12 @@ const ESTABLISHMENT_LIST_TTL: Duration = Duration::from_secs(10);
 #[derive(Clone)]
 pub struct BusinessService {
     business_pool: PgPool,
-    core_pool: PgPool,
     cache: Option<TtlCache>,
 }
 
 impl BusinessService {
-    pub fn new(business_pool: PgPool, core_pool: PgPool, cache: Option<TtlCache>) -> Self {
-        Self { business_pool, core_pool, cache }
+    pub fn new(business_pool: PgPool, cache: Option<TtlCache>) -> Self {
+        Self { business_pool, cache }
     }
 
     pub async fn list_establishments(
@@ -24,18 +23,19 @@ impl BusinessService {
         identity_id: Uuid,
         tenant_id: Uuid,
     ) -> Result<Vec<Establishment>, BusinessError> {
-        self.require_membership(identity_id, tenant_id).await?;
+        let mut transaction = self.business_pool.begin().await.map_err(|_| BusinessError::Storage)?;
+        set_tenant(&mut transaction, tenant_id).await?;
+        require_active_membership(&mut transaction, identity_id, tenant_id).await?;
         let cache_key = format!("tenant:{tenant_id}:establishments:v1");
         if let Some(cache) = &self.cache {
             if let Ok(Some(value)) = cache.get(&cache_key).await {
                 if let Ok(items) = serde_json::from_slice::<Vec<Establishment>>(&value) {
+                    transaction.commit().await.map_err(|_| BusinessError::Storage)?;
                     return Ok(items);
                 }
             }
         }
 
-        let mut transaction = self.business_pool.begin().await.map_err(|_| BusinessError::Storage)?;
-        set_tenant(&mut transaction, tenant_id).await?;
         let rows = sqlx::query_as::<_, Establishment>(
             "SELECT id, tenant_id, organization_id, branch_id, display_name, status, created_at FROM business.establishments WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT 200"
         )
@@ -59,7 +59,6 @@ impl BusinessService {
         branch_id: Option<Uuid>,
         display_name: String,
     ) -> Result<Establishment, BusinessError> {
-        self.require_membership(identity_id, tenant_id).await?;
         let display_name = display_name.trim().to_owned();
         if display_name.is_empty() || display_name.chars().count() > 200 {
             return Err(BusinessError::InvalidInput);
@@ -67,6 +66,7 @@ impl BusinessService {
 
         let mut transaction = self.business_pool.begin().await.map_err(|_| BusinessError::Storage)?;
         set_tenant(&mut transaction, tenant_id).await?;
+        require_active_membership(&mut transaction, identity_id, tenant_id).await?;
         let organization_active: bool = sqlx::query_scalar(
             "SELECT EXISTS (SELECT 1 FROM core.organizations WHERE tenant_id = $1 AND id = $2 AND status = 'active')"
         )
@@ -112,24 +112,22 @@ impl BusinessService {
         Ok(row)
     }
 
-    async fn require_membership(&self, identity_id: Uuid, tenant_id: Uuid) -> Result<(), BusinessError> {
-        let mut transaction = self.core_pool.begin().await.map_err(|_| BusinessError::Storage)?;
-        sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
-            .bind(tenant_id.to_string())
-            .execute(&mut *transaction)
-            .await
-            .map_err(|_| BusinessError::Storage)?;
-        let active: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM core.tenant_memberships WHERE tenant_id = $1 AND identity_id = $2 AND status = 'active')"
-        )
-        .bind(tenant_id)
-        .bind(identity_id)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(|_| BusinessError::Storage)?;
-        transaction.rollback().await.map_err(|_| BusinessError::Storage)?;
-        if active { Ok(()) } else { Err(BusinessError::Forbidden) }
-    }
+}
+
+async fn require_active_membership(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    identity_id: Uuid,
+    tenant_id: Uuid,
+) -> Result<(), BusinessError> {
+    let membership: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM core.tenant_memberships WHERE tenant_id = $1 AND identity_id = $2 AND status = 'active' FOR SHARE"
+    )
+    .bind(tenant_id)
+    .bind(identity_id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(|_| BusinessError::Storage)?;
+    membership.map(|_| ()).ok_or(BusinessError::Forbidden)
 }
 
 async fn set_tenant(

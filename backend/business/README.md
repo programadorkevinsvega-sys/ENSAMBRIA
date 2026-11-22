@@ -15,6 +15,7 @@ Required:
 Optional:
 - `BUSINESS_HTTP_LISTEN_ADDRESS` (default `0.0.0.0:8080`).
 - `BUSINESS_DATABASE_MAX_CONNECTIONS` (default 32).
+- `ENSAMBRIA_REDIS_REQUIRED` (default `false`): when `true`, BUSINESS refuses to start if either the CORE-auth or BUSINESS Redis cache cannot connect; use this in deployments where Redis is a required dependency.
 - Redis configuration documented in `docs/architecture/core-email-outbox-and-platform-contract.md`.
 
 Build and run:

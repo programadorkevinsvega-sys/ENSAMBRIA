@@ -7,7 +7,7 @@ CREATE TABLE business.establishments (
     status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (tenant_id, id),
+    UNIQUE (tenant_id, id)
 );
 CREATE INDEX establishments_tenant_created_idx
     ON business.establishments (tenant_id, created_at DESC, id DESC);

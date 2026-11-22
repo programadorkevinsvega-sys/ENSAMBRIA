@@ -21,15 +21,5 @@ CREATE INDEX email_outbox_pending_idx
     ON core.email_outbox (available_at, created_at)
     WHERE status IN ('pending', 'processing');
 GRANT INSERT ON core.email_outbox TO core_runtime;
-DO $
-BEGIN
-    -- Staging/prod DB roles are provisioned out-of-band by the database operator.
-    -- Keep migrations deployable before the isolated worker login is provisioned.
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'core_email_worker') THEN
-        GRANT USAGE ON SCHEMA core TO core_email_worker;
-        GRANT SELECT, UPDATE ON core.email_outbox TO core_email_worker;
-    END IF;
-END
-$;
 COMMENT ON TABLE core.email_outbox IS
     'Durable transactional email queue. Payloads contain one-time links; access is restricted to CORE runtime workers.';

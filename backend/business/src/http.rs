@@ -30,6 +30,12 @@ pub fn router<D: EmailDelivery + 'static>(state: Arc<ApiState<D>>) -> Router {
         .route("/v1/auth/recovery/complete", post(recovery_complete::<D>))
         .route("/v1/auth/refresh", post(refresh::<D>))
         .route("/v1/auth/mfa/challenge", post(mfa_challenge::<D>))
+        .route("/v1/auth/mfa/enrollment/begin", post(mfa_begin::<D>))
+        .route("/v1/auth/mfa/enrollment/confirm", post(mfa_confirm::<D>))
+        .route("/v1/auth/mfa/disable", post(mfa_disable::<D>))
+        .route("/v1/auth/logout", post(logout::<D>))
+        .route("/v1/auth/logout-all", post(logout_all::<D>))
+        .route("/v1/auth/verification/resend", post(resend_verification::<D>))
         .route("/v1/business/establishments", get(list_establishments::<D>).post(create_establishment::<D>))
         .with_state(state)
 }
@@ -48,6 +54,10 @@ struct RecoveryCompleteRequest { token: String, new_password: String }
 struct RefreshRequest { refresh_token: String }
 #[derive(Deserialize)]
 struct MfaRequest { challenge_token: String, factor: String }
+#[derive(Deserialize)]
+struct PasswordRequest { current_password: String }
+#[derive(Deserialize)]
+struct MfaConfirmRequest { current_password: String, code: String }
 #[derive(Deserialize)]
 struct CreateEstablishmentRequest { organization_id: Uuid, branch_id: Option<Uuid>, display_name: String }
 
@@ -112,6 +122,54 @@ async fn mfa_challenge<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, 
     }
 }
 
+
+async fn resend_verification<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, Json(request): Json<RecoveryRequest>) -> impl IntoResponse {
+    match state.auth.resend_verification(&request.email).await {
+        Ok(()) => (StatusCode::ACCEPTED, Json(MessageResponse { status: "accepted" })).into_response(),
+        Err(error) => auth_error(error),
+    }
+}
+async fn mfa_begin<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<PasswordRequest>) -> impl IntoResponse {
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    match state.auth.begin_totp_enrollment(token, &request.current_password).await {
+        Ok(uri) => (StatusCode::OK, Json(serde_json::json!({"status":"pending","otpauth_uri":uri}))).into_response(),
+        Err(error) => auth_error(error),
+    }
+}
+async fn mfa_confirm<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<MfaConfirmRequest>) -> impl IntoResponse {
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    match state.auth.confirm_totp_enrollment(token, &request.current_password, &request.code).await {
+        Ok(recovery_codes) => (StatusCode::OK, Json(serde_json::json!({"status":"enabled","recovery_codes":recovery_codes}))).into_response(),
+        Err(error) => auth_error(error),
+    }
+}
+async fn mfa_disable<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<PasswordRequest>) -> impl IntoResponse {
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    match state.auth.disable_totp(token, &request.current_password).await {
+        Ok(()) => (StatusCode::OK, Json(MessageResponse { status: "disabled" })).into_response(),
+        Err(error) => auth_error(error),
+    }
+}
+async fn logout<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap) -> impl IntoResponse {
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    match state.auth.logout(token).await {
+        Ok(()) => (StatusCode::OK, Json(MessageResponse { status: "logged_out" })).into_response(),
+        Err(error) => auth_error(error),
+    }
+}
+async fn logout_all<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap) -> impl IntoResponse {
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    match state.auth.logout_all(token).await {
+        Ok(()) => (StatusCode::OK, Json(MessageResponse { status: "sessions_revoked" })).into_response(),
+        Err(error) => auth_error(error),
+    }
+}
+fn bearer_token(headers: &HeaderMap) -> Result<&str, axum::response::Response> {
+    headers.get(AUTHORIZATION).and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer ")).filter(|value| !value.is_empty())
+        .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())
+}
+
 async fn list_establishments<D: EmailDelivery>(
     State(state): State<Arc<ApiState<D>>>, headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -136,9 +194,7 @@ async fn create_establishment<D: EmailDelivery>(
 }
 
 async fn authenticate_request<D: EmailDelivery>(state: &ApiState<D>, headers: &HeaderMap) -> Result<(Uuid, Uuid), axum::response::Response> {
-    let token = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer ")).filter(|v| !v.is_empty())
-        .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
+    let token = bearer_token(headers)?;
     let tenant = headers.get("x-tenant-id").and_then(|v| v.to_str().ok())
         .and_then(|v| Uuid::parse_str(v).ok())
         .ok_or_else(|| StatusCode::BAD_REQUEST.into_response())?;

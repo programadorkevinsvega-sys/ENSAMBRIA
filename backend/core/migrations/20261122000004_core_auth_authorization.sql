@@ -151,6 +151,8 @@ AS $$
           JOIN core.tenant_role_permissions rp
             ON rp.tenant_id = a.tenant_id AND rp.role_id = a.role_id
          WHERE i.id = p_actor_id
+           AND i.id = NULLIF(current_setting('app.actor_id', true), '')::uuid
+           AND p_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid
            AND i.status = 'active'
            AND m.tenant_id = p_tenant_id
            AND m.status = 'active'
@@ -197,6 +199,16 @@ AS $$
        AND b.organization_id = p_organization_id
        AND b.id = p_branch_id
      WHERE t.id = p_tenant_id
+       AND p_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+       AND EXISTS (
+           SELECT 1
+             FROM core.tenant_memberships m
+             JOIN core.identities i ON i.id = m.identity_id
+            WHERE m.tenant_id = t.id
+              AND m.identity_id = NULLIF(current_setting('app.actor_id', true), '')::uuid
+              AND m.status = 'active'
+              AND i.status = 'active'
+       )
        AND (p_organization_id IS NULL OR o.id IS NOT NULL)
        AND (p_branch_id IS NULL OR b.id IS NOT NULL)
        AND t.status = 'active'

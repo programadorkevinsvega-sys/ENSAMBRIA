@@ -22,7 +22,7 @@ Build and run:
 cargo run -p ensambria-business --bin business
 ```
 
-Apply the SQL files under `migrations/bootstrap` and `migrations` with the dedicated `business_schema_owner` migration role before starting the process. Runtime roles must not own tables or have BYPASSRLS.
+Apply CORE migrations first. Provision `business_schema_owner` as NOLOGIN and `business_runtime` as a least-privilege LOGIN role; grant `business_schema_owner` to the dedicated `core_migrator` role and grant `CONNECT` to `business_runtime`. Run `migrations/bootstrap/00000000000000_business_schema.sql` as the CORE schema administrator (it grants `USAGE`/`SELECT` on CORE tables to `business_runtime`), then run `migrations/20261122000001_business_establishments.sql` after `SET ROLE business_schema_owner` using the migration role. Do not run the bootstrap as `business_schema_owner`, because it does not own the CORE schema. Runtime roles must not own tables or have BYPASSRLS.
 
 ## HTTP contract
 

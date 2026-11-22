@@ -178,10 +178,6 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
-      - name: Refresh locked dependencies and patch known advisory
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: cargo update -p url --precise 2.5.9
-
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
@@ -420,15 +416,11 @@ jobs:
         with:
           tool: cargo-audit,cargo-deny
 
-      - name: Refresh locked dependencies and patch known advisory
-        if: steps.cargo_manifests.outputs.present == 'true'
-        run: cargo update -p url --precise 2.5.9
-
-      - name: Audit dependencies for vulnerabilities (cargo audit)
+      - name: Audit committed Cargo.lock for vulnerabilities (cargo audit)
         if: steps.cargo_manifests.outputs.present == 'true'
         run: cargo audit
 
-      - name: Validate supply chain and license compliance (cargo deny)
+      - name: Validate committed dependency graph and licenses (cargo deny)
         if: steps.cargo_manifests.outputs.present == 'true'
         run: cargo deny check
 

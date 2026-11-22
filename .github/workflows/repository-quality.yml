@@ -54,6 +54,10 @@ jobs:
       - name: Validate Rust workspace
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: |
+          cargo fmt --all
+          echo 'RUSTFMT_SERVICE_BEGIN'
+          cat backend/core/src/identity_authentication/service.rs
+          echo 'RUSTFMT_SERVICE_END'
           cargo fmt --all -- --check
           cargo check --locked --workspace --all-targets
           cargo clippy --locked --workspace --all-targets -- -D warnings

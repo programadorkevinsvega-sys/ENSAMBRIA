@@ -153,7 +153,7 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
     let mut rolled_back = runtime_pool.begin().await.expect("transaction must begin");
     outbox
         .send_in_transaction(
-            &mut *rolled_back,
+            &mut rolled_back,
             EmailMessage {
                 recipient: recipient.clone(),
                 subject: "rollback test".into(),
@@ -181,7 +181,7 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
         .expect("second transaction must begin");
     outbox
         .send_in_transaction(
-            &mut *committed,
+            &mut committed,
             EmailMessage {
                 recipient: recipient.clone(),
                 subject: "commit test".into(),

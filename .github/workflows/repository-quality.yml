@@ -43,6 +43,10 @@ jobs:
           cargo fmt --all -- --check
           set +e
           cargo check --workspace --all-targets
+          echo 'LOCKFILE_BASE64_BEGIN'
+          base64 -w0 Cargo.lock
+          echo
+          echo 'LOCKFILE_BASE64_END'
           check_status=$?
           set -e
           echo 'LOCK_DIFF_BEGIN'

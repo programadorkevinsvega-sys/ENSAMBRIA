@@ -193,6 +193,70 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
 
+      - name: Verify tenant Outbox and PLATFORM Inbox schema permissions and idempotency
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+              IF NOT has_table_privilege('core_runtime', 'core.outbox_events', 'INSERT') THEN
+                  RAISE EXCEPTION 'core_runtime must append Outbox rows in the tenant transaction';
+              END IF;
+              IF NOT has_table_privilege('core_outbox_relay', 'core.outbox_events', 'SELECT,UPDATE') THEN
+                  RAISE EXCEPTION 'core_outbox_relay must claim and publish Outbox rows';
+              END IF;
+              IF has_table_privilege('core_outbox_relay', 'core.outbox_events', 'INSERT') THEN
+                  RAISE EXCEPTION 'core_outbox_relay must not create business events';
+              END IF;
+              IF NOT has_table_privilege('platform_event_consumer', 'platform.inbox_messages', 'INSERT,UPDATE,SELECT') THEN
+                  RAISE EXCEPTION 'platform_event_consumer must maintain Inbox records';
+              END IF;
+              IF NOT has_table_privilege('platform_event_consumer', 'platform.tenant_onboardings', 'INSERT,SELECT') THEN
+                  RAISE EXCEPTION 'platform_event_consumer must create and inspect onboarding records';
+              END IF;
+              IF has_table_privilege('platform_event_consumer', 'platform.tenant_onboardings', 'DELETE') THEN
+                  RAISE EXCEPTION 'platform_event_consumer must not delete onboarding history';
+              END IF;
+          END
+          $;
+          SQL
+          psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE platform_event_consumer;
+          BEGIN;
+          INSERT INTO platform.inbox_messages (
+              event_id, consumer_name, event_type, schema_version, aggregate_id,
+              aggregate_version, product_id, correlation_id, payload_hash
+          ) VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789ad',
+              'platform.tenant-onboarding',
+              'core.tenant.created.v1',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ae',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              '018f0f2a-7b3c-7abc-8def-0123456789af',
+              decode(repeat('a', 64), 'hex')
+          ) ON CONFLICT (event_id) DO NOTHING;
+          INSERT INTO platform.tenant_onboardings (
+              tenant_id, product_id, product_config_version, source_event_id
+          ) VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789ae',
+              '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ad'
+          ) ON CONFLICT (tenant_id, product_id) DO NOTHING;
+          UPDATE platform.inbox_messages
+             SET status = 'applied', applied_at = clock_timestamp()
+           WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789ad'
+             AND status = 'received';
+          COMMIT;
+          SQL
+          count="$(psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -At -v ON_ERROR_STOP=1 -c \
+            "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789ae' AND product_id = '018f0f2a-7b3c-7abc-8def-0123456789ab'")"
+          test "$count" = "1"
+
       - name: Apply BUSINESS schema after CORE migrations
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: |

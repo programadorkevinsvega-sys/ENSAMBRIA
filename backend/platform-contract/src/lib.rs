@@ -163,6 +163,21 @@ pub mod platform {
                         .await?;
                     Ok(Self::new(connection))
                 }
+
+                pub async fn connect_with_tls<D>(
+                    destination: D,
+                    tls_config: tonic::transport::ClientTlsConfig,
+                ) -> Result<Self, tonic::transport::Error>
+                where
+                    D: TryInto<tonic::transport::Endpoint>,
+                    D::Error: Into<tonic::codegen::StdError>,
+                {
+                    let connection = tonic::transport::Endpoint::new(destination)?
+                        .tls_config(tls_config)?
+                        .connect()
+                        .await?;
+                    Ok(Self::new(connection))
+                }
             }
 
             impl<T> ProductCatalogClient<T>

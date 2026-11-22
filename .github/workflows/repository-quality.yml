@@ -183,6 +183,13 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo update -p url --precise 2.5.9
 
+      - name: Temporary export of resolved Cargo.lock
+        if: hashFiles('Cargo.lock') != ''
+        run: |
+          printf 'CARGO_LOCK_BEGIN\\n'
+          base64 -w0 Cargo.lock
+          printf '\\nCARGO_LOCK_END\\n'
+
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --workspace

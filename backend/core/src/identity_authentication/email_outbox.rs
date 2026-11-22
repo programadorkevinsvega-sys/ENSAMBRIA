@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin, time::Duration};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::service::{EmailDelivery, EmailDeliveryError, EmailMessage};
+use super::service::{EmailDelivery, EmailDeliveryError, EmailMessage, SmtpEmailDelivery};
 
 const MAX_ATTEMPTS: i32 = 10;
 const LEASE_SECONDS: i64 = 120;
@@ -38,6 +38,16 @@ impl EmailDelivery for OutboxEmailDelivery {
             Ok(())
         })
     }
+}
+
+/// Starts the production SMTP worker using CORE_SMTP_* deployment secrets.
+pub async fn run_smtp_worker_from_env(
+    pool: PgPool,
+    poll_interval: Duration,
+    batch_size: i64,
+) -> Result<(), EmailOutboxError> {
+    let smtp = SmtpEmailDelivery::from_env().map_err(|_| EmailOutboxError::InvalidSmtpConfiguration)?;
+    EmailOutboxWorker.run(pool, smtp, poll_interval, batch_size).await
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -118,6 +128,7 @@ impl EmailOutboxWorker {
 pub enum EmailOutboxError {
     InvalidBatchSize,
     InvalidPollInterval,
+    InvalidSmtpConfiguration,
     Storage,
 }
 
@@ -126,6 +137,7 @@ impl std::fmt::Display for EmailOutboxError {
         f.write_str(match self {
             Self::InvalidBatchSize => "email outbox batch size must be between 1 and 500",
             Self::InvalidPollInterval => "email outbox poll interval must be positive",
+            Self::InvalidSmtpConfiguration => "CORE_SMTP_* configuration is invalid or incomplete",
             Self::Storage => "email outbox persistence operation failed",
         })
     }

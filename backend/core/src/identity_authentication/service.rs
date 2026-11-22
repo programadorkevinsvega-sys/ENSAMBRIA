@@ -250,7 +250,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 ),
             })
             .await
-            .map_err(|_| AuthenticationError::EmailDelivery)?;
+            .unwrap_or_else(|_| {
+                tracing::warn!(event = "auth.verification_email_delivery_failed");
+            });
         Ok(())
     }
 
@@ -289,7 +291,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             recipient: email,
             subject: "Verifica tu cuenta ENSAMBRIA".into(),
             text_body: format!("Confirma tu correo con este enlace de un solo uso, válido por 24 horas:\\n{link}"),
-        }).await.map_err(|_| AuthenticationError::EmailDelivery)?;
+        }).await.unwrap_or_else(|_| {
+            tracing::warn!(event = "auth.verification_email_delivery_failed");
+        });
         Ok(())
     }
 
@@ -612,7 +616,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 ),
             })
             .await
-            .map_err(|_| AuthenticationError::EmailDelivery)?;
+            .unwrap_or_else(|_| {
+                tracing::warn!(event = "auth.recovery_email_delivery_failed");
+            });
         Ok(())
     }
 
@@ -1086,7 +1092,6 @@ pub enum AuthenticationError {
     MfaAlreadyEnabled,
     MfaEnrollmentNotFound,
     RateLimited,
-    EmailDelivery,
     Cryptography,
     Storage,
 }
@@ -1109,7 +1114,6 @@ impl fmt::Display for AuthenticationError {
             Self::MfaAlreadyEnabled => "MFA is already enabled",
             Self::MfaEnrollmentNotFound => "MFA enrollment was not found",
             Self::RateLimited => "too many authentication attempts",
-            Self::EmailDelivery => "transactional email could not be delivered",
             Self::Cryptography => "authentication cryptographic operation failed",
             Self::Storage => "authentication persistence operation failed",
         })

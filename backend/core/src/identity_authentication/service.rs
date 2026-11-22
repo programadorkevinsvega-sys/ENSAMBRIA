@@ -64,14 +64,14 @@ pub trait EmailDelivery: Send + Sync {
         message: EmailMessage,
     ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>>;
 
-    /// Enqueues a message using the caller's state transaction when the adapter supports it.
-    /// Production outbox adapters override this method to make state and delivery intent atomic.
+    /// Enqueues a message using the caller's state transaction.
+    /// Adapters must opt in explicitly; sending outside the transaction is not a safe fallback.
     fn send_in_transaction<'a>(
         &'a self,
         _connection: &'a mut PgConnection,
-        message: EmailMessage,
+        _message: EmailMessage,
     ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
-        self.send(message)
+        Box::pin(async { Err(EmailDeliveryError) })
     }
 }
 

@@ -17,6 +17,7 @@ BEGIN
         'identity_credentials',
         'auth_sessions',
         'account_recovery_tokens',
+        'identity_verification_tokens',
         'identity_mfa_totp',
         'identity_mfa_recovery_codes',
         'auth_rate_limits'

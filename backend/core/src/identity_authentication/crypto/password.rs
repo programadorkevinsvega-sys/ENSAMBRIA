@@ -65,7 +65,7 @@ pub fn hash_password(password: &str) -> Result<PasswordHash, PasswordHashError> 
         .map_err(|_| PasswordHashError::RandomGeneration)?;
     let mut hash = [0; HASH_LENGTH];
     pbkdf2::derive(
-        &pbkdf2::PBKDF2_HMAC_SHA256,
+        pbkdf2::PBKDF2_HMAC_SHA256,
         NonZeroU32::new(ITERATIONS).ok_or(PasswordHashError::InvalidHash)?,
         &salt,
         password.as_bytes(),
@@ -84,7 +84,7 @@ pub fn verify_password(password: &str, stored: &PasswordHash) -> Result<bool, Pa
     }
     let iterations = NonZeroU32::new(stored.iterations).ok_or(PasswordHashError::InvalidHash)?;
     Ok(pbkdf2::verify(
-        &pbkdf2::PBKDF2_HMAC_SHA256,
+        pbkdf2::PBKDF2_HMAC_SHA256,
         iterations,
         &stored.salt,
         password.as_bytes(),

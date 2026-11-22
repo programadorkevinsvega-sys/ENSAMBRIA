@@ -15,7 +15,7 @@ impl EmailLookupKey {
             return Err(EmailLookupError::InvalidKey);
         }
         Ok(Self {
-            key: hmac::Key::new(&hmac::HMAC_SHA256, secret),
+            key: hmac::Key::new(hmac::HMAC_SHA256, secret),
         })
     }
 

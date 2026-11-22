@@ -57,12 +57,6 @@ impl SessionTokenHash {
     }
 }
 
-impl fmt::Debug for SessionTokenHash {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("SessionTokenHash([REDACTED])")
-    }
-}
-
 fn hex_encode(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
     for byte in bytes {

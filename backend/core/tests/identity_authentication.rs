@@ -519,16 +519,15 @@ async fn repeated_password_failures_lock_the_identity_even_with_the_correct_pass
         .expect("identity must be verified");
 
     for _ in 0..5 {
-        assert_eq!(
-            service.login(&email, "incorrect password").await.unwrap_err(),
-            ensambria_core::identity_authentication::service::AuthenticationError::InvalidCredentials
-        );
+        assert!(matches!(
+            service.login(&email, "incorrect password").await,
+            Err(ensambria_core::identity_authentication::service::AuthenticationError::InvalidCredentials)
+        ));
     }
-    assert_eq!(
-        service.login(&email, password).await.unwrap_err(),
-        ensambria_core::identity_authentication::service::AuthenticationError::TemporarilyLocked,
-        "the correct password must not bypass an active lockout"
-    );
+    assert!(matches!(
+        service.login(&email, password).await,
+        Err(ensambria_core::identity_authentication::service::AuthenticationError::TemporarilyLocked)
+    ), "the correct password must not bypass an active lockout");
 
     pool.close().await;
 }

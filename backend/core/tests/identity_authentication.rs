@@ -15,7 +15,7 @@ use ensambria_core::{
             totp::TotpSecret,
         },
         service::{
-            AuthenticationService, AuthSession, EmailDelivery, EmailDeliveryError, EmailMessage,
+            AuthenticationService, EmailDelivery, EmailDeliveryError, EmailMessage,
             LoginOutcome, unix_time_now,
         },
     },

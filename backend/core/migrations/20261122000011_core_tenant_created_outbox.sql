@@ -43,6 +43,7 @@ CREATE INDEX outbox_events_expired_lease_idx
 
 REVOKE ALL ON core.outbox_events FROM PUBLIC;
 GRANT USAGE ON SCHEMA core TO core_outbox_relay;
+GRANT INSERT ON core.outbox_events TO core_runtime;
 GRANT SELECT, UPDATE ON core.outbox_events TO core_outbox_relay;
 
 COMMENT ON TABLE core.outbox_events IS

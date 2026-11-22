@@ -16,6 +16,8 @@ if (
   throw new Error('The CI smoke target must be the local BUSINESS establishments route');
 }
 
+http.setResponseCallback(http.expectedStatuses(401));
+
 export const options = {
   vus: 1,
   iterations: 1,

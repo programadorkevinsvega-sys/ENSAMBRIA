@@ -33,6 +33,11 @@ Apply the SQL files under `migrations/bootstrap` and `migrations` with the dedic
 - `POST /v1/auth/recovery/complete` — `{ "token", "new_password" }`
 - `POST /v1/auth/refresh` — `{ "refresh_token" }`
 - `POST /v1/auth/mfa/challenge` — `{ "challenge_token", "factor" }`
+- `POST /v1/auth/mfa/enrollment/begin` — Bearer token plus `{ "current_password" }`
+- `POST /v1/auth/mfa/enrollment/confirm` — Bearer token plus `{ "current_password", "code" }`
+- `POST /v1/auth/mfa/disable` — Bearer token plus `{ "current_password" }`
+- `POST /v1/auth/verification/resend` — `{ "email" }`
+- `POST /v1/auth/logout` and `POST /v1/auth/logout-all` — Bearer token
 - `GET /v1/business/establishments`
 - `POST /v1/business/establishments` — `{ "organization_id", "branch_id"?, "display_name" }`
 

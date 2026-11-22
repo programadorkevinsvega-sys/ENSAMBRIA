@@ -235,6 +235,16 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
         )
         .await
         .expect("registration response must not reveal email delivery or account state");
+    let persisted_failed_registration: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM core.identities WHERE email_normalized = $1")
+            .bind(&registration_email)
+            .fetch_one(&pool)
+            .await
+            .expect("inspect failed registration");
+    assert_eq!(
+        persisted_failed_registration, 0,
+        "failed transactional enqueue must roll back the identity and verification token"
+    );
     failing_service
         .resend_verification(&registration_email)
         .await
@@ -261,6 +271,17 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
         .request_recovery(&recovery_email)
         .await
         .expect("recovery response must not reveal account existence or delivery status");
+    let persisted_failed_recovery: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core.account_recovery_tokens t JOIN core.identities i ON i.id = t.identity_id WHERE i.email_normalized = $1",
+    )
+    .bind(&recovery_email)
+    .fetch_one(&pool)
+    .await
+    .expect("inspect failed recovery enqueue");
+    assert_eq!(
+        persisted_failed_recovery, 0,
+        "failed transactional enqueue must roll back the recovery token"
+    );
     pool.close().await;
 }
 

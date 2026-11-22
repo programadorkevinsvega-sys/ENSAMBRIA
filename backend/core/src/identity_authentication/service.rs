@@ -340,12 +340,12 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             return Err(AuthenticationError::InvalidCredentials);
         }
 
-        let authenticated: bool = sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
+        let authenticated: Option<bool> = sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
             .bind(identity_id)
-            .fetch_one(&self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        if !authenticated {
+        if authenticated != Some(true) {
             return Err(AuthenticationError::TemporarilyLocked);
         }
 
@@ -487,6 +487,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.session.created", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(session)
     }
 
@@ -541,15 +543,23 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .await
         .map_err(|_| AuthenticationError::Storage)?;
         match result {
-            Some((Some(identity_id), true, false)) => Ok(AuthSession {
-                identity_id,
-                session_id,
-                access_token: access.as_str().to_owned(),
-                refresh_token: refresh.as_str().to_owned(),
-                access_expires_at: access_expiry,
-                refresh_expires_at: refresh_expiry,
-            }),
-            Some((Some(_), false, true)) => Err(AuthenticationError::RefreshReuseDetected),
+            Some((Some(identity_id), true, false)) => {
+                self.record_audit(Some(identity_id), "auth.session.refreshed", "success", Some("identity"), Some(identity_id))
+                    .await?;
+                Ok(AuthSession {
+                    identity_id,
+                    session_id,
+                    access_token: access.as_str().to_owned(),
+                    refresh_token: refresh.as_str().to_owned(),
+                    access_expires_at: access_expiry,
+                    refresh_expires_at: refresh_expiry,
+                })
+            }
+            Some((Some(identity_id), false, true)) => {
+                self.record_audit(Some(identity_id), "auth.refresh.reuse_detected", "failure", Some("identity"), Some(identity_id))
+                    .await?;
+                Err(AuthenticationError::RefreshReuseDetected)
+            }
             _ => Err(AuthenticationError::InvalidRefreshToken),
         }
     }
@@ -564,6 +574,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
         let Some(identity_id) = identity else {
+            self.record_audit(None, "auth.recovery.requested", "success", None, None)
+                .await?;
             return Ok(());
         };
 
@@ -581,6 +593,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         if !issued {
             return Ok(());
         }
+        self.record_audit(Some(identity_id), "auth.recovery.requested", "success", Some("identity"), Some(identity_id))
+            .await?;
         let link = format!(
             "{}/reset-password?token={}",
             self.public_base_url,
@@ -874,6 +888,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.session.created", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(session)
     }
 

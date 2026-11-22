@@ -87,6 +87,7 @@ export default function () {
     headers,
     tags: { endpoint: parsed.pathname, method },
     timeout: __ENV.REQUEST_TIMEOUT || '10s',
+    redirects: 0,
   });
   const ok = check(response, {
     'functional endpoint returns success': (res) => res.status >= 200 && res.status < 300,

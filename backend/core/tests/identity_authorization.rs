@@ -290,7 +290,6 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     pool.close().await;
 }
 
-
 #[tokio::test]
 async fn one_global_identity_can_hold_independent_memberships_in_multiple_tenants() {
     let pool = test_pool().await;

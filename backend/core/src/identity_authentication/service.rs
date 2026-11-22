@@ -82,6 +82,21 @@ pub struct SmtpEmailDelivery {
 }
 
 impl SmtpEmailDelivery {
+    /// Builds the production STARTTLS transport from deployment-provided secrets.
+    /// Required variables: CORE_SMTP_HOST, CORE_SMTP_PORT, CORE_SMTP_USERNAME,
+    /// CORE_SMTP_PASSWORD and CORE_SMTP_FROM.
+    pub fn from_env() -> Result<Self, EmailDeliveryError> {
+        let host = std::env::var("CORE_SMTP_HOST").map_err(|_| EmailDeliveryError)?;
+        let port = std::env::var("CORE_SMTP_PORT")
+            .map_err(|_| EmailDeliveryError)?
+            .parse::<u16>()
+            .map_err(|_| EmailDeliveryError)?;
+        let username = std::env::var("CORE_SMTP_USERNAME").map_err(|_| EmailDeliveryError)?;
+        let password = std::env::var("CORE_SMTP_PASSWORD").map_err(|_| EmailDeliveryError)?;
+        let from = std::env::var("CORE_SMTP_FROM").map_err(|_| EmailDeliveryError)?;
+        Self::new(&host, port, username, password, &from)
+    }
+
     pub fn new(
         host: &str,
         port: u16,

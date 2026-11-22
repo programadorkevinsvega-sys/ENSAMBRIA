@@ -201,7 +201,8 @@ SELECT
     p.brand_name,
     p.published_configuration_version AS configuration_version,
     c.schema_version,
-    c.configuration
+    c.configuration,
+    c.published_at
 FROM platform.products p
 JOIN platform.product_configurations c
   ON c.product_id = p.id

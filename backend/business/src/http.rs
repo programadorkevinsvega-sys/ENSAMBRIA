@@ -137,28 +137,28 @@ async fn mfa_begin<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, head
     }
 }
 async fn mfa_confirm<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<MfaConfirmRequest>) -> impl IntoResponse {
-    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(status) => return status.into_response() };
     match state.auth.confirm_totp_enrollment(token, &request.current_password, &request.code).await {
         Ok(recovery_codes) => (StatusCode::OK, Json(serde_json::json!({"status":"enabled","recovery_codes":recovery_codes}))).into_response(),
         Err(error) => auth_error(error),
     }
 }
 async fn mfa_disable<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<PasswordRequest>) -> impl IntoResponse {
-    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(status) => return status.into_response() };
     match state.auth.disable_totp(token, &request.current_password).await {
         Ok(()) => (StatusCode::OK, Json(MessageResponse { status: "disabled" })).into_response(),
         Err(error) => auth_error(error),
     }
 }
 async fn logout<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap) -> impl IntoResponse {
-    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(status) => return status.into_response() };
     match state.auth.logout(token).await {
         Ok(()) => (StatusCode::OK, Json(MessageResponse { status: "logged_out" })).into_response(),
         Err(error) => auth_error(error),
     }
 }
 async fn logout_all<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap) -> impl IntoResponse {
-    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(status) => return status.into_response() };
     match state.auth.logout_all(token).await {
         Ok(()) => (StatusCode::OK, Json(MessageResponse { status: "sessions_revoked" })).into_response(),
         Err(error) => auth_error(error),
@@ -185,7 +185,7 @@ async fn create_establishment<D: EmailDelivery>(
     State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<CreateEstablishmentRequest>,
 ) -> impl IntoResponse {
     let (identity, tenant) = match authenticate_request(&state, &headers).await {
-        Ok(value) => value, Err(response) => return response,
+        Ok(value) => value, Err(status) => return status.into_response(),
     };
     match state.business.create_establishment(identity, tenant, request.organization_id, request.branch_id, request.display_name).await {
         Ok(item) => (StatusCode::CREATED, Json(item)).into_response(),

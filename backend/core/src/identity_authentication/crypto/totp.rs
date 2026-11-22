@@ -4,6 +4,7 @@ use ring::{
     hmac,
     rand::{SecureRandom, SystemRandom},
 };
+use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 const SECRET_LENGTH: usize = 20;
@@ -89,9 +90,7 @@ impl TotpSecret {
         ];
         for step in candidates.into_iter().flatten() {
             let expected = self.code_at_step(step);
-            if ring::constant_time::verify_slices_are_equal(code.as_bytes(), expected.as_bytes())
-                .is_ok()
-            {
+            if bool::from(code.as_bytes().ct_eq(expected.as_bytes())) {
                 return Some(step);
             }
         }

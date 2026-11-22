@@ -98,6 +98,17 @@ SET search_path = pg_catalog, platform
 AS $
 BEGIN
     IF OLD.published_at IS NOT NULL
+       AND NEW.status = 'retired'
+       AND EXISTS (
+           SELECT 1 FROM platform.products p
+            WHERE p.id = OLD.product_id
+              AND p.status = 'active'
+              AND p.published_configuration_version = OLD.version
+       ) THEN
+        RAISE EXCEPTION 'active products must move off a configuration before retirement'
+            USING ERRCODE = '55000';
+    END IF;
+    IF OLD.published_at IS NOT NULL
        AND (
            NEW.product_id IS DISTINCT FROM OLD.product_id
            OR NEW.version IS DISTINCT FROM OLD.version
@@ -133,6 +144,30 @@ $;
 CREATE TRIGGER product_configuration_no_delete
 BEFORE DELETE ON platform.product_configurations
 FOR EACH ROW EXECUTE FUNCTION platform.prevent_published_configuration_deletion();
+
+
+CREATE FUNCTION platform.validate_active_product_configuration()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, platform
+AS $
+BEGIN
+    IF NEW.status = 'active' AND NOT EXISTS (
+        SELECT 1 FROM platform.product_configurations c
+         WHERE c.product_id = NEW.id
+           AND c.version = NEW.published_configuration_version
+           AND c.status = 'published'
+    ) THEN
+        RAISE EXCEPTION 'active products require a published configuration version'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$;
+
+CREATE TRIGGER product_active_configuration_required
+BEFORE INSERT OR UPDATE OF status, published_configuration_version ON platform.products
+FOR EACH ROW EXECUTE FUNCTION platform.validate_active_product_configuration();
 
 CREATE FUNCTION platform.validate_product_surface_configuration()
 RETURNS trigger
@@ -211,6 +246,7 @@ JOIN platform.product_configurations c
 WHERE p.status = 'active';
 
 REVOKE ALL ON ALL TABLES IN SCHEMA platform FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA platform FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA platform FROM PUBLIC;
 GRANT SELECT ON
     platform.products,

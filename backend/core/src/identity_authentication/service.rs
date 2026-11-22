@@ -747,7 +747,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         self.record_audit(
             Some(identity_id),
             "auth.recovery.requested",

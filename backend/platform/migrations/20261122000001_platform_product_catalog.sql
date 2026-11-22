@@ -37,7 +37,7 @@ CREATE TABLE platform.product_domains (
     domain_name text NOT NULL UNIQUE
         CHECK (domain_name = lower(domain_name)
             AND length(domain_name) BETWEEN 4 AND 253
-            AND domain_name ~ '^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+
+            AND domain_name ~ '^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+$'),
     status text NOT NULL CHECK (status IN ('pending_verification', 'active', 'suspended', 'retired')),
     verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),

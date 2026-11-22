@@ -134,6 +134,33 @@ impl TtlCache {
             .map_err(map_redis_error)
     }
 
+    /// Atomic cross-replica rate limit. Redis is the fast path; callers may fall back to PostgreSQL on error.
+    pub async fn consume_rate_limit(
+        &self,
+        key: &str,
+        window_seconds: u64,
+        limit: u64,
+        block_seconds: u64,
+    ) -> Result<bool, CacheError> {
+        if window_seconds == 0 || limit == 0 || block_seconds == 0 {
+            return Err(CacheError::InvalidTtl);
+        }
+        let key = self.qualified_key(key)?;
+        let script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; if count > tonumber(ARGV[2]) then redis.call('EXPIRE', KEYS[1], ARGV[3]); return 0; end; return 1";
+        let mut connection = self.connection();
+        redis::cmd("EVAL")
+            .arg(script)
+            .arg(1)
+            .arg(key)
+            .arg(window_seconds)
+            .arg(limit)
+            .arg(block_seconds)
+            .query_async::<i64>(&mut connection)
+            .await
+            .map(|allowed| allowed == 1)
+            .map_err(map_redis_error)
+    }
+
     fn qualified_key(&self, key: &str) -> Result<String, CacheError> {
         validate_segment(key)?;
         Ok(format!("{}:{}", self.namespace, key))

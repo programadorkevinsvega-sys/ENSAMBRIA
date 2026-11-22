@@ -158,6 +158,26 @@ AS $$
            AND m.status = 'active'
            AND t.status = 'active'
            AND rp.permission_code = p_permission_code
+           AND (p_branch_id IS NULL OR p_organization_id IS NOT NULL)
+           AND (
+                p_organization_id IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM core.organizations o
+                     WHERE o.id = p_organization_id
+                       AND o.tenant_id = p_tenant_id
+                       AND o.status = 'active'
+                )
+           )
+           AND (
+                p_branch_id IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM core.branches b
+                     WHERE b.id = p_branch_id
+                       AND b.tenant_id = p_tenant_id
+                       AND b.organization_id = p_organization_id
+                       AND b.status = 'active'
+                )
+           )
            AND (
                 (a.scope_type = 'tenant' AND a.organization_id IS NULL AND a.branch_id IS NULL)
              OR (a.scope_type = 'organization'

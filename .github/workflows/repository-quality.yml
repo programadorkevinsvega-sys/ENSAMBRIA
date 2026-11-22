@@ -24,6 +24,7 @@ jobs:
     env:
       CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
       CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
       RUSTUP_TOOLCHAIN: 1.99.1
     services:
       postgres:
@@ -86,7 +87,7 @@ jobs:
             -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator;"
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, platform_runtime;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
@@ -95,7 +96,7 @@ jobs:
             -c "CREATE ROLE platform_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE platform_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT platform_schema_owner TO core_migrator;"
@@ -106,6 +107,35 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_schema_owner" \
             -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE platform_schema_owner;
+          BEGIN;
+          INSERT INTO platform.products (id, product_key, display_name, brand_name, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'ensambria-core', 'ENSAMBRIA Core', 'ENSAMBRIA', 'draft');
+          INSERT INTO platform.product_configurations (product_id, version, schema_version, configuration, status, published_at)
+          VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              1,
+              'product-config.v1',
+              '{"registration":{"email_verification":true},"authentication":{"mfa_totp":true}}'::jsonb,
+              'published',
+              clock_timestamp()
+          );
+          UPDATE platform.products
+             SET status = 'active', published_configuration_version = 1, updated_at = clock_timestamp()
+           WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789ab';
+          INSERT INTO platform.product_domains (id, product_id, domain_name, status, verified_at)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ac', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'shop.example.test', 'active', clock_timestamp());
+          INSERT INTO platform.product_markets (product_id, country_code, currency_code, locale, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'CO', 'COP', 'es-CO', 'enabled');
+          INSERT INTO platform.product_surfaces (product_id, surface_code, configuration_version, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'operator.web', 1, 'enabled');
+          INSERT INTO platform.capability_catalog (capability_code, contract_version, implementation_status)
+          VALUES ('identity.auth', 'v1', 'available');
+          INSERT INTO platform.product_capabilities (product_id, capability_code, configuration_version, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'identity.auth', 1, 'enabled');
+          COMMIT;
+          SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"

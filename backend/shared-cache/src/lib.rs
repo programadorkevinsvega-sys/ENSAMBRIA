@@ -131,14 +131,20 @@ impl TtlCache {
         if username.is_empty() || password.is_empty() {
             return Err(CacheError::InvalidConfiguration);
         }
-        let redis_info = RedisConnectionInfo::default().set_username(username).set_password(password);
-        let node_info = SentinelNodeConnectionInfo::default()
-            .set_tls_mode(if production { TlsMode::Secure)
-            .set_redis_connection_info(redis_info);
         let mut clients = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
-            let mut client = SentinelClient::build(nodes.clone(), master.clone(), Some(node_info.clone()), SentinelServerType::Master)
-                .map_err(map_redis_error)?;
+            let redis_info = RedisConnectionInfo::default()
+                .set_username(username.clone())
+                .set_password(password.clone());
+            let node_info = SentinelNodeConnectionInfo::default()
+                .set_tls_mode(TlsMode::Secure)
+                .set_redis_connection_info(redis_info);
+            let mut client = SentinelClient::build(
+                nodes.clone(),
+                master.clone(),
+                Some(node_info),
+                SentinelServerType::Master,
+            ).map_err(map_redis_error)?;
             let mut probe = client.get_async_connection().await.map_err(map_redis_error)?;
             redis::cmd("PING").query_async::<String>(&mut probe).await.map_err(map_redis_error)?;
             clients.push(tokio::sync::Mutex::new(client));

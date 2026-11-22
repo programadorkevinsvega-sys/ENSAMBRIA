@@ -7,6 +7,8 @@ use std::{
 };
 
 use redis::aio::{ConnectionManager, ConnectionManagerConfig};
+use redis::{RedisConnectionInfo, TlsMode};
+use redis::sentinel::{SentinelClient, SentinelNodeConnectionInfo, SentinelServerType};
 use redis::{Client, RedisError};
 use url::Url;
 
@@ -21,23 +23,32 @@ pub struct TtlCache {
     connections: Arc<Vec<ConnectionManager>>,
     next_connection: Arc<AtomicUsize>,
     namespace: String,
+    cluster: Option<Arc<tokio::sync::Mutex<redis::cluster_async::ClusterConnection>>>,
+    sentinel: Option<Arc<tokio::sync::Mutex<SentinelClient>>>,
 }
 
 impl TtlCache {
     /// Builds the shared cache from deployment environment variables.
     /// Production requires TLS (rediss://) and Redis ACL credentials.
     pub async fn connect_from_env(namespace: &str) -> Result<Self, CacheError> {
-        let redis_url = std::env::var("PLATFORM_REDIS_URL")
-            .map_err(|_| CacheError::InvalidConfiguration)?;
         let production = std::env::var("ENSAMBRIA_ENV")
             .is_ok_and(|value| value.eq_ignore_ascii_case("production"));
-        validate_redis_url(&redis_url, production)?;
+        let mode = std::env::var("PLATFORM_REDIS_MODE").unwrap_or_else(|_| "direct".to_owned());
         let pool_size = std::env::var("PLATFORM_REDIS_POOL_SIZE")
             .ok()
             .map(|value| value.parse::<usize>().map_err(|_| CacheError::InvalidConfiguration))
             .transpose()?
             .unwrap_or(DEFAULT_CONNECTIONS_PER_PROCESS);
-        Self::connect_with_pool_size(&redis_url, namespace, pool_size).await
+        match mode.as_str() {
+            "direct" => {
+                let url = std::env::var("PLATFORM_REDIS_URL").map_err(|_| CacheError::InvalidConfiguration)?;
+                validate_redis_url(&url, production)?;
+                Self::connect_with_pool_size(&url, namespace, pool_size).await
+            }
+            "cluster" => Self::connect_cluster(env_list("PLATFORM_REDIS_CLUSTER_URLS")?, namespace, production).await,
+            "sentinel" => Self::connect_sentinel_from_env(namespace, production).await,
+            _ => Err(CacheError::InvalidConfiguration),
+        }
     }
 
     pub async fn connect(redis_url: &str, namespace: &str) -> Result<Self, CacheError> {
@@ -82,6 +93,55 @@ impl TtlCache {
             connections: Arc::new(connections),
             next_connection: Arc::new(AtomicUsize::new(0)),
             namespace: namespace.to_owned(),
+            cluster: None,
+            sentinel: None,
+        })
+    }
+
+
+    async fn connect_cluster(nodes: Vec<String>, namespace: &str, production: bool) -> Result<Self, CacheError> {
+        validate_segment(namespace)?;
+        if nodes.is_empty() || nodes.iter().any(|node| validate_redis_url(node, production).is_err()) {
+            return Err(CacheError::InvalidConfiguration);
+        }
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let client = redis::cluster::ClusterClient::new(nodes).map_err(|_| CacheError::InvalidConfiguration)?;
+        let connection = client.get_async_connection().await.map_err(map_redis_error)?;
+        Ok(Self {
+            connections: Arc::new(Vec::new()),
+            next_connection: Arc::new(AtomicUsize::new(0)),
+            namespace: namespace.to_owned(),
+            cluster: Some(Arc::new(tokio::sync::Mutex::new(connection))),
+            sentinel: None,
+        })
+    }
+
+    async fn connect_sentinel_from_env(namespace: &str, production: bool) -> Result<Self, CacheError> {
+        validate_segment(namespace)?;
+        let nodes = env_list("PLATFORM_REDIS_SENTINEL_URLS")?;
+        let master = std::env::var("PLATFORM_REDIS_SENTINEL_MASTER_NAME").map_err(|_| CacheError::InvalidConfiguration)?;
+        if nodes.iter().any(|node| validate_redis_url(node, production).is_err()) || master.trim().is_empty() {
+            return Err(CacheError::InvalidConfiguration);
+        }
+        let username = std::env::var("PLATFORM_REDIS_USERNAME").map_err(|_| CacheError::InvalidConfiguration)?;
+        let password = std::env::var("PLATFORM_REDIS_PASSWORD").map_err(|_| CacheError::InvalidConfiguration)?;
+        if username.is_empty() || password.is_empty() {
+            return Err(CacheError::InvalidConfiguration);
+        }
+        let redis_info = RedisConnectionInfo::default().set_username(username).set_password(password);
+        let node_info = SentinelNodeConnectionInfo::default()
+            .set_tls_mode(if production { TlsMode::Secure } else { TlsMode::Insecure })
+            .set_redis_connection_info(redis_info);
+        let mut client = SentinelClient::build(nodes, master, Some(node_info), SentinelServerType::Master)
+            .map_err(map_redis_error)?;
+        let mut probe = client.get_async_connection().await.map_err(map_redis_error)?;
+        redis::cmd("PING").query_async::<String>(&mut probe).await.map_err(map_redis_error)?;
+        Ok(Self {
+            connections: Arc::new(Vec::new()),
+            next_connection: Arc::new(AtomicUsize::new(0)),
+            namespace: namespace.to_owned(),
+            cluster: None,
+            sentinel: Some(Arc::new(tokio::sync::Mutex::new(client))),
         })
     }
 
@@ -93,12 +153,17 @@ impl TtlCache {
 
     pub async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {
         let key = self.qualified_key(key)?;
+        if let Some(cluster) = &self.cluster {
+            let mut connection = cluster.lock().await;
+            return redis::cmd("GET").arg(key).query_async(&mut *connection).await.map_err(map_redis_error);
+        }
+        if let Some(sentinel) = &self.sentinel {
+            let mut client = sentinel.lock().await;
+            let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
+            return redis::cmd("GET").arg(key).query_async(&mut connection).await.map_err(map_redis_error);
+        }
         let mut connection = self.connection();
-        redis::cmd("GET")
-            .arg(key)
-            .query_async(&mut connection)
-            .await
-            .map_err(map_redis_error)
+        redis::cmd("GET").arg(key).query_async(&mut connection).await.map_err(map_redis_error)
     }
 
     pub async fn put(
@@ -113,25 +178,32 @@ impl TtlCache {
             return Err(CacheError::InvalidTtl);
         }
 
+        if let Some(cluster) = &self.cluster {
+            let mut connection = cluster.lock().await;
+            return redis::cmd("SET").arg(key).arg(value).arg("EX").arg(ttl_seconds).query_async::<()>(&mut *connection).await.map_err(map_redis_error);
+        }
+        if let Some(sentinel) = &self.sentinel {
+            let mut client = sentinel.lock().await;
+            let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
+            return redis::cmd("SET").arg(key).arg(value).arg("EX").arg(ttl_seconds).query_async::<()>(&mut connection).await.map_err(map_redis_error);
+        }
         let mut connection = self.connection();
-        redis::cmd("SET")
-            .arg(key)
-            .arg(value)
-            .arg("EX")
-            .arg(ttl_seconds)
-            .query_async::<()>(&mut connection)
-            .await
-            .map_err(map_redis_error)
+        redis::cmd("SET").arg(key).arg(value).arg("EX").arg(ttl_seconds).query_async::<()>(&mut connection).await.map_err(map_redis_error)
     }
 
     pub async fn delete(&self, key: &str) -> Result<(), CacheError> {
         let key = self.qualified_key(key)?;
+        if let Some(cluster) = &self.cluster {
+            let mut connection = cluster.lock().await;
+            return redis::cmd("DEL").arg(key).query_async::<()>(&mut *connection).await.map_err(map_redis_error);
+        }
+        if let Some(sentinel) = &self.sentinel {
+            let mut client = sentinel.lock().await;
+            let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
+            return redis::cmd("DEL").arg(key).query_async::<()>(&mut connection).await.map_err(map_redis_error);
+        }
         let mut connection = self.connection();
-        redis::cmd("DEL")
-            .arg(key)
-            .query_async::<()>(&mut connection)
-            .await
-            .map_err(map_redis_error)
+        redis::cmd("DEL").arg(key).query_async::<()>(&mut connection).await.map_err(map_redis_error)
     }
 
     /// Atomic cross-replica rate limit. Redis is the fast path; callers may fall back to PostgreSQL on error.
@@ -147,24 +219,31 @@ impl TtlCache {
         }
         let key = self.qualified_key(key)?;
         let script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; if count > tonumber(ARGV[2]) then redis.call('EXPIRE', KEYS[1], ARGV[3]); return 0; end; return 1";
-        let mut connection = self.connection();
-        redis::cmd("EVAL")
-            .arg(script)
-            .arg(1)
-            .arg(key)
-            .arg(window_seconds)
-            .arg(limit)
-            .arg(block_seconds)
-            .query_async::<i64>(&mut connection)
-            .await
-            .map(|allowed| allowed == 1)
-            .map_err(map_redis_error)
+        let result = if let Some(cluster) = &self.cluster {
+            let mut connection = cluster.lock().await;
+            redis::cmd("EVAL").arg(script).arg(1).arg(key).arg(window_seconds).arg(limit).arg(block_seconds).query_async::<i64>(&mut *connection).await
+        } else if let Some(sentinel) = &self.sentinel {
+            let mut client = sentinel.lock().await;
+            let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
+            redis::cmd("EVAL").arg(script).arg(1).arg(key).arg(window_seconds).arg(limit).arg(block_seconds).query_async::<i64>(&mut connection).await
+        } else {
+            let mut connection = self.connection();
+            redis::cmd("EVAL").arg(script).arg(1).arg(key).arg(window_seconds).arg(limit).arg(block_seconds).query_async::<i64>(&mut connection).await
+        };
+        result.map(|allowed| allowed == 1).map_err(map_redis_error)
     }
 
     fn qualified_key(&self, key: &str) -> Result<String, CacheError> {
         validate_segment(key)?;
         Ok(format!("{}:{}", self.namespace, key))
     }
+}
+
+fn env_list(name: &'static str) -> Result<Vec<String>, CacheError> {
+    let value = std::env::var(name).map_err(|_| CacheError::InvalidConfiguration)?;
+    let values = value.split(';').map(str::trim).filter(|item| !item.is_empty()).map(str::to_owned).collect::<Vec<_>>();
+    if values.is_empty() { return Err(CacheError::InvalidConfiguration); }
+    Ok(values)
 }
 
 fn validate_redis_url(redis_url: &str, production: bool) -> Result<(), CacheError> {

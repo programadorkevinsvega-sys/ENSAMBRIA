@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 use sqlx::{PgPool, types::Json};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use ensambria_shared_cache::TtlCache;
 
 use uuid::Uuid;
 
@@ -13,10 +14,10 @@ pub struct ProductCatalog {
 
 impl ProductCatalog {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self { pool, cache: None }
     }
 
-    pub async fn get_active_product(
+    pub fn with_cache(pool: PgPool, cache: TtlCache) -> Self {\n        Self { pool, cache: Some(cache) }\n    }\n\n    pub async fn get_active_product(
         &self,
         product_id: Uuid,
     ) -> Result<Option<ProductCatalogEntry>, ProductCatalogError> {
@@ -120,6 +121,31 @@ impl ProductCatalog {
         domain_name: &str,
     ) -> Result<Option<ProductCatalogEntry>, ProductCatalogError> {
         let domain = normalize_domain(domain_name)?;
+        let cache_key = format!("domain:v1:{domain}");
+        if let Some(cache) = &self.cache {
+            match cache.get(&cache_key).await {
+                Ok(Some(cached_id)) => {
+                    if let Ok(encoded_id) = std::str::from_utf8(&cached_id)
+                        && let Ok(product_id) = Uuid::parse_str(encoded_id)
+                    {
+                        if let Some(product) = self.get_active_product(product_id).await? {
+                            return Ok(Some(product));
+                        }
+                    }
+                    let _ = cache.delete(&cache_key).await;
+                }
+                Ok(None) => {}
+                Err(_) => {
+                    tracing::warn!(
+                        event = "cache.redis.read_failed",
+                        component = "platform",
+                        operation = "product_domain.resolve",
+                        result = "fallback"
+                    );
+                }
+            }
+        }
+
         let product_id: Option<Uuid> = sqlx::query_scalar(
             "SELECT p.product_id FROM platform.active_product_catalog p JOIN platform.product_domains d ON d.product_id = p.product_id WHERE d.domain_name = $1 AND d.status = 'active' LIMIT 1",
         )
@@ -127,6 +153,18 @@ impl ProductCatalog {
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| ProductCatalogError::Storage)?;
+
+        if let (Some(cache), Some(product_id)) = (&self.cache, product_id) {
+            if cache.put(&cache_key, product_id.to_string().as_bytes(), Duration::from_secs(10)).await.is_err() {
+                tracing::warn!(
+                    event = "cache.redis.write_failed",
+                    component = "platform",
+                    operation = "product_domain.resolve",
+                    result = "fallback"
+                );
+            }
+        }
+
         match product_id {
             Some(id) => self.get_active_product(id).await,
             None => Ok(None),

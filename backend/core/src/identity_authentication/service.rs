@@ -1051,7 +1051,6 @@ pub enum AuthenticationError {
     MfaAlreadyEnabled,
     MfaEnrollmentNotFound,
     RateLimited,
-    EmailDelivery,
     Cryptography,
     Storage,
 }
@@ -1074,7 +1073,6 @@ impl fmt::Display for AuthenticationError {
             Self::MfaAlreadyEnabled => "MFA is already enabled",
             Self::MfaEnrollmentNotFound => "MFA enrollment was not found",
             Self::RateLimited => "too many authentication attempts",
-            Self::EmailDelivery => "email delivery failed",
             Self::Cryptography => "authentication cryptographic operation failed",
             Self::Storage => "authentication persistence operation failed",
         })
@@ -1087,4 +1085,43 @@ pub fn unix_time_now() -> Result<u64, AuthenticationError> {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .map_err(|_| AuthenticationError::Cryptography)
+}
+
+#[cfg(test)]
+mod smtp_tests {
+    use super::SmtpEmailDelivery;
+
+    #[test]
+    fn smtp_transport_requires_authenticated_starttls_configuration() {
+        assert!(
+            SmtpEmailDelivery::new(
+                "smtp.example.test",
+                587,
+                "mailer".into(),
+                "secret".into(),
+                "no-reply@example.test",
+            )
+            .is_ok()
+        );
+        assert!(
+            SmtpEmailDelivery::new(
+                "https://smtp.example.test",
+                587,
+                "mailer".into(),
+                "secret".into(),
+                "no-reply@example.test",
+            )
+            .is_err()
+        );
+        assert!(
+            SmtpEmailDelivery::new(
+                "smtp.example.test",
+                0,
+                "mailer".into(),
+                "secret".into(),
+                "no-reply@example.test",
+            )
+            .is_err()
+        );
+    }
 }

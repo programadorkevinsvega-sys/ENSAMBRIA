@@ -283,6 +283,7 @@ dependencies = [
  "http",
  "metrics",
  "metrics-exporter-prometheus",
+ "ring",
  "sqlx",
  "tokio",
  "tokio-stream",

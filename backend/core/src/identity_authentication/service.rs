@@ -249,7 +249,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 ),
             })
             .await
-            .map_err(|_| {
+            .unwrap_or_else(|_| {
                 tracing::warn!(event = "auth.verification_email_delivery_failed");
             });
         Ok(())
@@ -290,7 +290,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             recipient: email,
             subject: "Verifica tu cuenta ENSAMBRIA".into(),
             text_body: format!("Confirma tu correo con este enlace de un solo uso, válido por 24 horas:\\n{link}"),
-        }).await.map_err(|_| {
+        }).await.unwrap_or_else(|_| {
             tracing::warn!(event = "auth.verification_email_delivery_failed");
         });
         Ok(())
@@ -612,7 +612,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 ),
             })
             .await
-            .map_err(|_| {
+            .unwrap_or_else(|_| {
                 tracing::warn!(event = "auth.recovery_email_delivery_failed");
             });
         Ok(())

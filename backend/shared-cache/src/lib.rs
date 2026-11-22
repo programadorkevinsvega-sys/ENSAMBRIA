@@ -131,6 +131,8 @@ impl TtlCache {
         if username.is_empty() || password.is_empty() {
             return Err(CacheError::InvalidConfiguration);
         }
+        let redis_tls = production || std::env::var("PLATFORM_REDIS_TLS")
+            .is_ok_and(|value| value.eq_ignore_ascii_case("true"));
         let mut clients = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
             let redis_info = RedisConnectionInfo {
@@ -140,7 +142,7 @@ impl TtlCache {
                 ..RedisConnectionInfo::default()
             };
             let node_info = SentinelNodeConnectionInfo {
-                tls_mode: Some(TlsMode::Secure),
+                tls_mode: redis_tls.then_some(TlsMode::Secure),
                 redis_connection_info: Some(redis_info),
             };
             let mut client = SentinelClient::build(

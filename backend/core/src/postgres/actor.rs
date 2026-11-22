@@ -77,7 +77,11 @@ mod tests {
             "private-database-credential-marker",
         )));
         let error = ActorContextError::from(source);
-        assert!(!error.to_string().contains("private-database-credential-marker"));
+        assert!(
+            !error
+                .to_string()
+                .contains("private-database-credential-marker")
+        );
         assert!(!format!("{error:?}").contains("private-database-credential-marker"));
         let _ = ActorId::new(sqlx::types::Uuid::nil());
     }

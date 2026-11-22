@@ -16,8 +16,8 @@ async fn test_pool() -> PgPool {
 
     let database_url = std::env::var("CORE_TEST_DATABASE_URL")
         .expect("isolated PostgreSQL runtime URL must be configured");
-    let options = PgConnectOptions::from_str(&database_url)
-        .expect("isolated PostgreSQL URL must be valid");
+    let options =
+        PgConnectOptions::from_str(&database_url).expect("isolated PostgreSQL URL must be valid");
     let config = PgPoolConfiguration::new(
         1,
         Duration::from_secs(3),
@@ -30,20 +30,14 @@ async fn test_pool() -> PgPool {
         .expect("non-privileged PostgreSQL runtime must connect")
 }
 
-async fn set_tenant(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    tenant_id: Uuid,
-) {
+async fn set_tenant(transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>, tenant_id: Uuid) {
     TenantContext::new(TenantId::new(tenant_id))
         .establish(transaction)
         .await
         .expect("tenant context must be established transaction-locally");
 }
 
-async fn set_actor(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    actor_id: Uuid,
-) {
+async fn set_actor(transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>, actor_id: Uuid) {
     ActorContext::new(ActorId::new(actor_id))
         .establish(transaction)
         .await
@@ -97,11 +91,12 @@ async fn rls_denies_cross_tenant_reads_writes_and_cross_tenant_relationships() {
         .expect("cross-tenant reads must return an empty result");
     assert_eq!(visible, 0);
 
-    let updated = sqlx::query("UPDATE core.organizations SET display_name = 'tampered' WHERE id = $1")
-        .bind(org_b)
-        .execute(&mut *transaction)
-        .await
-        .expect("cross-tenant updates must not affect rows");
+    let updated =
+        sqlx::query("UPDATE core.organizations SET display_name = 'tampered' WHERE id = $1")
+            .bind(org_b)
+            .execute(&mut *transaction)
+            .await
+            .expect("cross-tenant updates must not affect rows");
     assert_eq!(updated.rows_affected(), 0);
 
     let deleted = sqlx::query("DELETE FROM core.organizations WHERE id = $1")
@@ -133,7 +128,10 @@ async fn rls_denies_cross_tenant_reads_writes_and_cross_tenant_relationships() {
         "composite tenant/organization foreign keys must reject cross-tenant references"
     );
 
-    transaction.rollback().await.expect("test transaction must roll back");
+    transaction
+        .rollback()
+        .await
+        .expect("test transaction must roll back");
     pool.close().await;
 }
 
@@ -175,8 +173,14 @@ async fn actor_rls_and_tenant_context_do_not_leak_after_commit_or_rollback() {
     .bind(identity_id)
     .execute(&mut *transaction)
     .await;
-    assert!(forged.is_err(), "an actor cannot create another actor's identity");
-    transaction.rollback().await.expect("second transaction must roll back");
+    assert!(
+        forged.is_err(),
+        "an actor cannot create another actor's identity"
+    );
+    transaction
+        .rollback()
+        .await
+        .expect("second transaction must roll back");
 
     let actor_context: Option<String> =
         sqlx::query_scalar("SELECT NULLIF(current_setting('app.actor_id', true), '')")

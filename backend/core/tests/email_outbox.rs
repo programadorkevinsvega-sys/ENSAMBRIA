@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, sync::{Arc, atomic::{AtomicUsize, Ordering}}, time::Duration};
+use std::{future::Future, pin::Pin, sync::{Arc, atomic::{AtomicUsize, Ordering}}};
 
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
@@ -79,6 +79,12 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
     .bind(format!("{id}@example.test"))
     .fetch_one(&pool).await.expect("sent state must persist");
     assert_eq!(final_state, "sent");
+    let retained_body: String = sqlx::query_scalar(
+        "SELECT text_body FROM core.email_outbox WHERE recipient = $1",
+    )
+    .bind(format!("{id}@example.test"))
+    .fetch_one(&pool).await.expect("sent payload metadata must remain");
+    assert_eq!(retained_body, "[REDACTED]");
 
     assert!(worker.deliver_batch(&pool, &successful, 0).await.is_err());
     pool.close().await;

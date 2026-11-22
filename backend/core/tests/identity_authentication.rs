@@ -492,7 +492,6 @@ async fn totp_enrollment_mfa_challenge_recovery_code_and_disable_complete() {
     pool.close().await;
 }
 
-
 #[tokio::test]
 async fn repeated_password_failures_lock_the_identity_even_with_the_correct_password() {
     let pool = test_pool().await;

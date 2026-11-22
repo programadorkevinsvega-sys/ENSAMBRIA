@@ -38,6 +38,59 @@ impl PlatformProductPolicy {
         Ok(product)
     }
 
+    /// Activates a tenant/product association only after PLATFORM confirms the published contract.
+    pub async fn associate_tenant_product(
+        &self,
+        pool: &sqlx::PgPool,
+        tenant_id: Uuid,
+        product_id: Uuid,
+        capability_code: &str,
+        contract_version: &str,
+    ) -> Result<ProductCatalogEntry, PlatformContractError> {
+        let product = self.catalog.get_active_product(product_id).await
+            .map_err(|_| PlatformContractError::PlatformUnavailable)?
+            .ok_or(PlatformContractError::ProductUnavailable)?;
+        let product = self.require_capability(
+            product_id,
+            capability_code,
+            contract_version,
+            product.configuration_version,
+        ).await?;
+
+        let mut transaction = pool.begin().await
+            .map_err(|_| PlatformContractError::CoreUnavailable)?;
+        sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
+            .bind(tenant_id.to_string())
+            .execute(&mut *transaction)
+            .await
+            .map_err(|_| PlatformContractError::CoreUnavailable)?;
+
+        let tenant_status: Option<String> = sqlx::query_scalar(
+            "SELECT status FROM core.tenants WHERE id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(|_| PlatformContractError::CoreUnavailable)?;
+        if tenant_status.as_deref() != Some("active") {
+            return Err(PlatformContractError::TenantUnavailable);
+        }
+
+        sqlx::query(
+            "INSERT INTO core.tenant_products              (tenant_id, product_id, product_config_version, association_status, validated_at)              VALUES ($1, $2, $3, 'active', clock_timestamp())              ON CONFLICT (tenant_id, product_id) DO UPDATE              SET product_config_version = EXCLUDED.product_config_version,                  association_status = 'active', validated_at = clock_timestamp(),                  updated_at = clock_timestamp()",
+        )
+        .bind(tenant_id)
+        .bind(product_id)
+        .bind(product.configuration_version)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| PlatformContractError::CoreUnavailable)?;
+
+        transaction.commit().await
+            .map_err(|_| PlatformContractError::CoreUnavailable)?;
+        Ok(product)
+    }
+
     /// Enforces both CORE's tenant association and PLATFORM's published capability contract.
     /// Tenant RLS is applied inside the transaction; product IDs remain opaque cross-service references.
     pub async fn require_tenant_capability(
@@ -92,6 +145,7 @@ impl PlatformProductPolicy {
 pub enum PlatformContractError {
     ProductUnavailable,
     TenantProductNotActive,
+    TenantUnavailable,
     CoreUnavailable,
     CapabilityUnavailable,
     ConfigurationVersionMismatch,
@@ -104,6 +158,7 @@ impl std::fmt::Display for PlatformContractError {
         f.write_str(match self {
             Self::ProductUnavailable => "PLATFORM product is not active or published",
             Self::TenantProductNotActive => "CORE tenant does not have an active association with this product",
+            Self::TenantUnavailable => "CORE tenant is not active",
             Self::CoreUnavailable => "CORE tenant product association could not be read",
             Self::CapabilityUnavailable => "PLATFORM product capability is not available",
             Self::ConfigurationVersionMismatch => "PLATFORM product configuration version does not match CORE association",

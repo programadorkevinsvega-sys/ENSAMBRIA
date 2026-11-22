@@ -18,7 +18,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .max_connections(std::env::var("BUSINESS_DATABASE_MAX_CONNECTIONS").ok().and_then(|v| v.parse().ok()).unwrap_or(32))
         .connect(&business_url).await?;
 
-    let auth = Arc::new(authentication_service_from_env(core_pool.clone())?);
+    let auth_cache = TtlCache::connect_from_env("auth").await.ok();
+    let auth_service = authentication_service_from_env(core_pool.clone())?;
+    let auth_service = match auth_cache {
+        Some(cache) => auth_service.with_rate_limit_cache(cache),
+        None => {
+            tracing::warn!(event="auth.rate_limit.redis_unavailable", fallback="postgres");
+            auth_service
+        }
+    };
+    let auth = Arc::new(auth_service);
     let cache = match TtlCache::connect_from_env("business").await {
         Ok(cache) => Some(cache),
         Err(error) => {

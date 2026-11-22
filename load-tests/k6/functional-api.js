@@ -77,7 +77,7 @@ export const options = {
   thresholds: {
     http_req_failed: [`rate<=${errorRateThreshold}`],
     http_req_duration: [`p(95)<${p95Threshold}`, `p(99)<${p99Threshold}`],
-    functional_request_failures: [`rate<${errorRateThreshold}`],
+    functional_request_failures: [`rate<=${errorRateThreshold}`],
     functional_request_latency: [`p(95)<${p95Threshold}`, `p(99)<${p99Threshold}`],
   },
 };

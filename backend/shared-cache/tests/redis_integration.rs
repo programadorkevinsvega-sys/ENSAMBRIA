@@ -16,6 +16,15 @@ async fn redis_cache_round_trips_expires_and_deletes_values() {
     cache.put(&key, value, Duration::from_secs(2)).await.unwrap();
     assert_eq!(cache.get(&key).await.unwrap().as_deref(), Some(value.as_slice()));
 
+    let isolated_cache = TtlCache::connect(&redis_url, "ensambria_other_test")
+        .await
+        .expect("Redis test service must be reachable");
+    assert_eq!(isolated_cache.get(&key).await.unwrap(), None);
+
     cache.delete(&key).await.unwrap();
+    assert_eq!(cache.get(&key).await.unwrap(), None);
+
+    cache.put(&key, value, Duration::from_secs(1)).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(1_100)).await;
     assert_eq!(cache.get(&key).await.unwrap(), None);
 }

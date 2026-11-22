@@ -203,6 +203,14 @@ impl EmailDelivery for CapturingEmailDelivery {
             .push(message);
         Box::pin(std::future::ready(Ok(())))
     }
+
+    fn send_in_transaction<'a>(
+        &'a self,
+        _connection: &'a mut sqlx::PgConnection,
+        message: EmailMessage,
+    ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
+        self.send(message)
+    }
 }
 
 fn authentication_service(

@@ -163,7 +163,11 @@ mod tests {
         let second = hash_password("correct horse battery staple").expect("second hash");
 
         assert!(first.as_str().starts_with(PHC_PREFIX));
-        assert_ne!(first.as_str(), second.as_str(), "each password hash must use a fresh salt");
+        assert_ne!(
+            first.as_str(),
+            second.as_str(),
+            "each password hash must use a fresh salt"
+        );
         assert!(verify_password("correct horse battery staple", &first).unwrap());
         assert!(verify_password("correct horse battery staple", &second).unwrap());
     }

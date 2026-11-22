@@ -1,13 +1,3 @@
-use std::{
-    convert::Infallible,
-    future::Future,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
-
-use tonic::codegen::{Body, Service, StdError, http};
-
 pub mod google {
     pub mod protobuf {
         #[derive(Clone, PartialEq, ::prost::Message)]
@@ -23,7 +13,17 @@ pub mod google {
 pub mod platform {
     pub mod product_catalog {
         pub mod v1 {
-            use super::super::super::google::protobuf::Timestamp;
+            use std::{
+                convert::Infallible,
+                future::Future,
+                pin::Pin,
+                sync::Arc,
+                task::{Context, Poll},
+            };
+
+            use tonic::codegen::{Body, Service, StdError, http};
+
+            use crate::google::protobuf::Timestamp;
 
             #[derive(Clone, PartialEq, ::prost::Message)]
             pub struct GetActiveProductRequest {

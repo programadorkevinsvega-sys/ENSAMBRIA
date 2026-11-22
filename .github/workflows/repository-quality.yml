@@ -99,6 +99,9 @@ jobs:
             -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
             -c "GRANT platform_schema_owner TO core_migrator;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \

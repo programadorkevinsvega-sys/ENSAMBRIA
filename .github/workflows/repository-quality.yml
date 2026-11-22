@@ -216,26 +216,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 60); do
-            if docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG; then
-              break
-            fi
-            sleep 2
-          done
-          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 \
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 sh -ec '
+            for attempt in $(seq 1 90); do
+              ready=1
+              for spec in 172.29.0.21:7001 172.29.0.22:7002 172.29.0.23:7003 172.29.0.24:7004 172.29.0.25:7005 172.29.0.26:7006; do
+                host=${spec%:*}; port=${spec#*:}
+                if ! redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG; then ready=0; break; fi
+              done
+              if [ "$ready" -eq 1 ]; then exit 0; fi
+              sleep 1
+            done
+            echo "Not all six Redis Cluster nodes became ready" >&2
+            exit 1
+          '
+          timeout 120s docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 \
             redis-cli -a "$REDIS_PASSWORD" --cluster create \
             172.29.0.21:7001 172.29.0.22:7002 172.29.0.23:7003 \
             172.29.0.24:7004 172.29.0.25:7005 172.29.0.26:7006 \
             --cluster-replicas 1 --cluster-yes
-          for attempt in $(seq 1 60); do
-            if docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 \
-              redis-cli -p 26379 SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | grep -q redis-master; then
-              break
-            fi
-            sleep 2
-          done
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 sh -ec '
+            for attempt in $(seq 1 60); do
+              master="$(redis-cli -p 26379 --raw SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | head -n 1 || true)"
+              if [ -n "$master" ]; then echo "Sentinel reports master: $master"; exit 0; fi
+              sleep 1
+            done
+            echo "Sentinel did not discover its monitored master" >&2
+            exit 1
+          '
           sudo sh -c 'printf "172.29.0.10 redis-master\\n172.29.0.11 redis-replica\\n" >> /etc/hosts'
-
       - name: Build shared Redis runtime smoke test
         run: cargo build --locked -p ensambria-shared-cache --example redis_ha_smoke
 
@@ -255,16 +263,20 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f infra/redis-ha/compose.ci.yml stop redis-master
-          promoted=false
-          for attempt in $(seq 1 45); do
-            master="$(docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 \
-              redis-cli -p 26379 --raw SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | head -n 1 || true)"
-            if [ "$master" = "redis-replica" ]; then promoted=true; break; fi
-            sleep 2
-          done
-          test "$promoted" = true
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 sh -ec '
+            promoted=false
+            for attempt in $(seq 1 60); do
+              master="$(redis-cli -p 26379 --raw SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | head -n 1 || true)"
+              if [ "$master" = "redis-replica" ] || [ "$master" = "172.29.0.11" ]; then
+                echo "Sentinel promoted replica: $master"
+                promoted=true
+                break
+              fi
+              sleep 1
+            done
+            test "$promoted" = true
+          '
           cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
-
       - name: Verify backend shared-cache adapter through Redis Cluster
         env:
           PLATFORM_REDIS_MODE: cluster
@@ -279,16 +291,20 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f infra/redis-ha/compose.ci.yml stop cluster-1
-          healthy=false
-          for attempt in $(seq 1 45); do
-            state="$(docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-2 \
-              redis-cli -a "$REDIS_PASSWORD" -p 7002 --raw CLUSTER INFO 2>/dev/null | grep '^cluster_state:' || true)"
-            if [ "$state" = "cluster_state:ok" ]; then healthy=true; break; fi
-            sleep 2
-          done
-          test "$healthy" = true
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-2 sh -ec '
+            healthy=false
+            for attempt in $(seq 1 60); do
+              state="$(redis-cli -a "$REDIS_PASSWORD" -p 7002 --raw CLUSTER INFO 2>/dev/null | grep "^cluster_state:" || true)"
+              if [ "$state" = "cluster_state:ok" ]; then
+                echo "Redis Cluster recovered after master loss"
+                healthy=true
+                break
+              fi
+              sleep 1
+            done
+            test "$healthy" = true
+          '
           cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
-
       - name: Collect Redis HA diagnostics on failure
         if: failure()
         run: |

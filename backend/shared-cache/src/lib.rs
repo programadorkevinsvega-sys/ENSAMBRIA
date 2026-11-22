@@ -31,21 +31,7 @@ impl TtlCache {
             .map_err(|_| CacheError::InvalidConfiguration)?;
         let production = std::env::var("ENSAMBRIA_ENV")
             .is_ok_and(|value| value.eq_ignore_ascii_case("production"));
-        let parsed = Url::parse(&redis_url).map_err(|_| CacheError::InvalidConfiguration)?;
-        if production
-            && (parsed.scheme() != "rediss"
-                || parsed.username().is_empty()
-                || parsed.password().is_none_or(str::is_empty))
-        {
-            return Err(CacheError::InvalidConfiguration);
-        }
-        if !matches!(parsed.scheme(), "redis" | "rediss")
-            || parsed.host_str().is_none()
-            || parsed.query().is_some()
-            || parsed.fragment().is_some()
-        {
-            return Err(CacheError::InvalidConfiguration);
-        }
+        validate_redis_url(&redis_url, production)?;
         let pool_size = std::env::var("PLATFORM_REDIS_POOL_SIZE")
             .ok()
             .map(|value| value.parse::<usize>().map_err(|_| CacheError::InvalidConfiguration))
@@ -152,6 +138,25 @@ impl TtlCache {
         validate_segment(key)?;
         Ok(format!("{}:{}", self.namespace, key))
     }
+}
+
+fn validate_redis_url(redis_url: &str, production: bool) -> Result<(), CacheError> {
+    let parsed = Url::parse(redis_url).map_err(|_| CacheError::InvalidConfiguration)?;
+    if production
+        && (parsed.scheme() != "rediss"
+            || parsed.username().is_empty()
+            || parsed.password().is_none_or(str::is_empty))
+    {
+        return Err(CacheError::InvalidConfiguration);
+    }
+    if !matches!(parsed.scheme(), "redis" | "rediss")
+        || parsed.host_str().is_none()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(CacheError::InvalidConfiguration);
+    }
+    Ok(())
 }
 
 fn validate_segment(value: &str) -> Result<(), CacheError> {

@@ -61,7 +61,7 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
     let other_actor = Uuid::now_v7();
     let identity_id = actor;
     let session_id = Uuid::now_v7();
-    let token_hash = vec![0x77; 32];
+    let token_hash = vec![0x77_u8; 32];
     let email = format!("{identity_id}@example.test");
     let stored_hash = hash_password("correct horse battery staple").expect("Argon2id hash");
     let mut transaction = pool.begin().await.expect("transaction must begin");

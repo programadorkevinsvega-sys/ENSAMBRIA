@@ -194,6 +194,7 @@ impl std::error::Error for CacheError {}
 #[cfg(test)]
 mod tests {
     use super::{CacheError, validate_segment};
+    use url::Url;
 
     #[test]
     fn production_redis_configuration_requires_tls_and_acl() {

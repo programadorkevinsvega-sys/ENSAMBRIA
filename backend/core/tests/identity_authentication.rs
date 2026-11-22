@@ -221,22 +221,18 @@ fn authentication_service(
 
 #[tokio::test]
 async fn transactional_email_delivery_failures_are_reported_to_callers() {
-    use ensambria_core::identity_authentication::service::AuthenticationError;
-
     let pool = test_pool().await;
     let failing_service = failing_authentication_service(pool.clone());
     let registration_email = format!("{}@example.test", Uuid::now_v7());
 
-    assert!(matches!(
-        failing_service
-            .register(&registration_email, Some("Delivery Failure Test"), "correct horse battery staple")
-            .await,
-        Err(AuthenticationError::EmailDelivery)
-    ));
-    assert!(matches!(
-        failing_service.resend_verification(&registration_email).await,
-        Err(AuthenticationError::EmailDelivery)
-    ));
+    failing_service
+        .register(&registration_email, Some("Delivery Failure Test"), "correct horse battery staple")
+        .await
+        .expect("registration response must not reveal email delivery or account state");
+    failing_service
+        .resend_verification(&registration_email)
+        .await
+        .expect("resend response must not reveal email delivery or account state");
 
     let capture = CapturingEmailDelivery::default();
     let working_service = authentication_service(pool.clone(), capture.clone());
@@ -251,10 +247,10 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
         .await
         .expect("captured verification token must activate the identity");
 
-    assert!(matches!(
-        failing_service.request_recovery(&recovery_email).await,
-        Err(AuthenticationError::EmailDelivery)
-    ));
+    failing_service
+        .request_recovery(&recovery_email)
+        .await
+        .expect("recovery response must not reveal account existence or delivery status");
     pool.close().await;
 }
 

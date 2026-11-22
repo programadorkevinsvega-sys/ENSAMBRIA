@@ -44,14 +44,7 @@ jobs:
           set +e
           cargo check --workspace --all-targets
           check_status=$?
-          echo 'LOCKFILE_BASE64_BEGIN'
-          base64 -w0 Cargo.lock
-          echo
-          echo 'LOCKFILE_BASE64_END'
           set -e
-          echo 'LOCK_DIFF_BEGIN'
-          git diff -- Cargo.lock
-          echo 'LOCK_DIFF_END'
           test "$check_status" -eq 0
           cargo clippy --locked --workspace --all-targets -- -D warnings
 

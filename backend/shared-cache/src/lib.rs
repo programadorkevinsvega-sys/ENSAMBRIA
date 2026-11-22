@@ -1,4 +1,10 @@
-use std::time::Duration;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use redis::aio::{ConnectionManager, ConnectionManagerConfig};
 use redis::{Client, RedisError};
@@ -6,17 +12,35 @@ use redis::{Client, RedisError};
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
 const RESPONSE_TIMEOUT: Duration = Duration::from_millis(500);
 const RECONNECT_ATTEMPTS: usize = 5;
+const DEFAULT_CONNECTIONS_PER_PROCESS: usize = 4;
+const MAX_CONNECTIONS_PER_PROCESS: usize = 64;
 
 #[derive(Clone)]
 pub struct TtlCache {
-    connection: ConnectionManager,
+    connections: Arc<Vec<ConnectionManager>>,
+    next_connection: Arc<AtomicUsize>,
     namespace: String,
 }
 
 impl TtlCache {
     pub async fn connect(redis_url: &str, namespace: &str) -> Result<Self, CacheError> {
+        Self::connect_with_pool_size(
+            redis_url,
+            namespace,
+            DEFAULT_CONNECTIONS_PER_PROCESS,
+        )
+        .await
+    }
+
+    pub async fn connect_with_pool_size(
+        redis_url: &str,
+        namespace: &str,
+        pool_size: usize,
+    ) -> Result<Self, CacheError> {
         validate_segment(namespace)?;
-        if redis_url.trim().is_empty() {
+        if redis_url.trim().is_empty()
+            || !(1..=MAX_CONNECTIONS_PER_PROCESS).contains(&pool_size)
+        {
             return Err(CacheError::InvalidConfiguration);
         }
 
@@ -29,19 +53,30 @@ impl TtlCache {
             .set_number_of_retries(RECONNECT_ATTEMPTS)
             .set_connection_timeout(CONNECTION_TIMEOUT)
             .set_response_timeout(RESPONSE_TIMEOUT);
-        let connection = ConnectionManager::new_with_config(client, configuration)
-            .await
-            .map_err(|_| CacheError::Unavailable)?;
+        let mut connections = Vec::with_capacity(pool_size);
+        for _ in 0..pool_size {
+            let connection = ConnectionManager::new_with_config(client.clone(), configuration.clone())
+                .await
+                .map_err(|_| CacheError::Unavailable)?;
+            connections.push(connection);
+        }
 
         Ok(Self {
-            connection,
+            connections: Arc::new(connections),
+            next_connection: Arc::new(AtomicUsize::new(0)),
             namespace: namespace.to_owned(),
         })
     }
 
+    fn connection(&self) -> ConnectionManager {
+        let index = self.next_connection.fetch_add(1, Ordering::Relaxed)
+            % self.connections.len();
+        self.connections[index].clone()
+    }
+
     pub async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {
         let key = self.qualified_key(key)?;
-        let mut connection = self.connection.clone();
+        let mut connection = self.connection();
         redis::cmd("GET")
             .arg(key)
             .query_async(&mut connection)

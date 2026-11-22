@@ -287,17 +287,17 @@ jobs:
         shell: bash
         env:
           PLATFORM_REDIS_MODE: cluster
-          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.26:7006
         run: |
           set -euo pipefail
           docker compose -f infra/redis-ha/compose.ci.yml stop cluster-1
-          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-6 sh -ec '
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-5 sh -ec '
             promoted=false
             for attempt in $(seq 1 60); do
-              state="$(redis-cli -p 7006 --raw CLUSTER INFO 2>/dev/null | tr -d "\\r" | grep "^cluster_state:" || true)"
-              nodes="$(redis-cli -p 7006 --raw CLUSTER NODES 2>/dev/null || true)"
-              if [ "$state" = "cluster_state:ok" ] && printf "%s\\n" "$nodes" | grep -Eq "172.29.0.26:7006@17006 master"; then
-                echo "Replica 172.29.0.26:7006 was promoted and cluster state is healthy"
+              state="$(redis-cli -p 7005 --raw CLUSTER INFO 2>/dev/null | tr -d "\\r" | grep "^cluster_state:" || true)"
+              nodes="$(redis-cli -p 7005 --raw CLUSTER NODES 2>/dev/null || true)"
+              if [ "$state" = "cluster_state:ok" ] && printf "%s\\n" "$nodes" | grep -Eq "172.29.0.25:7005@17005 master"; then
+                echo "Replica 172.29.0.25:7005 was promoted and cluster state is healthy"
                 promoted=true
                 break
               fi

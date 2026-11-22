@@ -36,7 +36,6 @@ jobs:
       - name: Validate Rust workspace
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: |
-          cargo fmt --all
           cargo fmt --all -- --check
           cargo check --locked --workspace --all-targets
           cargo clippy --locked --workspace --all-targets -- -D warnings
@@ -190,6 +189,113 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE business_schema_owner" \
             -f backend/business/migrations/20261122000001_business_establishments.sql
+
+
+  redis-ha-integration:
+    name: redis-ha-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      REDIS_PASSWORD: ensambria-ci-only
+      PLATFORM_REDIS_USERNAME: default
+      PLATFORM_REDIS_PASSWORD: ensambria-ci-only
+      PLATFORM_REDIS_POOL_SIZE: 2
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
+
+      - name: Provision Redis Sentinel and Cluster on the GitHub runner
+        run: docker compose -f infra/redis-ha/compose.ci.yml up -d
+
+      - name: Wait for Redis nodes and create the six-node cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 \
+            redis-cli -a "$REDIS_PASSWORD" --cluster create \
+            172.29.0.21:7001 172.29.0.22:7002 172.29.0.23:7003 \
+            172.29.0.24:7004 172.29.0.25:7005 172.29.0.26:7006 \
+            --cluster-replicas 1 --cluster-yes
+          for attempt in $(seq 1 60); do
+            if docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 \
+              redis-cli -p 26379 SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | grep -q redis-master; then
+              break
+            fi
+            sleep 2
+          done
+          sudo sh -c 'printf "172.29.0.10 redis-master\\n172.29.0.11 redis-replica\\n" >> /etc/hosts'
+
+      - name: Build shared Redis runtime smoke test
+        run: cargo build --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Verify BUSINESS and CORE shared-cache adapter through Sentinel
+        env:
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Force Sentinel master failure and verify automatic failover
+        shell: bash
+        env:
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml stop redis-master
+          promoted=false
+          for attempt in $(seq 1 45); do
+            master="$(docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 \
+              redis-cli -p 26379 --raw SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | head -n 1 || true)"
+            if [ "$master" = "redis-replica" ]; then promoted=true; break; fi
+            sleep 2
+          done
+          test "$promoted" = true
+          cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Verify backend shared-cache adapter through Redis Cluster
+        env:
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.21:7001;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Force Redis Cluster master failure and verify replica promotion
+        shell: bash
+        env:
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml stop cluster-1
+          healthy=false
+          for attempt in $(seq 1 45); do
+            state="$(docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-2 \
+              redis-cli -a "$REDIS_PASSWORD" -p 7002 --raw CLUSTER INFO 2>/dev/null | grep '^cluster_state:' || true)"
+            if [ "$state" = "cluster_state:ok" ]; then healthy=true; break; fi
+            sleep 2
+          done
+          test "$healthy" = true
+          cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Collect Redis HA diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -f infra/redis-ha/compose.ci.yml ps
+          docker compose -f infra/redis-ha/compose.ci.yml logs --no-color --tail=200
+
+      - name: Tear down Redis HA topology
+        if: always()
+        run: docker compose -f infra/redis-ha/compose.ci.yml down --volumes --remove-orphans
 
   security-dependencies:
     name: security-dependencies

@@ -208,8 +208,21 @@ fn validate_product_configuration(
     if schema_version != "product-config.v1" {
         return Err(ProductCatalogError::UnsupportedConfigurationSchema);
     }
-    if !value.is_object() {
+    if !value.is_object()
+        || ["branding", "domains", "markets", "surfaces", "capabilities"]
+            .iter()
+            .any(|field| value.get(field).is_some_and(Value::is_null))
+    {
         return Err(ProductCatalogError::InvalidConfiguration);
+    }
+    if let Some(branding) = value.get("branding") {
+        if !branding.is_object()
+            || ["displayName", "brandName", "logoUri"]
+                .iter()
+                .any(|field| branding.get(field).is_some_and(Value::is_null))
+        {
+            return Err(ProductCatalogError::InvalidConfiguration);
+        }
     }
     let configuration: ProductConfigurationV1 = serde_json::from_value(value.clone())
         .map_err(|_| ProductCatalogError::InvalidConfiguration)?;
@@ -293,7 +306,7 @@ fn validate_product_configuration(
 fn valid_contract_code(value: &str, maximum_length: usize) -> bool {
     let mut bytes = value.bytes();
     matches!(bytes.next(), Some(first) if first.is_ascii_lowercase())
-        && (1..maximum_length).contains(&value.len())
+        && (2..=maximum_length).contains(&value.len())
         && bytes.all(|byte| {
             byte.is_ascii_lowercase()
                 || byte.is_ascii_digit()
@@ -409,5 +422,58 @@ mod tests {
         assert_eq!(normalize_domain("  SHOP.Example.COM. ").unwrap(), "shop.example.com");
         assert_eq!(normalize_domain("https://shop.example.com").unwrap_err(), ProductCatalogError::InvalidDomain);
         assert_eq!(normalize_domain("shop.example.com/path").unwrap_err(), ProductCatalogError::InvalidDomain);
+    }
+
+    #[test]
+    fn validates_the_versioned_product_configuration_contract() {
+        let valid = serde_json::json!({
+            "branding": {
+                "displayName": "ENSAMBRIA Core",
+                "brandName": "ENSAMBRIA"
+            },
+            "domains": ["shop.example.test"],
+            "markets": [{
+                "countryCode": "CO",
+                "currencyCode": "COP",
+                "locale": "es-CO"
+            }],
+            "surfaces": [{
+                "code": "operator.web",
+                "configurationVersion": 1
+            }],
+            "capabilities": [{
+                "code": "identity.auth",
+                "contractVersion": "v1"
+            }]
+        });
+        assert_eq!(validate_product_configuration("product-config.v1", &valid), Ok(()));
+        assert_eq!(
+            validate_product_configuration("product-config.v2", &valid),
+            Err(ProductCatalogError::UnsupportedConfigurationSchema)
+        );
+    }
+
+    #[test]
+    fn rejects_noncanonical_or_duplicate_product_configuration_values() {
+        let uppercase_domain = serde_json::json!({"domains": ["SHOP.EXAMPLE.TEST"]});
+        assert_eq!(
+            validate_product_configuration("product-config.v1", &uppercase_domain),
+            Err(ProductCatalogError::InvalidConfiguration)
+        );
+        let duplicate_surface = serde_json::json!({
+            "surfaces": [
+                {"code": "operator.web", "configurationVersion": 1},
+                {"code": "operator.web", "configurationVersion": 1}
+            ]
+        });
+        assert_eq!(
+            validate_product_configuration("product-config.v1", &duplicate_surface),
+            Err(ProductCatalogError::InvalidConfiguration)
+        );
+        let unknown_property = serde_json::json!({"unreviewedCapability": true});
+        assert_eq!(
+            validate_product_configuration("product-config.v1", &unknown_property),
+            Err(ProductCatalogError::InvalidConfiguration)
+        );
     }
 }

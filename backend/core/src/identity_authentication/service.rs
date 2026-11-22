@@ -657,8 +657,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
     pub async fn begin_totp_enrollment(
         &self,
-        identity_id: Uuid,
+        access_token: &str,
     ) -> Result<String, AuthenticationError> {
+        let identity_id = self.authenticate_access_token(access_token).await?;
         let secret = TotpSecret::generate().map_err(|_| AuthenticationError::Cryptography)?;
         let encrypted = self
             .mfa_protector
@@ -703,9 +704,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
     pub async fn confirm_totp_enrollment(
         &self,
-        identity_id: Uuid,
+        access_token: &str,
         code: &str,
     ) -> Result<Vec<String>, AuthenticationError> {
+        let identity_id = self.authenticate_access_token(access_token).await?;
         let unix_seconds = unix_time_now()?;
         let mut transaction = self
             .pool
@@ -779,9 +781,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
     pub async fn disable_totp(
         &self,
-        identity_id: Uuid,
+        access_token: &str,
         current_password: &str,
     ) -> Result<(), AuthenticationError> {
+        let identity_id = self.authenticate_access_token(access_token).await?;
         let mut transaction = self
             .pool
             .begin()
@@ -854,7 +857,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         Ok(())
     }
 
-    pub async fn logout_all(&self, identity_id: Uuid) -> Result<(), AuthenticationError> {
+    pub async fn logout_all(&self, access_token: &str) -> Result<(), AuthenticationError> {
+        let identity_id = self.authenticate_access_token(access_token).await?;
         let mut transaction = self
             .pool
             .begin()

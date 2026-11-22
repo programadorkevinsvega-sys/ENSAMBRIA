@@ -215,14 +215,13 @@ fn validate_product_configuration(
     {
         return Err(ProductCatalogError::InvalidConfiguration);
     }
-    if let Some(branding) = value.get("branding") {
-        if !branding.is_object()
+    if let Some(branding) = value.get("branding")
+        && (!branding.is_object()
             || ["displayName", "brandName", "logoUri"]
                 .iter()
-                .any(|field| branding.get(*field).is_some_and(Value::is_null))
-        {
-            return Err(ProductCatalogError::InvalidConfiguration);
-        }
+                .any(|field| branding.get(*field).is_some_and(Value::is_null)))
+    {
+        return Err(ProductCatalogError::InvalidConfiguration);
     }
     let configuration: ProductConfigurationV1 = serde_json::from_value(value.clone())
         .map_err(|_| ProductCatalogError::InvalidConfiguration)?;

@@ -211,7 +211,7 @@ fn validate_product_configuration(
     if !value.is_object()
         || ["branding", "domains", "markets", "surfaces", "capabilities"]
             .iter()
-            .any(|field| value.get(field).is_some_and(Value::is_null))
+            .any(|field| value.get(*field).is_some_and(Value::is_null))
     {
         return Err(ProductCatalogError::InvalidConfiguration);
     }
@@ -219,7 +219,7 @@ fn validate_product_configuration(
         if !branding.is_object()
             || ["displayName", "brandName", "logoUri"]
                 .iter()
-                .any(|field| branding.get(field).is_some_and(Value::is_null))
+                .any(|field| branding.get(*field).is_some_and(Value::is_null))
         {
             return Err(ProductCatalogError::InvalidConfiguration);
         }
@@ -415,7 +415,7 @@ impl std::error::Error for ProductCatalogError {}
 
 #[cfg(test)]
 mod tests {
-    use super::{ProductCatalogError, normalize_domain};
+    use super::{ProductCatalogError, normalize_domain, validate_product_configuration};
 
     #[test]
     fn normalizes_ascii_domains_without_accepting_urls_or_paths() {

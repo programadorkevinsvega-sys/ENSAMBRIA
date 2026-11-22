@@ -16,7 +16,7 @@ use ring::{
     digest::{SHA256, digest},
     hmac,
 };
-use sqlx::{PgPool, Row};
+use sqlx::{PgConnection, PgPool, Row};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -63,6 +63,16 @@ pub trait EmailDelivery: Send + Sync {
         &'a self,
         message: EmailMessage,
     ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>>;
+
+    /// Enqueues a message using the caller's state transaction when the adapter supports it.
+    /// Production outbox adapters override this method to make state and delivery intent atomic.
+    fn send_in_transaction<'a>(
+        &'a self,
+        _connection: &'a mut PgConnection,
+        message: EmailMessage,
+    ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
+        self.send(message)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -250,16 +260,29 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         if !issued {
             return Err(AuthenticationError::Storage);
         }
-        transaction
-            .commit()
-            .await
-            .map_err(|_| AuthenticationError::Storage)?;
-
         let link = format!(
             "{}/verify-email?token={}",
             self.public_base_url,
             token.as_str()
         );
+        if self.email.send_in_transaction(
+            &mut *transaction,
+            EmailMessage {
+                recipient: email,
+                subject: "Verifica tu cuenta ENSAMBRIA".into(),
+                text_body: format!(
+                    "Confirma tu correo abriendo este enlace de un solo uso, válido por 24 horas:\n{link}\nSi no solicitaste esta cuenta, ignora este mensaje."
+                ),
+            },
+        ).await.is_err() {
+            tracing::warn!(event = "auth.verification_email_enqueue_failed");
+            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            return Ok(());
+        }
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         self.record_audit(
             Some(identity_id),
             "auth.identity.registration_requested",
@@ -268,28 +291,21 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             Some(identity_id),
         )
         .await?;
-        self.email
-            .send(EmailMessage {
-                recipient: email,
-                subject: "Verifica tu cuenta ENSAMBRIA".into(),
-                text_body: format!(
-                    "Confirma tu correo abriendo este enlace de un solo uso, válido por 24 horas:\n{link}\nSi no solicitaste esta cuenta, ignora este mensaje."
-                ),
-            })
-            .await
-            .unwrap_or_else(|_| {
-                tracing::warn!(event = "auth.verification_email_delivery_failed");
-            });
         Ok(())
     }
 
     pub async fn resend_verification(&self, email: &str) -> Result<(), AuthenticationError> {
         let email = normalize_email(email).map_err(|_| AuthenticationError::InvalidInput)?;
         self.enforce_rate_limit("recovery", &email).await?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         let pending: Option<Uuid> =
             sqlx::query_scalar("SELECT identity_id FROM core.auth_lookup_pending_identity($1)")
                 .bind(&email)
-                .fetch_optional(&self.pool)
+                .fetch_optional(&mut *transaction)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
         let Some(identity_id) = pending else {
@@ -303,10 +319,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .bind(Uuid::now_v7())
                 .bind(token_hash.as_bytes())
                 .bind(unix_timestamp(SystemTime::now() + VERIFICATION_TOKEN_TTL)?)
-                .fetch_one(&self.pool)
+                .fetch_one(&mut *transaction)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
         if !issued {
+            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
         let link = format!(
@@ -314,13 +331,29 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             self.public_base_url,
             token.as_str()
         );
-        self.email.send(EmailMessage {
-            recipient: email,
-            subject: "Verifica tu cuenta ENSAMBRIA".into(),
-            text_body: format!("Confirma tu correo con este enlace de un solo uso, válido por 24 horas:\\n{link}"),
-        }).await.unwrap_or_else(|_| {
-            tracing::warn!(event = "auth.verification_email_delivery_failed");
-        });
+        if self.email.send_in_transaction(
+            &mut *transaction,
+            EmailMessage {
+                recipient: email,
+                subject: "Verifica tu cuenta ENSAMBRIA".into(),
+                text_body: format!(
+                    "Confirma tu correo con este enlace de un solo uso, válido por 24 horas:\n{link}"
+                ),
+            },
+        ).await.is_err() {
+            tracing::warn!(event = "auth.verification_email_enqueue_failed");
+            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            return Ok(());
+        }
+        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.identity.verification_resent",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(())
     }
 
@@ -658,6 +691,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
         let (token, token_hash) =
             SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         let issued: bool = sqlx::query_scalar(
             "SELECT core.auth_issue_recovery_token($1, $2, $3, to_timestamp($4::double precision))",
         )
@@ -665,12 +703,33 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .bind(Uuid::now_v7())
         .bind(token_hash.as_bytes())
         .bind(unix_timestamp(SystemTime::now() + RECOVERY_TOKEN_TTL)?)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *transaction)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
         if !issued {
+            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
+        let link = format!(
+            "{}/reset-password?token={}",
+            self.public_base_url,
+            token.as_str()
+        );
+        if self.email.send_in_transaction(
+            &mut *transaction,
+            EmailMessage {
+                recipient: email,
+                subject: "Recupera tu cuenta ENSAMBRIA".into(),
+                text_body: format!(
+                    "Solicitaste restablecer tu contraseña. Usa este enlace de un solo uso, válido por una hora:\n{link}\nSi no solicitaste el cambio, ignora este mensaje."
+                ),
+            },
+        ).await.is_err() {
+            tracing::warn!(event = "auth.recovery_email_enqueue_failed");
+            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            return Ok(());
+        }
+        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
         self.record_audit(
             Some(identity_id),
             "auth.recovery.requested",
@@ -679,23 +738,6 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             Some(identity_id),
         )
         .await?;
-        let link = format!(
-            "{}/reset-password?token={}",
-            self.public_base_url,
-            token.as_str()
-        );
-        self.email
-            .send(EmailMessage {
-                recipient: email,
-                subject: "Recupera tu cuenta ENSAMBRIA".into(),
-                text_body: format!(
-                    "Solicitaste restablecer tu contraseña. Usa este enlace de un solo uso, válido por una hora:\n{link}\nSi no solicitaste el cambio, ignora este mensaje."
-                ),
-            })
-            .await
-            .unwrap_or_else(|_| {
-                tracing::warn!(event = "auth.recovery_email_delivery_failed");
-            });
         Ok(())
     }
 

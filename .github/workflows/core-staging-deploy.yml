@@ -54,7 +54,7 @@ jobs:
       - name: Build CORE and its migration runner
         run: >-
           cargo build --locked --release --package ensambria-core
-          --bin core --bin core-migrate --target x86_64-unknown-linux-musl
+          --bin core --bin core-migrate --bin core-email-worker --target x86_64-unknown-linux-musl
 
       - name: Package only binaries and migration SQL
         id: package
@@ -69,6 +69,9 @@ jobs:
           install -m 0750 \
             target/x86_64-unknown-linux-musl/release/core-migrate \
             "$artifact_directory/core-migrate"
+          install -m 0750 \
+            target/x86_64-unknown-linux-musl/release/core-email-worker \
+            "$artifact_directory/core-email-worker"
           mkdir "$artifact_directory/migrations"
           mapfile -d '' -t migration_files < <(
             find backend/core/migrations -maxdepth 1 -type f -name '*.sql' -print0 | sort -z
@@ -78,7 +81,7 @@ jobs:
             install -m 0640 "$migration_file" "$artifact_directory/migrations/"
           done
           tar --create --gzip --file "$core_package" \
-            --directory "$artifact_directory" core core-migrate migrations
+            --directory "$artifact_directory" core core-migrate core-email-worker migrations
           echo "path=$core_package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings
@@ -141,6 +144,7 @@ jobs:
             backend/core/deployment/deploy-staging.sh \
             backend/core/deployment/ensambria-core.service \
             backend/core/deployment/ensambria-core-migrate.service \
+            backend/core/deployment/ensambria-core-email-worker.service \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}:${REMOTE_DIRECTORY}/"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \

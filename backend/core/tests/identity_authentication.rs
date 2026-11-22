@@ -83,15 +83,16 @@ async fn credentials_and_sessions_are_actor_scoped_and_token_indexes_are_opaque(
     .execute(&mut *transaction)
     .await
     .expect("opaque session lookup must be insertable");
-    sqlx::query(
-        "INSERT INTO core.identity_login_lookup (email_hmac, identity_id) VALUES ($1, $2)",
-    )
-    .bind(&email_hmac)
-    .bind(identity_id)
-    .execute(&mut *transaction)
-    .await
-    .expect("opaque email lookup must be insertable");
-    transaction.commit().await.expect("identity transaction must commit");
+    sqlx::query("INSERT INTO core.identity_login_lookup (email_hmac, identity_id) VALUES ($1, $2)")
+        .bind(&email_hmac)
+        .bind(identity_id)
+        .execute(&mut *transaction)
+        .await
+        .expect("opaque email lookup must be insertable");
+    transaction
+        .commit()
+        .await
+        .expect("identity transaction must commit");
 
     let mut transaction = pool.begin().await.expect("second transaction must begin");
     set_actor(&mut transaction, other_actor).await;
@@ -110,14 +111,18 @@ async fn credentials_and_sessions_are_actor_scoped_and_token_indexes_are_opaque(
     assert_eq!(visible_credentials, 0);
     assert_eq!(visible_sessions, 0);
 
-    let indexed_identity: Uuid =
-        sqlx::query_scalar("SELECT identity_id FROM core.identity_login_lookup WHERE email_hmac = $1")
-            .bind(&email_hmac)
-            .fetch_one(&mut *transaction)
-            .await
-            .expect("HMAC lookup index must be available to authentication");
+    let indexed_identity: Uuid = sqlx::query_scalar(
+        "SELECT identity_id FROM core.identity_login_lookup WHERE email_hmac = $1",
+    )
+    .bind(&email_hmac)
+    .fetch_one(&mut *transaction)
+    .await
+    .expect("HMAC lookup index must be available to authentication");
     assert_eq!(indexed_identity, identity_id);
 
-    transaction.rollback().await.expect("test transaction must roll back");
+    transaction
+        .rollback()
+        .await
+        .expect("test transaction must roll back");
     pool.close().await;
 }

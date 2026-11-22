@@ -76,7 +76,10 @@ mod tests {
 
     #[test]
     fn rejects_short_lookup_keys_and_malformed_emails() {
-        assert_eq!(EmailLookupKey::new(&[1; 16]).err(), Some(EmailLookupError::InvalidKey));
+        assert_eq!(
+            EmailLookupKey::new(&[1; 16]).err(),
+            Some(EmailLookupError::InvalidKey)
+        );
         assert!(normalize_email("missing-at-sign").is_err());
         assert!(normalize_email("two@@example.test").is_err());
     }

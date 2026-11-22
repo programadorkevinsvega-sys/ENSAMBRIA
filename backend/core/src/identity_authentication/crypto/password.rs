@@ -78,15 +78,11 @@ pub fn hash_password(password: &str) -> Result<PasswordHash, PasswordHashError> 
     })
 }
 
-pub fn verify_password(
-    password: &str,
-    stored: &PasswordHash,
-) -> Result<bool, PasswordHashError> {
+pub fn verify_password(password: &str, stored: &PasswordHash) -> Result<bool, PasswordHashError> {
     if password.len() > MAX_PASSWORD_BYTES {
         return Err(PasswordHashError::PasswordTooLong);
     }
-    let iterations =
-        NonZeroU32::new(stored.iterations).ok_or(PasswordHashError::InvalidHash)?;
+    let iterations = NonZeroU32::new(stored.iterations).ok_or(PasswordHashError::InvalidHash)?;
     Ok(pbkdf2::verify(
         &pbkdf2::PBKDF2_HMAC_SHA256,
         iterations,
@@ -140,12 +136,8 @@ mod tests {
         assert!(!verify_password("incorrect horse battery staple", &stored).unwrap());
         assert!(!format!("{stored:?}").contains("correct horse"));
         assert_eq!(stored.iterations(), 600_000);
-        let restored = PasswordHash::from_parts(
-            stored.iterations(),
-            stored.salt(),
-            stored.hash(),
-        )
-        .expect("stored parts must round-trip");
+        let restored = PasswordHash::from_parts(stored.iterations(), stored.salt(), stored.hash())
+            .expect("stored parts must round-trip");
         assert!(verify_password("correct horse battery staple", &restored).unwrap());
     }
 

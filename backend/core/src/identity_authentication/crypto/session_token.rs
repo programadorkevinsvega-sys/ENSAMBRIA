@@ -43,9 +43,7 @@ impl fmt::Debug for SessionTokenHash {
 
 impl SessionTokenHash {
     pub fn from_presented(token: &str) -> Result<Self, SessionTokenError> {
-        if token.len() != TOKEN_HEX_LENGTH
-            || !token.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
+        if token.len() != TOKEN_HEX_LENGTH || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(SessionTokenError::InvalidToken);
         }
         let digest = digest(&SHA256, token.as_bytes());

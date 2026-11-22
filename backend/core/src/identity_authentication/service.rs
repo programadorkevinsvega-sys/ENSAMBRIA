@@ -17,6 +17,7 @@ use lettre::{
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::{
     identity_authentication::crypto::{
@@ -433,11 +434,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                     .try_get("encryption_key_version")
                     .map_err(|_| AuthenticationError::Storage)?,
             };
-            let secret_bytes = self
-                .mfa_protector
-                .open(identity_id, &encrypted)
-                .map_err(|_| AuthenticationError::Cryptography)?;
+            let secret_bytes = Zeroizing::new(
+                self.mfa_protector
+                    .open(identity_id, &encrypted)
+                    .map_err(|_| AuthenticationError::Cryptography)?,
+            );
             let secret_array: [u8; 20] = secret_bytes
+                .as_slice()
                 .try_into()
                 .map_err(|_| AuthenticationError::Cryptography)?;
             let secret = TotpSecret::from_bytes(secret_array);
@@ -729,11 +732,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .try_get("encryption_key_version")
                 .map_err(|_| AuthenticationError::Storage)?,
         };
-        let secret_bytes = self
-            .mfa_protector
-            .open(identity_id, &encrypted)
-            .map_err(|_| AuthenticationError::Cryptography)?;
+        let secret_bytes = Zeroizing::new(
+            self.mfa_protector
+                .open(identity_id, &encrypted)
+                .map_err(|_| AuthenticationError::Cryptography)?,
+        );
         let secret_array: [u8; 20] = secret_bytes
+            .as_slice()
             .try_into()
             .map_err(|_| AuthenticationError::Cryptography)?;
         let secret = TotpSecret::from_bytes(secret_array);

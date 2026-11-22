@@ -6,7 +6,7 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
-redis = { version = "0.32.7", default-features = false, features = ["connection-manager", "tokio-rustls-comp", "tls-rustls-webpki-roots"] }
+redis = { version = "0.32.7", default-features = false, features = ["connection-manager", "tokio-rustls-comp", "tls-rustls-webpki-roots", "cluster-async", "sentinel"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 url = "2.5"
 

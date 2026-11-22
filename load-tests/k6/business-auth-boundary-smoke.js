@@ -4,16 +4,10 @@ import { Rate } from 'k6/metrics';
 
 const unexpectedStatus = new Rate('business_auth_boundary_unexpected_status');
 const target = __ENV.TARGET_URL || 'http://127.0.0.1:18080/v1/business/establishments';
+const allowedTarget = 'http://127.0.0.1:18080/v1/business/establishments';
 
-const parsed = new URL(target);
-if (
-  parsed.protocol !== 'http:' ||
-  !['127.0.0.1', 'localhost'].includes(parsed.hostname) ||
-  parsed.pathname !== '/v1/business/establishments' ||
-  parsed.search !== '' ||
-  parsed.hash !== ''
-) {
-  throw new Error('The CI smoke target must be the local BUSINESS establishments route');
+if (target !== allowedTarget) {
+  throw new Error('The CI smoke target must be exactly the local BUSINESS establishments route');
 }
 
 http.setResponseCallback(http.expectedStatuses(401));
@@ -31,6 +25,7 @@ export default function () {
     headers: { Accept: 'application/json' },
     tags: { component: 'business', check: 'authentication-boundary' },
     timeout: '5s',
+    redirects: 0,
   });
 
   const expected = check(response, {

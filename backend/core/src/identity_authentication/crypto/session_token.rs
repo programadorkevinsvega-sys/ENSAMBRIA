@@ -35,6 +35,12 @@ impl fmt::Debug for SessionToken {
 #[derive(Clone, Eq, PartialEq)]
 pub struct SessionTokenHash([u8; 32]);
 
+impl fmt::Debug for SessionTokenHash {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("SessionTokenHash([REDACTED])")
+    }
+}
+
 impl SessionTokenHash {
     pub fn from_presented(token: &str) -> Result<Self, SessionTokenError> {
         if token.len() != TOKEN_HEX_LENGTH

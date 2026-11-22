@@ -10,6 +10,11 @@ use ring::{
     digest::{SHA256, digest},
     hmac,
 };
+use lettre::{
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    message::Mailbox,
+    transport::smtp::authentication::Credentials,
+};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -67,6 +72,66 @@ impl fmt::Display for EmailDeliveryError {
     }
 }
 impl Error for EmailDeliveryError {}
+
+
+pub struct SmtpEmailDelivery {
+    transport: AsyncSmtpTransport<Tokio1Executor>,
+    from: Mailbox,
+}
+
+impl SmtpEmailDelivery {
+    pub fn new(
+        host: &str,
+        port: u16,
+        username: String,
+        password: String,
+        from_address: &str,
+    ) -> Result<Self, EmailDeliveryError> {
+        if host.trim().is_empty()
+            || host.contains("://")
+            || host.bytes().any(|byte| byte.is_ascii_whitespace())
+            || port == 0
+            || username.is_empty()
+            || password.is_empty()
+        {
+            return Err(EmailDeliveryError);
+        }
+        let from = from_address
+            .parse::<Mailbox>()
+            .map_err(|_| EmailDeliveryError)?;
+        let transport = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host.trim())
+            .map_err(|_| EmailDeliveryError)?
+            .port(port)
+            .credentials(Credentials::new(username, password))
+            .build();
+        Ok(Self { transport, from })
+    }
+}
+
+impl EmailDelivery for SmtpEmailDelivery {
+    fn send<'a>(
+        &'a self,
+        message: EmailMessage,
+    ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
+        Box::pin(async move {
+            let recipient = message
+                .recipient
+                .parse::<Mailbox>()
+                .map_err(|_| EmailDeliveryError)?;
+            let email = Message::builder()
+                .from(self.from.clone())
+                .to(recipient)
+                .subject(message.subject)
+                .body(message.text_body)
+                .map_err(|_| EmailDeliveryError)?;
+            self.transport
+                .send(email)
+                .await
+                .map_err(|_| EmailDeliveryError)?;
+            Ok(())
+        })
+    }
+}
 
 pub struct AuthenticationService<D: EmailDelivery> {
     pool: PgPool,
@@ -183,7 +248,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 ),
             })
             .await
-            .map_err(|_| AuthenticationError::EmailDelivery)?;
+            .map_err(|_| {
+                tracing::warn!(event = "auth.verification_email_delivery_failed");
+            });
         Ok(())
     }
 
@@ -222,7 +289,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             recipient: email,
             subject: "Verifica tu cuenta ENSAMBRIA".into(),
             text_body: format!("Confirma tu correo con este enlace de un solo uso, válido por 24 horas:\\n{link}"),
-        }).await.map_err(|_| AuthenticationError::EmailDelivery)?;
+        }).await.map_err(|_| {
+            tracing::warn!(event = "auth.verification_email_delivery_failed");
+        });
         Ok(())
     }
 
@@ -526,7 +595,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 ),
             })
             .await
-            .map_err(|_| AuthenticationError::EmailDelivery)?;
+            .map_err(|_| {
+                tracing::warn!(event = "auth.recovery_email_delivery_failed");
+            });
         Ok(())
     }
 

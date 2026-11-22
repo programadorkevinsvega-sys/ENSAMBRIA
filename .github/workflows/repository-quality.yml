@@ -159,10 +159,6 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
 
-      - name: Run Rust tests against PostgreSQL
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: cargo test --locked --workspace
-
   security-dependencies:
     name: security-dependencies
     runs-on: ubuntu-latest

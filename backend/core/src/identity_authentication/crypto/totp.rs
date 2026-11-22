@@ -26,6 +26,37 @@ impl TotpSecret {
         Self(secret)
     }
 
+
+    pub fn from_base32(encoded: &str) -> Result<Self, TotpError> {
+        if encoded.len() != 32 {
+            return Err(TotpError::InvalidEncoding);
+        }
+        let mut decoded = Vec::with_capacity(SECRET_LENGTH);
+        let mut buffer = 0_u32;
+        let mut bits = 0_u8;
+        for byte in encoded.bytes() {
+            let value = match byte {
+                b'A'..=b'Z' => u32::from(byte - b'A'),
+                b'2'..=b'7' => u32::from(byte - b'2' + 26),
+                _ => return Err(TotpError::InvalidEncoding),
+            };
+            buffer = (buffer << 5) | value;
+            bits += 5;
+            if bits >= 8 {
+                bits -= 8;
+                decoded.push(((buffer >> bits) & 0xff) as u8);
+                buffer &= (1_u32 << bits) - 1;
+            }
+        }
+        if bits != 0 && buffer != 0 {
+            return Err(TotpError::InvalidEncoding);
+        }
+        let secret: [u8; SECRET_LENGTH] = decoded
+            .try_into()
+            .map_err(|_| TotpError::InvalidEncoding)?;
+        Ok(Self(secret))
+    }
+
     pub fn as_bytes(&self) -> &[u8; SECRET_LENGTH] {
         &self.0
     }
@@ -105,11 +136,15 @@ fn base32_encode(bytes: &[u8]) -> String {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TotpError {
     RandomGeneration,
+    InvalidEncoding,
 }
 
 impl fmt::Display for TotpError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("TOTP secret generation failed")
+        formatter.write_str(match self {
+            Self::RandomGeneration => "TOTP secret generation failed",
+            Self::InvalidEncoding => "TOTP secret encoding is invalid",
+        })
     }
 }
 
@@ -132,6 +167,9 @@ mod tests {
     fn secret_is_encoded_as_unpadded_base32_and_redacted() {
         let secret = TotpSecret::from_bytes(*b"12345678901234567890");
         assert_eq!(secret.base32(), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        let restored = TotpSecret::from_base32(&secret.base32()).unwrap();
+        assert_eq!(restored.as_bytes(), secret.as_bytes());
+        assert!(TotpSecret::from_base32("not-base32").is_err());
         assert!(!format!("{secret:?}").contains("1234567890"));
     }
 }

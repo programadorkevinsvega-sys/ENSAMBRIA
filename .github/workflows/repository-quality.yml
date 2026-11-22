@@ -21,25 +21,6 @@ jobs:
     name: repository-quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
-      CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
-      PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
-      RUSTUP_TOOLCHAIN: 1.99.1
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: ensambria_core_test
-          POSTGRES_HOST_AUTH_METHOD: trust
-          POSTGRES_USER: core_admin
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U core_admin -d ensambria_core_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -70,82 +51,113 @@ jobs:
           test "$check_status" -eq 0
           cargo clippy --locked --workspace --all-targets -- -D warnings
 
-      - name: Create isolated PostgreSQL test roles and CORE and PLATFORM schemas
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: |
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT core_schema_owner TO core_migrator;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE platform_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT platform_schema_owner TO core_migrator;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -f backend/platform/migrations/bootstrap/00000000000000_platform_schema.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_schema_owner" \
-            -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE platform_schema_owner;
-          BEGIN;
-          INSERT INTO platform.products (id, product_key, display_name, brand_name, status)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'ensambria-core', 'ENSAMBRIA Core', 'ENSAMBRIA', 'draft');
-          INSERT INTO platform.product_configurations (product_id, version, schema_version, configuration, status, published_at)
-          VALUES (
-              '018f0f2a-7b3c-7abc-8def-0123456789ab',
-              1,
-              'product-config.v1',
-              '{"branding":{"displayName":"ENSAMBRIA Core","brandName":"ENSAMBRIA"},"domains":["shop.example.test"],"markets":[{"countryCode":"CO","currencyCode":"COP","locale":"es-CO"}],"surfaces":[{"code":"operator.web","configurationVersion":1}],"capabilities":[{"code":"identity.auth","contractVersion":"v1"}]}'::jsonb,
-              'published',
-              clock_timestamp()
-          );
-          UPDATE platform.products
-             SET status = 'active', published_configuration_version = 1, updated_at = clock_timestamp()
-           WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789ab';
-          INSERT INTO platform.product_domains (id, product_id, domain_name, status, verified_at)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ac', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'shop.example.test', 'active', clock_timestamp());
-          INSERT INTO platform.product_markets (product_id, country_code, currency_code, locale, status)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'CO', 'COP', 'es-CO', 'enabled');
-          INSERT INTO platform.product_surfaces (product_id, surface_code, configuration_version, status)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'operator.web', 1, 'enabled');
-          INSERT INTO platform.capability_catalog (capability_code, contract_version, implementation_status)
-          VALUES ('identity.auth', 'v1', 'available');
-          INSERT INTO platform.product_capabilities (product_id, capability_code, configuration_version, status)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'identity.auth', 1, 'enabled');
-          COMMIT;
-          SQL
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
-
-      - name: Run Rust tests against PostgreSQL
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
+
+  postgres-integration:
+    name: postgres-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
+      RUSTUP_TOOLCHAIN: 1.99.1
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ensambria_core_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_USER: core_admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U core_admin -d ensambria_core_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
+
+            - name: Create isolated PostgreSQL test roles and CORE and PLATFORM schemas
+              if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+              run: |
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "CREATE ROLE core_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "GRANT core_schema_owner TO core_migrator;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "CREATE ROLE platform_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "GRANT platform_schema_owner TO core_migrator;"
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -f backend/platform/migrations/bootstrap/00000000000000_platform_schema.sql
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "SET ROLE platform_schema_owner" \
+                  -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+                SET ROLE platform_schema_owner;
+                BEGIN;
+                INSERT INTO platform.products (id, product_key, display_name, brand_name, status)
+                VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'ensambria-core', 'ENSAMBRIA Core', 'ENSAMBRIA', 'draft');
+                INSERT INTO platform.product_configurations (product_id, version, schema_version, configuration, status, published_at)
+                VALUES (
+                    '018f0f2a-7b3c-7abc-8def-0123456789ab',
+                    1,
+                    'product-config.v1',
+                    '{"branding":{"displayName":"ENSAMBRIA Core","brandName":"ENSAMBRIA"},"domains":["shop.example.test"],"markets":[{"countryCode":"CO","currencyCode":"COP","locale":"es-CO"}],"surfaces":[{"code":"operator.web","configurationVersion":1}],"capabilities":[{"code":"identity.auth","contractVersion":"v1"}]}'::jsonb,
+                    'published',
+                    clock_timestamp()
+                );
+                UPDATE platform.products
+                   SET status = 'active', published_configuration_version = 1, updated_at = clock_timestamp()
+                 WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789ab';
+                INSERT INTO platform.product_domains (id, product_id, domain_name, status, verified_at)
+                VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ac', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'shop.example.test', 'active', clock_timestamp());
+                INSERT INTO platform.product_markets (product_id, country_code, currency_code, locale, status)
+                VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'CO', 'COP', 'es-CO', 'enabled');
+                INSERT INTO platform.product_surfaces (product_id, surface_code, configuration_version, status)
+                VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'operator.web', 1, 'enabled');
+                INSERT INTO platform.capability_catalog (capability_code, contract_version, implementation_status)
+                VALUES ('identity.auth', 'v1', 'available');
+                INSERT INTO platform.product_capabilities (product_id, capability_code, configuration_version, status)
+                VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'identity.auth', 1, 'enabled');
+                COMMIT;
+                SQL
+                psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+                  -v ON_ERROR_STOP=1 \
+                  -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
+      
+            - name: Run Rust tests against PostgreSQL
+              if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
 
   security-dependencies:
     name: security-dependencies

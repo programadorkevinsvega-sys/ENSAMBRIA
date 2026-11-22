@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use ensambria_shared_cache::TtlCache;
 use serde::{Deserialize, Serialize};

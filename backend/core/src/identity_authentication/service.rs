@@ -266,7 +266,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             token.as_str()
         );
         if self.email.send_in_transaction(
-            &mut *transaction,
+            &mut transaction,
             EmailMessage {
                 recipient: email,
                 subject: "Verifica tu cuenta ENSAMBRIA".into(),
@@ -338,7 +338,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             token.as_str()
         );
         if self.email.send_in_transaction(
-            &mut *transaction,
+            &mut transaction,
             EmailMessage {
                 recipient: email,
                 subject: "Verifica tu cuenta ENSAMBRIA".into(),
@@ -731,7 +731,7 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             token.as_str()
         );
         if self.email.send_in_transaction(
-            &mut *transaction,
+            &mut transaction,
             EmailMessage {
                 recipient: email,
                 subject: "Recupera tu cuenta ENSAMBRIA".into(),

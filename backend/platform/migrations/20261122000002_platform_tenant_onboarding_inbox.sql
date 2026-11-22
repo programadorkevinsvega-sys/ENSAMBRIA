@@ -8,6 +8,7 @@ CREATE TABLE platform.inbox_messages (
     aggregate_id uuid NOT NULL,
     aggregate_version bigint NOT NULL CHECK (aggregate_version > 0),
     product_id uuid NOT NULL,
+    product_config_version integer NOT NULL CHECK (product_config_version > 0),
     correlation_id uuid NOT NULL,
     payload_hash bytea NOT NULL CHECK (octet_length(payload_hash) = 32),
     status text NOT NULL DEFAULT 'received'

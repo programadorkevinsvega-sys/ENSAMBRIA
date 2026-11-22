@@ -270,13 +270,6 @@ COMMENT ON TABLE platform.capability_catalog IS
 COMMENT ON VIEW platform.active_product_catalog IS
     'Read-only published catalogue surface consumed by CORE through a versioned contract.';
 
-            AND domain_name !~ '(^[.]|[.]$|[.][.]|(^|[.])-|-[.]|-$)'),
-    status text NOT NULL CHECK (status IN ('pending_verification', 'active', 'suspended', 'retired')),
-    verified_at timestamptz,
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (product_id, domain_name),
-    CHECK ((status = 'active') = (verified_at IS NOT NULL))
-);
 
 CREATE TABLE platform.product_markets (
     product_id uuid NOT NULL REFERENCES platform.products(id),

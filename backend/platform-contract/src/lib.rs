@@ -331,9 +331,8 @@ pub mod platform {
                             }
                             let inner = Arc::clone(&self.inner);
                             Box::pin(async move {
-                                let mut grpc = tonic::server::Grpc::new(
-                                    tonic_prost::ProstCodec::default(),
-                                );
+                                let mut grpc =
+                                    tonic::server::Grpc::new(tonic_prost::ProstCodec::default());
                                 Ok(grpc.unary(Method(inner), request).await)
                             })
                         }
@@ -358,9 +357,8 @@ pub mod platform {
                             }
                             let inner = Arc::clone(&self.inner);
                             Box::pin(async move {
-                                let mut grpc = tonic::server::Grpc::new(
-                                    tonic_prost::ProstCodec::default(),
-                                );
+                                let mut grpc =
+                                    tonic::server::Grpc::new(tonic_prost::ProstCodec::default());
                                 Ok(grpc.unary(Method(inner), request).await)
                             })
                         }

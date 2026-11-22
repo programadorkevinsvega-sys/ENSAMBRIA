@@ -3,8 +3,6 @@ use std::time::Duration;
 use redis::aio::{ConnectionManager, ConnectionManagerConfig};
 use redis::{Client, RedisError};
 
-const MIN_RECONNECT_DELAY: Duration = Duration::from_millis(100);
-const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
 const RESPONSE_TIMEOUT: Duration = Duration::from_millis(500);
 const RECONNECT_ATTEMPTS: usize = 5;
@@ -24,11 +22,12 @@ impl TtlCache {
 
         let client = Client::open(redis_url).map_err(|_| CacheError::InvalidConfiguration)?;
         let configuration = ConnectionManagerConfig::new()
-            .set_min_delay(MIN_RECONNECT_DELAY)
-            .set_max_delay(MAX_RECONNECT_DELAY)
+            .set_exponent_base(2)
+            .set_factor(100)
+            .set_max_delay(2_000)
             .set_number_of_retries(RECONNECT_ATTEMPTS)
-            .set_connection_timeout(Some(CONNECTION_TIMEOUT))
-            .set_response_timeout(Some(RESPONSE_TIMEOUT));
+            .set_connection_timeout(CONNECTION_TIMEOUT)
+            .set_response_timeout(RESPONSE_TIMEOUT);
         let connection = ConnectionManager::new_with_config(client, configuration)
             .await
             .map_err(|_| CacheError::Unavailable)?;

@@ -21,7 +21,11 @@ use ensambria_core::{
     },
     postgres::{ActorContext, ActorId, PgPoolConfiguration, create_pool},
 };
-use sqlx::{PgPool, postgres::{PgConnectOptions, PgPoolOptions}, types::Uuid};
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+    types::Uuid,
+};
 
 async fn test_pool() -> PgPool {
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")

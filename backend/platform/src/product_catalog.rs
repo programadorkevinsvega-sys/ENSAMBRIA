@@ -132,10 +132,9 @@ impl ProductCatalog {
                 Ok(Some(cached_id)) => {
                     if let Ok(encoded_id) = std::str::from_utf8(&cached_id)
                         && let Ok(product_id) = Uuid::parse_str(encoded_id)
+                        && let Some(product) = self.get_active_product(product_id).await?
                     {
-                        if let Some(product) = self.get_active_product(product_id).await? {
-                            return Ok(Some(product));
-                        }
+                        return Ok(Some(product));
                     }
                     let _ = cache.delete(&cache_key).await;
                 }
@@ -159,15 +158,22 @@ impl ProductCatalog {
         .await
         .map_err(|_| ProductCatalogError::Storage)?;
 
-        if let (Some(cache), Some(product_id)) = (&self.cache, product_id) {
-            if cache.put(&cache_key, product_id.to_string().as_bytes(), Duration::from_secs(10)).await.is_err() {
-                tracing::warn!(
-                    event = "cache.redis.write_failed",
-                    component = "platform",
-                    operation = "product_domain.resolve",
-                    result = "fallback"
-                );
-            }
+        if let (Some(cache), Some(product_id)) = (&self.cache, product_id)
+            && cache
+                .put(
+                    &cache_key,
+                    product_id.to_string().as_bytes(),
+                    Duration::from_secs(10),
+                )
+                .await
+                .is_err()
+        {
+            tracing::warn!(
+                event = "cache.redis.write_failed",
+                component = "platform",
+                operation = "product_domain.resolve",
+                result = "fallback"
+            );
         }
 
         match product_id {

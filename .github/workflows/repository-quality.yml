@@ -17,13 +17,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  format-rust:
+    name: format-rust
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - name: Check out PR source branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
+
+      - name: Apply rustfmt once and commit only formatting changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          cargo fmt --all
+          if [ -n "$(git status --porcelain -- '*.rs')" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- '*.rs'
+            git commit -m "style(rust): format workspace sources"
+            git push origin "HEAD:$PR_BRANCH"
+          else
+            echo "Rust sources are already formatted."
+          fi
+
   repository-quality:
     name: repository-quality
+    needs: format-rust
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Check out repository
+      - name: Check out latest PR source branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt

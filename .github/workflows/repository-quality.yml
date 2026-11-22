@@ -155,6 +155,10 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
 
+      - name: Refresh locked dependencies and patch known advisory
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo update -p url --precise 2.5.9
+
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
@@ -182,6 +186,10 @@ jobs:
         uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519
         with:
           tool: cargo-audit,cargo-deny
+
+      - name: Refresh locked dependencies and patch known advisory
+        if: steps.cargo_manifests.outputs.present == 'true'
+        run: cargo update -p url --precise 2.5.9
 
       - name: Audit dependencies for vulnerabilities (cargo audit)
         if: steps.cargo_manifests.outputs.present == 'true'

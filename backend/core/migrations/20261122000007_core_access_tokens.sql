@@ -121,6 +121,19 @@ BEGIN
         RETURN;
     END IF;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM core.identities
+         WHERE id = v_session.identity_id
+           AND status = 'active'
+           AND email_verified_at IS NOT NULL
+    ) THEN
+        UPDATE core.auth_sessions
+           SET revoked_at = COALESCE(revoked_at, clock_timestamp())
+         WHERE identity_id = v_session.identity_id;
+        RETURN QUERY SELECT v_session.identity_id, false, false;
+        RETURN;
+    END IF;
+
     INSERT INTO core.auth_sessions (
         id, identity_id, access_token_hash, access_expires_at,
         refresh_token_hash, expires_at, ip_prefix, user_agent_digest

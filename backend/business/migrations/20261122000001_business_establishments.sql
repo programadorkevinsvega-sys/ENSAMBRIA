@@ -8,8 +8,6 @@ CREATE TABLE business.establishments (
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (tenant_id, id),
-    FOREIGN KEY (tenant_id, organization_id) REFERENCES core.organizations(tenant_id, id),
-    FOREIGN KEY (tenant_id, organization_id, branch_id) REFERENCES core.branches(tenant_id, organization_id, id)
 );
 CREATE INDEX establishments_tenant_created_idx
     ON business.establishments (tenant_id, created_at DESC, id DESC);

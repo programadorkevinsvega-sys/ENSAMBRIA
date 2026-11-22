@@ -65,22 +65,14 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
         .await
         .expect("Argon2id credential must be inserted under its actor context");
     sqlx::query(
-        "INSERT INTO core.sessions (id, identity_id, expires_at) VALUES ($1, $2, clock_timestamp() + interval '1 day')",
+        "INSERT INTO core.auth_sessions (id, identity_id, refresh_token_hash, expires_at) VALUES ($1, $2, $3, clock_timestamp() + interval '1 day')",
     )
     .bind(session_id)
     .bind(identity_id)
-    .execute(&mut *transaction)
-    .await
-    .expect("session must be inserted under its actor context");
-    sqlx::query(
-        "INSERT INTO core.session_token_lookup (token_hash, session_id, identity_id) VALUES ($1, $2, $3)",
-    )
     .bind(&token_hash)
-    .bind(session_id)
-    .bind(identity_id)
     .execute(&mut *transaction)
     .await
-    .expect("opaque session lookup must be insertable");
+    .expect("opaque refresh session must be inserted under its actor context");
     transaction
         .commit()
         .await
@@ -107,7 +99,7 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
             .await
             .expect("credential lookup must be scoped");
     let visible_sessions: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core.sessions WHERE identity_id = $1")
+        sqlx::query_scalar("SELECT count(*) FROM core.auth_sessions WHERE identity_id = $1")
             .bind(identity_id)
             .fetch_one(&mut *transaction)
             .await

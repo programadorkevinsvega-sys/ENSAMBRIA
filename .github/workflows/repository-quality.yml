@@ -41,6 +41,7 @@ jobs:
           cat backend/core/src/identity_authentication/service.rs
           echo 'RUSTFMT_SERVICE_END'
           cargo fmt --all -- --check
+          cargo update -p url --precise 2.5.9
           set +e
           cargo check --workspace --all-targets
           check_status=$?

@@ -1,7 +1,10 @@
 use ensambria_platform_contract::platform::product_catalog::v1::{
     GetActiveProductRequest, ProductCatalogClient, ProductCatalogEntry, ResolveActiveDomainRequest,
 };
-use tonic::{Code, transport::Channel};
+use tonic::{
+    Code,
+    transport::{Certificate, Channel, ClientTlsConfig, Identity},
+};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -18,7 +21,28 @@ impl PlatformProductPolicy {
     pub async fn from_env() -> Result<Self, PlatformContractError> {
         let endpoint = std::env::var("PLATFORM_PRODUCT_CATALOG_ENDPOINT")
             .map_err(|_| PlatformContractError::InvalidConfiguration)?;
-        let catalog = ProductCatalogClient::connect(endpoint)
+        if !endpoint.starts_with("https://") {
+            return Err(PlatformContractError::InvalidConfiguration);
+        }
+        let ca_certificate = std::fs::read(
+            std::env::var("PLATFORM_PRODUCT_CATALOG_CA_CERT_FILE")
+                .map_err(|_| PlatformContractError::InvalidConfiguration)?,
+        )
+        .map_err(|_| PlatformContractError::InvalidConfiguration)?;
+        let client_certificate = std::fs::read(
+            std::env::var("CORE_PLATFORM_GRPC_CLIENT_CERT_FILE")
+                .map_err(|_| PlatformContractError::InvalidConfiguration)?,
+        )
+        .map_err(|_| PlatformContractError::InvalidConfiguration)?;
+        let client_key = std::fs::read(
+            std::env::var("CORE_PLATFORM_GRPC_CLIENT_KEY_FILE")
+                .map_err(|_| PlatformContractError::InvalidConfiguration)?,
+        )
+        .map_err(|_| PlatformContractError::InvalidConfiguration)?;
+        let tls_config = ClientTlsConfig::new()
+            .ca_certificate(Certificate::from_pem(ca_certificate))
+            .identity(Identity::from_pem(client_certificate, client_key));
+        let catalog = ProductCatalogClient::connect_with_tls(endpoint, tls_config)
             .await
             .map_err(|_| PlatformContractError::PlatformUnavailable)?;
         Ok(Self { catalog })

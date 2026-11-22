@@ -222,7 +222,7 @@ jobs:
           END
           $;
           SQL
-          psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE platform_event_consumer;
           BEGIN;
           INSERT INTO platform.inbox_messages (

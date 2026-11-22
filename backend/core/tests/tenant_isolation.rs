@@ -140,13 +140,12 @@ async fn rls_denies_cross_tenant_reads_writes_and_cross_tenant_relationships() {
 #[tokio::test]
 async fn actor_rls_and_tenant_context_do_not_leak_after_commit_or_rollback() {
     let pool = test_pool().await;
-    let actor_a = Uuid::now_v7();
     let actor_b = Uuid::now_v7();
     let tenant_a = Uuid::now_v7();
     let identity_id = Uuid::now_v7();
     let mut transaction = pool.begin().await.expect("transaction must begin");
 
-    set_actor(&mut transaction, actor_a).await;
+    set_actor(&mut transaction, identity_id).await;
     sqlx::query(
         "INSERT INTO core.identities (id, email_normalized, email_display) VALUES ($1, 'a@example.test', 'a@example.test')",
     )

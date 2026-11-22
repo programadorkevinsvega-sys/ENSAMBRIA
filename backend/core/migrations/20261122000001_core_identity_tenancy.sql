@@ -197,7 +197,6 @@ DECLARE
     table_name text;
 BEGIN
     FOREACH table_name IN ARRAY ARRAY[
-        'tenants',
         'organizations',
         'branches',
         'tenant_memberships',
@@ -217,6 +216,12 @@ BEGIN
     END LOOP;
 END
 $$;
+
+ALTER TABLE core.tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE core.tenants FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenants_tenant_scope ON core.tenants
+    USING (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 ALTER TABLE core.security_audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core.security_audit_events FORCE ROW LEVEL SECURITY;

@@ -8,6 +8,7 @@ CREATE TABLE core.outbox_events (
     aggregate_id uuid NOT NULL,
     aggregate_version bigint NOT NULL CHECK (aggregate_version > 0),
     product_id uuid NOT NULL,
+    product_config_version integer NOT NULL CHECK (product_config_version > 0),
     correlation_id uuid NOT NULL,
     payload jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
     status text NOT NULL DEFAULT 'pending'

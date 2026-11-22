@@ -48,6 +48,11 @@ FROM PUBLIC;
 GRANT USAGE ON SCHEMA platform TO platform_event_consumer;
 GRANT SELECT, INSERT, UPDATE ON platform.inbox_messages TO platform_event_consumer;
 GRANT SELECT, INSERT, UPDATE ON platform.tenant_onboardings TO platform_event_consumer;
+GRANT SELECT ON
+    platform.products,
+    platform.product_configurations,
+    platform.active_product_catalog
+TO platform_event_consumer;
 
 COMMENT ON TABLE platform.inbox_messages IS
     'Idempotency ledger for durable CORE events; applied only in the same transaction as the consumer effect.';

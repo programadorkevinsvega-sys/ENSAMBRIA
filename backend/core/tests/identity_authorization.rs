@@ -315,7 +315,10 @@ async fn one_global_identity_can_hold_independent_memberships_in_multiple_tenant
     for tenant in tenants {
         let membership = Uuid::now_v7();
         let role = Uuid::now_v7();
-        let mut tx = pool.begin().await.expect("tenant membership transaction must begin");
+        let mut tx = pool
+            .begin()
+            .await
+            .expect("tenant membership transaction must begin");
         ActorContext::new(ActorId::new(actor))
             .establish(&mut tx)
             .await
@@ -369,7 +372,10 @@ async fn one_global_identity_can_hold_independent_memberships_in_multiple_tenant
 
     for (index, tenant) in tenants.into_iter().enumerate() {
         let other_tenant = tenants[1 - index];
-        let mut tx = pool.begin().await.expect("authorization transaction must begin");
+        let mut tx = pool
+            .begin()
+            .await
+            .expect("authorization transaction must begin");
         ActorContext::new(ActorId::new(actor))
             .establish(&mut tx)
             .await
@@ -378,28 +384,31 @@ async fn one_global_identity_can_hold_independent_memberships_in_multiple_tenant
             .establish(&mut tx)
             .await
             .expect("current tenant context must be established");
-        let allowed: bool = sqlx::query_scalar(
-            "SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)",
-        )
-        .bind(actor)
-        .bind(tenant)
-        .fetch_one(&mut *tx)
-        .await
-        .expect("current tenant permission must be evaluated");
-        let cross_tenant: bool = sqlx::query_scalar(
-            "SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)",
-        )
-        .bind(actor)
-        .bind(other_tenant)
-        .fetch_one(&mut *tx)
-        .await
-        .expect("foreign tenant permission must be evaluated");
-        assert!(allowed, "identity must retain its membership in each tenant");
+        let allowed: bool =
+            sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)")
+                .bind(actor)
+                .bind(tenant)
+                .fetch_one(&mut *tx)
+                .await
+                .expect("current tenant permission must be evaluated");
+        let cross_tenant: bool =
+            sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)")
+                .bind(actor)
+                .bind(other_tenant)
+                .fetch_one(&mut *tx)
+                .await
+                .expect("foreign tenant permission must be evaluated");
+        assert!(
+            allowed,
+            "identity must retain its membership in each tenant"
+        );
         assert!(
             !cross_tenant,
             "a valid identity and foreign tenant ID must not cross the transaction scope"
         );
-        tx.rollback().await.expect("authorization transaction must roll back");
+        tx.rollback()
+            .await
+            .expect("authorization transaction must roll back");
     }
 
     pool.close().await;

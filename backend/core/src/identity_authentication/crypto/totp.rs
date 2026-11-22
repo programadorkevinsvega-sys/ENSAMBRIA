@@ -88,7 +88,9 @@ fn base32_encode(bytes: &[u8]) -> String {
         }
     }
     if bits > 0 {
-        output.push(char::from(ALPHABET[((buffer << (5 - bits)) & 0x1f) as usize]));
+        output.push(char::from(
+            ALPHABET[((buffer << (5 - bits)) & 0x1f) as usize],
+        ));
     }
     output
 }

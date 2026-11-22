@@ -101,7 +101,7 @@ impl EmailOutboxWorker {
                     let terminal = attempts >= MAX_ATTEMPTS;
                     let delay_seconds = 30_i64.saturating_mul(1_i64 << attempts.min(10));
                     sqlx::query(
-                        "UPDATE core.email_outbox                          SET status = CASE WHEN $2 THEN 'dead' ELSE 'pending' END,                              available_at = clock_timestamp() + ($3 * interval '1 second'),                              locked_until = NULL, last_error = 'smtp delivery failed'                          WHERE id = $1 AND status = 'processing'",
+                        "UPDATE core.email_outbox SET status = CASE WHEN $2 THEN 'dead' ELSE 'pending' END, text_body = CASE WHEN $2 THEN '[REDACTED]' ELSE text_body END, available_at = clock_timestamp() + ($3 * interval '1 second'), locked_until = NULL, last_error = 'smtp delivery failed' WHERE id = $1 AND status = 'processing'",
                     )
                     .bind(id)
                     .bind(terminal)

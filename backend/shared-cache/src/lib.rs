@@ -109,7 +109,7 @@ impl TtlCache {
 
     pub async fn delete(&self, key: &str) -> Result<(), CacheError> {
         let key = self.qualified_key(key)?;
-        let mut connection = self.connection.clone();
+        let mut connection = self.connection();
         redis::cmd("DEL")
             .arg(key)
             .query_async::<()>(&mut connection)

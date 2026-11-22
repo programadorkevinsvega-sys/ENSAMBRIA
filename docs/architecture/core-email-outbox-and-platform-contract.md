@@ -17,6 +17,17 @@ The AES key is loaded from a secret-manager-provided environment variable and is
 
 Build and run the separate `core-email-worker` binary. It connects using its own PostgreSQL login, polls every five seconds, and processes batches of 25. The systemd unit is installed by staging deployment but intentionally is not enabled automatically: enable it only after the dedicated worker environment file has been provisioned.
 
+Before enabling the worker, the database operator must provision its dedicated login (the restricted migrator cannot create roles), grant database connection, and apply the outbox grants. For example, using the approved database administration channel and a secret-managed password:
+
+```sql
+CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<injected-secret>';
+GRANT CONNECT ON DATABASE ensambria TO core_email_worker;
+GRANT USAGE ON SCHEMA core TO core_email_worker;
+GRANT SELECT, UPDATE ON core.email_outbox TO core_email_worker;
+```
+
+The migration applies the grants automatically when the role already exists; it deliberately does not create privileged database logins. The worker environment file must use this dedicated login.
+
 Worker environment file: `/etc/apps/ensambria/core/email-worker.env`, owned by root with mode 0600. It contains:
 
 - `DATABASE_URL`: the dedicated `core_email_worker` PostgreSQL role (not `core_runtime`)

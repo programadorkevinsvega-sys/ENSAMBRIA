@@ -1832,6 +1832,13 @@ Una fase o subfase solamente se considera terminada cuando cumple:
 
 CÓDIGO + PRUEBAS + SEGURIDAD + ARQUITECTURA + DOCUMENTACIÓN + REPRODUCIBILIDAD + CI + DEPLOYMENT CUANDO CORRESPONDA + VERIFICACIÓN.
 
+### Aplicabilidad y calendario de pruebas de rendimiento (k6)
+
+La obligación transversal desde Fase 0 es **planificar** la estrategia, ownership, riesgos, estructura de scripts, criterios y precondiciones de rendimiento; no significa ejecutar pruebas de carga sobre fases sin funcionalidad ejecutable, target autorizado o perfil aprobado. Cada fase implementadora evalúa qué escenarios de rendimiento corresponden a los casos que introduce y registra expresamente aplicabilidad, evidencia o motivo de no ejecución. El smoke test de conectividad/funcionalidad es distinto de Load, Stress, Spike, Soak, Breakpoint, Scalability y Capacity Planning; nunca acredita capacidad.
+
+En subfase 1.2 solo se considera ejecutado el smoke k6 GET protegido con respuesta esperada HTTP 401 en las matrices Redis Sentinel/Cluster y post-failover de CI. No se ejecutaron pruebas de carga normal, estrés, picos, resistencia, breakpoint ni capacidad. Estas pruebas se asignan a las fases futuras que incorporen los recorridos y targets medibles. Antes de ejecutarlas deben aprobarse explícitamente target/entorno, workload, datos sintéticos aislados, tasa/VUs/duración, thresholds, límites de recursos, stop conditions, supervisión, observabilidad, limpieza y recuperación. Sin esas precondiciones se registran como no ejecutadas/bloqueadas, sin inventar parámetros ni convertir la ausencia de carga en fallo de CI funcional.
+
+
 Todo entregable entra mediante PR y los checks obligatorios de CI deben coincidir con las verificaciones locales documentadas. La fase no se cierra por checks omitidos/pendientes ni por haber fusionado sus PR: requiere evidencia de aceptación para todos los requisitos y suites aplicables.
 
 No marcar una fase como completa por tener interfaces visuales o endpoints que no persisten información.

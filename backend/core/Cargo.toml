@@ -21,6 +21,5 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal
 tokio-stream = { version = "0.1", features = ["net"] }
 tonic = { version = "0.14.9", default-features = false, features = ["router", "transport"] }
 tonic-health = "0.14.9"
-tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v7"] }

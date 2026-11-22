@@ -44,9 +44,6 @@ jobs:
           set +e
           cargo check --workspace --all-targets
           check_status=$?
-          echo 'LOCKFILE_BEGIN'
-          cat Cargo.lock
-          echo 'LOCKFILE_END'
           set -e
           test "$check_status" -eq 0
           cargo clippy --locked --workspace --all-targets -- -D warnings

@@ -288,6 +288,7 @@ jobs:
 
       - name: Start BUSINESS HTTP runtime with required Sentinel caches
         env:
+          BUSINESS_HTTP_TEST_PROFILE: sentinel-primary
           PLATFORM_REDIS_MODE: sentinel
           PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
           PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
@@ -319,6 +320,7 @@ jobs:
           cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
       - name: Start BUSINESS HTTP runtime after Sentinel failover
         env:
+          BUSINESS_HTTP_TEST_PROFILE: sentinel-after-failover
           PLATFORM_REDIS_MODE: sentinel
           PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
           PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
@@ -332,6 +334,7 @@ jobs:
 
       - name: Start BUSINESS HTTP runtime with required Cluster caches
         env:
+          BUSINESS_HTTP_TEST_PROFILE: cluster-primary
           PLATFORM_REDIS_MODE: cluster
           PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.21:7001;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
         run: bash scripts/ci/check-business-redis-runtime.sh
@@ -364,9 +367,19 @@ jobs:
 
       - name: Start BUSINESS HTTP runtime after Cluster failover
         env:
+          BUSINESS_HTTP_TEST_PROFILE: cluster-after-failover
           PLATFORM_REDIS_MODE: cluster
           PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.26:7006
         run: bash scripts/ci/check-business-redis-runtime.sh
+
+      - name: Upload BUSINESS k6 smoke evidence
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: business-k6-smoke-${{ github.run_id }}
+          path: artifacts/k6/*.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Collect Redis HA diagnostics on failure
         if: failure()

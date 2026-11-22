@@ -162,7 +162,10 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
         )
         .await
         .expect("outbox insert must join the caller transaction");
-    rolled_back.rollback().await.expect("transaction must roll back");
+    rolled_back
+        .rollback()
+        .await
+        .expect("transaction must roll back");
 
     let after_rollback: i64 =
         sqlx::query_scalar("SELECT count(*) FROM core.email_outbox WHERE recipient = $1")
@@ -172,7 +175,10 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
             .expect("inspect rolled-back outbox row");
     assert_eq!(after_rollback, 0);
 
-    let mut committed = runtime_pool.begin().await.expect("second transaction must begin");
+    let mut committed = runtime_pool
+        .begin()
+        .await
+        .expect("second transaction must begin");
     outbox
         .send_in_transaction(
             &mut *committed,

@@ -276,7 +276,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             },
         ).await.is_err() {
             tracing::warn!(event = "auth.verification_email_enqueue_failed");
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
         transaction
@@ -323,7 +326,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
         if !issued {
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
         let link = format!(
@@ -342,10 +348,16 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             },
         ).await.is_err() {
             tracing::warn!(event = "auth.verification_email_enqueue_failed");
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         self.record_audit(
             Some(identity_id),
             "auth.identity.verification_resent",
@@ -707,7 +719,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .await
         .map_err(|_| AuthenticationError::Storage)?;
         if !issued {
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
         let link = format!(
@@ -726,7 +741,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             },
         ).await.is_err() {
             tracing::warn!(event = "auth.recovery_email_enqueue_failed");
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
         transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;

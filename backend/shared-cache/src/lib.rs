@@ -20,6 +20,7 @@ impl TtlCache {
             return Err(CacheError::InvalidConfiguration);
         }
 
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let client = Client::open(redis_url).map_err(|_| CacheError::InvalidConfiguration)?;
         let configuration = ConnectionManagerConfig::new()
             .set_exponent_base(2)

@@ -8,8 +8,10 @@ ephemeral GitHub Actions PostgreSQL and Redis topology. For each Redis mode
 runtime check executes:
 
 ```sh
-docker run --rm --network host -v "$PWD:/work:ro" -w /work \
-  grafana/k6:0.54.0 run --quiet load-tests/k6/business-auth-boundary-smoke.js
+docker run --rm --network host -v "$PWD:/work" -w /work \
+  grafana/k6:0.54.0 run --quiet \
+  --summary-export=/work/artifacts/k6/business-smoke.json \
+  load-tests/k6/business-auth-boundary-smoke.js
 ```
 
 This is deliberately one unauthenticated, read-only request to

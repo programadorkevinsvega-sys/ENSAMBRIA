@@ -1,4 +1,6 @@
 use ensambria_platform::product_catalog::{ProductCatalog, ProductCatalogEntry};
+use ensambria_shared_cache::TtlCache;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -8,6 +10,35 @@ pub struct PlatformProductPolicy {
 
 impl PlatformProductPolicy {
     pub fn new(catalog: ProductCatalog) -> Self {
+        Self { catalog }
+    }
+
+    /// Builds the PLATFORM adapter with an optional Redis cache. Redis is cache-only:
+    /// connection/configuration failures leave PostgreSQL as the authoritative fallback.
+    pub async fn from_env(pool: PgPool) -> Self {
+        let catalog = match std::env::var("PLATFORM_REDIS_URL") {
+            Ok(redis_url) => match TtlCache::connect(&redis_url, "platform").await {
+                Ok(cache) => ProductCatalog::with_cache(pool.clone(), cache),
+                Err(_) => {
+                    tracing::warn!(
+                        event = "cache.redis.startup_failed",
+                        component = "core",
+                        operation = "platform_catalog.initialize",
+                        result = "postgres_fallback"
+                    );
+                    ProductCatalog::new(pool)
+                }
+            },
+            Err(_) => {
+                tracing::warn!(
+                    event = "cache.redis.not_configured",
+                    component = "core",
+                    operation = "platform_catalog.initialize",
+                    result = "postgres_only"
+                );
+                ProductCatalog::new(pool)
+            }
+        };
         Self { catalog }
     }
 

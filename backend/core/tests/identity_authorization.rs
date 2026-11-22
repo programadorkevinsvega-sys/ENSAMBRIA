@@ -6,6 +6,8 @@ use ensambria_core::{
 };
 use sqlx::{PgPool, postgres::PgConnectOptions, types::Uuid};
 
+type RegionalContext = (Option<String>, Option<String>, Option<String>, Option<String>);
+
 async fn test_pool() -> PgPool {
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("isolated PostgreSQL migration URL must be configured");
@@ -250,7 +252,7 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
             .await
             .expect("authorization must fail closed without transaction context");
     assert!(!denied_without_context);
-    let regional_without_context: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> =
+    let regional_without_context: Option<RegionalContext> =
         sqlx::query_as(
             "SELECT country_code::text, currency_code::text, locale, time_zone FROM core.resolve_regional_context($1, $2, $3)",
         )

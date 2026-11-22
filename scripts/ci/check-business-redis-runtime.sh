@@ -48,5 +48,5 @@ mkdir -p "$(dirname "$summary_file")"
 docker run --rm --network host \
     -v "$PWD:/work" -w /work \
     "$k6_image" run --quiet --summary-export="/work/$summary_file" \
-    load-tests/k6/business-auth-boundary-smoke.js \
-    -e "TARGET_URL=$business_url"
+    -e "TARGET_URL=$business_url" \
+    load-tests/k6/business-auth-boundary-smoke.js

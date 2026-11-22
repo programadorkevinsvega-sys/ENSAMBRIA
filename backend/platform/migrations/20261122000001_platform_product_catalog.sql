@@ -37,7 +37,8 @@ CREATE TABLE platform.product_domains (
     domain_name text NOT NULL UNIQUE
         CHECK (domain_name = lower(domain_name)
             AND length(domain_name) BETWEEN 4 AND 253
-            AND domain_name ~ '^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+    status text NOT NULL CHECK (status IN ('pending_verification', 'active', 'suspended', 'retired')),
+            AND domain_name ~ '^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$')
+    status text NOT NULL CHECK (status IN ('pending_verification', 'active', 'suspended', 'retired')),
     verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (product_id, domain_name),
@@ -94,7 +95,7 @@ CREATE FUNCTION platform.prevent_published_configuration_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL
        AND NEW.status = 'retired'
@@ -120,7 +121,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_configuration_immutable
 BEFORE UPDATE ON platform.product_configurations
@@ -130,7 +131,7 @@ CREATE FUNCTION platform.prevent_published_configuration_deletion()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL THEN
         RAISE EXCEPTION 'published product configurations cannot be deleted'
@@ -138,7 +139,7 @@ BEGIN
     END IF;
     RETURN OLD;
 END
-$;
+$$;
 
 CREATE TRIGGER product_configuration_no_delete
 BEFORE DELETE ON platform.product_configurations
@@ -149,7 +150,7 @@ CREATE FUNCTION platform.validate_active_product_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF NEW.status = 'active' AND NOT EXISTS (
         SELECT 1 FROM platform.product_configurations c
@@ -162,7 +163,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_active_configuration_required
 BEFORE INSERT OR UPDATE OF status, published_configuration_version ON platform.products
@@ -172,7 +173,7 @@ CREATE FUNCTION platform.validate_product_surface_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF NEW.status = 'enabled' AND NOT EXISTS (
         SELECT 1 FROM platform.product_configurations c
@@ -186,7 +187,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_surface_published_configuration
 BEFORE INSERT OR UPDATE ON platform.product_surfaces
@@ -196,7 +197,7 @@ CREATE FUNCTION platform.validate_product_capability()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 DECLARE v_implementation_status text;
 BEGIN
     SELECT implementation_status INTO v_implementation_status
@@ -217,7 +218,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_capability_available_only
 BEFORE INSERT OR UPDATE ON platform.product_capabilities
@@ -327,7 +328,7 @@ CREATE FUNCTION platform.prevent_published_configuration_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF OLD.status = 'published'
        AND (
@@ -342,7 +343,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_configuration_immutable
 BEFORE UPDATE ON platform.product_configurations
@@ -352,7 +353,7 @@ CREATE FUNCTION platform.validate_product_surface_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF NEW.status = 'enabled' AND NOT EXISTS (
         SELECT 1 FROM platform.product_configurations c
@@ -365,7 +366,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_surface_published_configuration
 BEFORE INSERT OR UPDATE ON platform.product_surfaces
@@ -375,7 +376,7 @@ CREATE FUNCTION platform.validate_product_capability()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 DECLARE v_implementation_status text;
 BEGIN
     SELECT implementation_status INTO v_implementation_status
@@ -396,7 +397,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_capability_available_only
 BEFORE INSERT OR UPDATE ON platform.product_capabilities
@@ -503,7 +504,7 @@ CREATE FUNCTION platform.prevent_published_configuration_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL
        AND NEW.status = 'retired'
@@ -529,7 +530,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_configuration_immutable
 BEFORE UPDATE ON platform.product_configurations
@@ -539,7 +540,7 @@ CREATE FUNCTION platform.prevent_published_configuration_deletion()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL THEN
         RAISE EXCEPTION 'published product configurations cannot be deleted'
@@ -547,7 +548,7 @@ BEGIN
     END IF;
     RETURN OLD;
 END
-$;
+$$;
 
 CREATE TRIGGER product_configuration_no_delete
 BEFORE DELETE ON platform.product_configurations
@@ -558,7 +559,7 @@ CREATE FUNCTION platform.validate_active_product_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF NEW.status = 'active' AND NOT EXISTS (
         SELECT 1 FROM platform.product_configurations c
@@ -571,7 +572,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_active_configuration_required
 BEFORE INSERT OR UPDATE OF status, published_configuration_version ON platform.products
@@ -581,7 +582,7 @@ CREATE FUNCTION platform.validate_product_surface_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF NEW.status = 'enabled' AND NOT EXISTS (
         SELECT 1 FROM platform.product_configurations c
@@ -595,7 +596,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_surface_published_configuration
 BEFORE INSERT OR UPDATE ON platform.product_surfaces
@@ -605,7 +606,7 @@ CREATE FUNCTION platform.validate_product_capability()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 DECLARE v_implementation_status text;
 BEGIN
     SELECT implementation_status INTO v_implementation_status
@@ -626,7 +627,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_capability_available_only
 BEFORE INSERT OR UPDATE ON platform.product_capabilities
@@ -736,7 +737,7 @@ CREATE FUNCTION platform.prevent_published_configuration_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF OLD.status = 'published'
        AND (
@@ -751,7 +752,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_configuration_immutable
 BEFORE UPDATE ON platform.product_configurations
@@ -761,7 +762,7 @@ CREATE FUNCTION platform.validate_product_surface_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 BEGIN
     IF NEW.status = 'enabled' AND NOT EXISTS (
         SELECT 1 FROM platform.product_configurations c
@@ -774,7 +775,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_surface_published_configuration
 BEFORE INSERT OR UPDATE ON platform.product_surfaces
@@ -784,7 +785,7 @@ CREATE FUNCTION platform.validate_product_capability()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, platform
-AS $
+AS $$
 DECLARE v_implementation_status text;
 BEGIN
     SELECT implementation_status INTO v_implementation_status
@@ -805,7 +806,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END
-$;
+$$;
 
 CREATE TRIGGER product_capability_available_only
 BEFORE INSERT OR UPDATE ON platform.product_capabilities

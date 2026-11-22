@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 redis = { version = "0.32.7", default-features = false, features = ["connection-manager", "tokio-rustls-comp", "tls-rustls-webpki-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+url = "2.5"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

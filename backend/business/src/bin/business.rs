@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             None
         }
     };
-    let business = BusinessService::new(business_pool.clone(), core_pool, cache);
+    let business = BusinessService::new(business_pool.clone(), cache);
     let state = Arc::new(ApiState { auth, business });
     let app = router::<OutboxEmailDelivery>(state);
 

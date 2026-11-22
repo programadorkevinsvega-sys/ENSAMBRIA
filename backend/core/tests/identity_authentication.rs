@@ -21,7 +21,7 @@ use ensambria_core::{
     },
     postgres::{ActorContext, ActorId, PgPoolConfiguration, create_pool},
 };
-use sqlx::{PgPool, postgres::PgConnectOptions, types::Uuid};
+use sqlx::{PgPool, postgres::{PgConnectOptions, PgPoolOptions}, types::Uuid};
 
 async fn test_pool() -> PgPool {
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
@@ -234,7 +234,9 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
     let pool = test_pool().await;
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("isolated PostgreSQL migration URL must be configured");
-    let inspection_pool = PgPool::connect(&migration_url)
+    let inspection_pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&migration_url)
         .await
         .expect("migration identity must connect for privileged test inspection");
     sqlx::query("SET ROLE core_schema_owner")

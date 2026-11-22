@@ -156,4 +156,55 @@ mod tests {
         assert!(hash_password("short").is_err());
         assert!(PasswordHash::from_phc("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA").is_err());
     }
+
+    #[test]
+    fn uses_the_expected_argon2id_phc_parameters_and_independent_random_salts() {
+        let first = hash_password("correct horse battery staple").expect("first hash");
+        let second = hash_password("correct horse battery staple").expect("second hash");
+
+        assert!(first.as_str().starts_with(PHC_PREFIX));
+        assert_ne!(first.as_str(), second.as_str(), "each password hash must use a fresh salt");
+        assert!(verify_password("correct horse battery staple", &first).unwrap());
+        assert!(verify_password("correct horse battery staple", &second).unwrap());
+    }
+
+    #[test]
+    fn rejects_phc_hashes_with_downgraded_or_unsupported_parameters() {
+        let stored = hash_password("correct horse battery staple").expect("hash must be created");
+        let phc = stored.as_str();
+
+        for invalid in [
+            phc.replace("argon2id", "argon2i"),
+            phc.replace("v=19", "v=16"),
+            phc.replace("m=19456,t=2,p=1", "m=8192,t=1,p=1"),
+            phc.replace("m=19456,t=2,p=1", "m=19456,t=2,p=2"),
+        ] {
+            assert!(
+                PasswordHash::from_phc(&invalid).is_err(),
+                "unsupported PHC parameters must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn enforces_password_byte_limit_and_accepts_twelve_unicode_characters() {
+        let too_long = "a".repeat(1025);
+        assert!(matches!(
+            hash_password(&too_long),
+            Err(super::PasswordHashError::PasswordTooLong)
+        ));
+
+        let stored = hash_password("áááááááááááá").expect("12 Unicode characters are valid");
+        assert!(verify_password("áááááááááááá", &stored).unwrap());
+        assert!(matches!(
+            verify_password(&too_long, &stored),
+            Err(super::PasswordHashError::PasswordTooLong)
+        ));
+    }
+
+    #[test]
+    fn malformed_hash_material_never_verifies() {
+        let stored = hash_password("correct horse battery staple").expect("hash must be created");
+        assert!(!verify_password("wrong password entirely", &stored).unwrap());
+    }
 }

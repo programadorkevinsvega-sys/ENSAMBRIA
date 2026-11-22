@@ -26,7 +26,7 @@ PLATFORM owns the first cache entry: domain-to-product resolution as a routing h
 
 Authentication rate limiting remains PostgreSQL-backed in this cut. Redis must not become the authority for account lockout, session revocation, MFA challenges or recovery tokens. No authentication secret or bearer token is cached.
 
-The current CORE executable is still a health-only runtime and PLATFORM has no production runtime composition in this branch. The cache adapter and PLATFORM catalog integration are reusable code, but production activation requires wiring the cache-enabled catalog into the future authorized service composition and provisioning the Redis endpoint through the secret manager.
+The deployed CORE executable remains a health/runtime foundation; the CI HA harness separately builds and exercises the actual BUSINESS HTTP runtime against Sentinel and Cluster, including post-failover behavior. This CI integration evidence does not mean BUSINESS is deployed in staging or production. Production activation still requires the authorized service composition, Redis TLS/ACL provisioning through the approved secret mechanism, production topology, observability and capacity validation.
 
 ## Phase 2 — BUSINESS
 
@@ -42,5 +42,5 @@ Reservations, availability holds, capacity, workforce eligibility, prices/charge
 - Real Redis integration tests for namespaced keys, TTL expiry, deletion, cache miss, malformed values and fallback behavior.
 - Restart/reconnect test against the isolated development Redis service, with the documented destructive-test restrictions in `AGENTS.md`.
 - PostgreSQL + Redis tests for each owner’s actual cache-aside flow, including tenant isolation, stale-version invalidation, concurrent misses and Redis outage.
-- Load/stress tests using k6 against the actual API/BFF/backend path, including hot-key distribution, pool/connection budgets, p95/p99 latency, Redis CPU/memory/network, eviction and failover.
+- For each phase that introduces a cache-enabled production API/BFF/backend path, execute the applicable k6 load/stress tests against that actual authorized target, including hot-key distribution, pool/connection budgets, p95/p99 latency, Redis CPU/memory/network, eviction and failover. Do not run capacity tests before the target, workload, thresholds, limits and stop conditions are approved; the 1.2 CI smoke/HA tests are not capacity evidence.
 - A measured sharded/HA topology and capacity plan before any claim that the system is ready for hundreds of thousands of businesses or millions of concurrent users.

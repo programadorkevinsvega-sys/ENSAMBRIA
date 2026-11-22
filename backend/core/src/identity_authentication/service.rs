@@ -3,6 +3,7 @@ use std::{
     fmt,
     future::Future,
     pin::Pin,
+    sync::OnceLock,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -313,20 +314,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .map_err(|_| AuthenticationError::Storage)?;
 
         let Some((identity_id, encoded, status, verified, locked)) = record else {
+            let dummy = dummy_password_hash()?;
+            let _ = verify_password(password, &dummy)
+                .map_err(|_| AuthenticationError::Cryptography)?;
             self.record_audit(None, "auth.login.failed", "failure", None, None)
                 .await?;
             return Err(AuthenticationError::InvalidCredentials);
         };
-        if status != "active" || !verified {
-            self.record_audit(Some(identity_id), "auth.login.denied", "denied", Some("identity"), Some(identity_id))
-                .await?;
-            return Err(AuthenticationError::InvalidCredentials);
-        }
-        if locked {
-            self.record_audit(Some(identity_id), "auth.login.locked", "denied", Some("identity"), Some(identity_id))
-                .await?;
-            return Err(AuthenticationError::TemporarilyLocked);
-        }
         let verifier =
             PasswordHash::from_phc(&encoded).map_err(|_| AuthenticationError::Storage)?;
         if !verify_password(password, &verifier).map_err(|_| AuthenticationError::Cryptography)? {
@@ -339,6 +333,16 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             self.record_audit(Some(identity_id), "auth.login.failed", "failure", Some("identity"), Some(identity_id))
                 .await?;
             return Err(AuthenticationError::InvalidCredentials);
+        }
+        if status != "active" || !verified {
+            self.record_audit(Some(identity_id), "auth.login.denied", "denied", Some("identity"), Some(identity_id))
+                .await?;
+            return Err(AuthenticationError::InvalidCredentials);
+        }
+        if locked {
+            self.record_audit(Some(identity_id), "auth.login.locked", "denied", Some("identity"), Some(identity_id))
+                .await?;
+            return Err(AuthenticationError::TemporarilyLocked);
         }
 
         let authenticated: Option<bool> = sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
@@ -1017,6 +1021,17 @@ impl fmt::Debug for AuthSession {
     }
 }
 
+
+
+fn dummy_password_hash() -> Result<PasswordHash, AuthenticationError> {
+    static DUMMY_HASH: OnceLock<Result<PasswordHash, AuthenticationError>> = OnceLock::new();
+    DUMMY_HASH
+        .get_or_init(|| {
+            hash_password("ENSAMBRIA-dummy-login-password")
+                .map_err(|_| AuthenticationError::Cryptography)
+        })
+        .clone()
+}
 
 fn unix_timestamp(value: SystemTime) -> Result<i64, AuthenticationError> {
     let seconds = value

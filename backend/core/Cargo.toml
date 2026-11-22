@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 ensambria-shared-cache = { path = "../shared-cache" }
-ensambria-platform = { path = "../platform" }
+ensambria-platform-contract = { path = "../platform-contract" }
 lettre = { version = "0.11.19", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
 tracing = "0.1"
 zeroize = "1.9.2"

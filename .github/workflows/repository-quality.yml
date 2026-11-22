@@ -62,7 +62,7 @@ jobs:
           cargo check --locked --workspace --all-targets
           cargo clippy --locked --workspace --all-targets -- -D warnings
 
-      - name: Create isolated PostgreSQL test roles and CORE schema
+      - name: Create isolated PostgreSQL test roles and CORE and PLATFORM schemas
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: |
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
@@ -83,6 +83,25 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE platform_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE platform_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT platform_schema_owner TO core_migrator;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/platform/migrations/bootstrap/00000000000000_platform_schema.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_schema_owner" \
+            -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
 
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''

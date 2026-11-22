@@ -2,9 +2,7 @@ use std::{str::FromStr, time::Duration};
 
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
-    postgres::{
-        ActorContext, ActorId, PgPoolConfiguration, TenantContext, TenantId, create_pool,
-    },
+    postgres::{ActorContext, ActorId, PgPoolConfiguration, TenantContext, TenantId, create_pool},
 };
 use sqlx::{PgPool, postgres::PgConnectOptions, types::Uuid};
 
@@ -130,43 +128,39 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     .await
     .expect("role must be assigned at branch scope");
 
-    let allowed: bool = sqlx::query_scalar(
-        "SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .bind(branch)
-    .fetch_one(&mut *tx)
-    .await
-    .expect("authorization evaluator must execute");
-    let denied_wrong_branch: bool = sqlx::query_scalar(
-        "SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .bind(Uuid::now_v7())
-    .fetch_one(&mut *tx)
-    .await
-    .expect("authorization evaluator must execute for another branch");
-    let denied_organization_scope: bool = sqlx::query_scalar(
-        "SELECT core.has_permission($1, $2, 'branch.manage', $3, NULL)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .fetch_one(&mut *tx)
-    .await
-    .expect("branch-scoped permission must not imply organization scope");
-    let denied_tenant_scope: bool = sqlx::query_scalar(
-        "SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .fetch_one(&mut *tx)
-    .await
-    .expect("branch-scoped permission must not imply tenant scope");
+    let allowed: bool =
+        sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .bind(branch)
+            .fetch_one(&mut *tx)
+            .await
+            .expect("authorization evaluator must execute");
+    let denied_wrong_branch: bool =
+        sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .bind(Uuid::now_v7())
+            .fetch_one(&mut *tx)
+            .await
+            .expect("authorization evaluator must execute for another branch");
+    let denied_organization_scope: bool =
+        sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', $3, NULL)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .fetch_one(&mut *tx)
+            .await
+            .expect("branch-scoped permission must not imply organization scope");
+    let denied_tenant_scope: bool =
+        sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)")
+            .bind(actor)
+            .bind(tenant)
+            .fetch_one(&mut *tx)
+            .await
+            .expect("branch-scoped permission must not imply tenant scope");
     assert!(allowed);
     assert!(!denied_wrong_branch);
     assert!(!denied_organization_scope);
@@ -228,15 +222,16 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
         )
     );
 
-    tx.commit().await.expect("authorization fixture must commit");
+    tx.commit()
+        .await
+        .expect("authorization fixture must commit");
 
-    let lookup: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT identity_id, password_hash FROM core.auth_lookup_identity($1)",
-    )
-    .bind(&email)
-    .fetch_optional(&pool)
-    .await
-    .expect("pre-auth identity lookup must be available through the definer function");
+    let lookup: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT identity_id, password_hash FROM core.auth_lookup_identity($1)")
+            .bind(&email)
+            .fetch_optional(&pool)
+            .await
+            .expect("pre-auth identity lookup must be available through the definer function");
     assert_eq!(
         lookup,
         Some((
@@ -245,16 +240,15 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
         ))
     );
 
-    let denied_without_context: bool = sqlx::query_scalar(
-        "SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .bind(branch)
-    .fetch_one(&pool)
-    .await
-    .expect("authorization must fail closed without transaction context");
+    let denied_without_context: bool =
+        sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .bind(branch)
+            .fetch_one(&pool)
+            .await
+            .expect("authorization must fail closed without transaction context");
     assert!(!denied_without_context);
     let regional_without_context: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> =
         sqlx::query_as(

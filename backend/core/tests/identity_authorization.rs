@@ -242,6 +242,14 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
         ))
     );
 
+    let residual_context: (Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT NULLIF(current_setting('app.actor_id', true), ''), NULLIF(current_setting('app.tenant_id', true), '')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("PostgreSQL context state must be readable");
+    assert_eq!(residual_context, (None, None), "transaction-local security context must not leak after commit");
+
     let denied_without_context: bool =
         sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)")
             .bind(actor)

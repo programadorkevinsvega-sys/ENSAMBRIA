@@ -243,7 +243,8 @@ impl TtlCache {
             let mut connection = cluster[index].lock().await;
             redis::cmd("EVAL").arg(script).arg(1).arg(key).arg(window_seconds).arg(limit).arg(block_seconds).query_async::<i64>(&mut *connection).await
         } else if let Some(sentinel) = &self.sentinel {
-            let mut client = sentinel.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % sentinel.len();
+            let mut client = sentinel[index].lock().await;
             let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
             redis::cmd("EVAL").arg(script).arg(1).arg(key).arg(window_seconds).arg(limit).arg(block_seconds).query_async::<i64>(&mut connection).await
         } else {

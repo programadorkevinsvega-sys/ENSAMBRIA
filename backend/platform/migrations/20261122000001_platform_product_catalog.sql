@@ -86,6 +86,90 @@ CREATE TABLE platform.product_capabilities (
         REFERENCES platform.product_configurations(product_id, version)
 );
 
+
+ALTER TABLE platform.products
+    ADD CONSTRAINT products_active_requires_published_configuration
+    CHECK (status <> 'active' OR published_configuration_version IS NOT NULL);
+
+CREATE FUNCTION platform.prevent_published_configuration_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, platform
+AS $
+BEGIN
+    IF OLD.status = 'published'
+       AND (
+           NEW.product_id IS DISTINCT FROM OLD.product_id
+           OR NEW.version IS DISTINCT FROM OLD.version
+           OR NEW.schema_version IS DISTINCT FROM OLD.schema_version
+           OR NEW.configuration IS DISTINCT FROM OLD.configuration
+           OR NEW.published_at IS DISTINCT FROM OLD.published_at
+       ) THEN
+        RAISE EXCEPTION 'published product configurations are immutable'
+            USING ERRCODE = '55000';
+    END IF;
+    RETURN NEW;
+END
+$;
+
+CREATE TRIGGER product_configuration_immutable
+BEFORE UPDATE ON platform.product_configurations
+FOR EACH ROW EXECUTE FUNCTION platform.prevent_published_configuration_mutation();
+
+CREATE FUNCTION platform.validate_product_surface_configuration()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, platform
+AS $
+BEGIN
+    IF NEW.status = 'enabled' AND NOT EXISTS (
+        SELECT 1 FROM platform.product_configurations c
+         WHERE c.product_id = NEW.product_id
+           AND c.version = NEW.configuration_version
+           AND c.status = 'published'
+    ) THEN
+        RAISE EXCEPTION 'enabled product surfaces require a published configuration'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$;
+
+CREATE TRIGGER product_surface_published_configuration
+BEFORE INSERT OR UPDATE ON platform.product_surfaces
+FOR EACH ROW EXECUTE FUNCTION platform.validate_product_surface_configuration();
+
+CREATE FUNCTION platform.validate_product_capability()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, platform
+AS $
+DECLARE v_implementation_status text;
+BEGIN
+    SELECT implementation_status INTO v_implementation_status
+      FROM platform.capability_catalog
+     WHERE capability_code = NEW.capability_code;
+    IF NEW.status = 'enabled' AND v_implementation_status <> 'available' THEN
+        RAISE EXCEPTION 'only available capabilities may be enabled'
+            USING ERRCODE = '23514';
+    END IF;
+    IF NEW.status = 'enabled' AND NOT EXISTS (
+        SELECT 1 FROM platform.product_configurations c
+         WHERE c.product_id = NEW.product_id
+           AND c.version = NEW.configuration_version
+           AND c.status = 'published'
+    ) THEN
+        RAISE EXCEPTION 'enabled product capabilities require a published configuration'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$;
+
+CREATE TRIGGER product_capability_available_only
+BEFORE INSERT OR UPDATE ON platform.product_capabilities
+FOR EACH ROW EXECUTE FUNCTION platform.validate_product_capability();
+
 CREATE INDEX product_catalog_status_idx ON platform.products(status, product_key);
 CREATE INDEX product_domains_active_idx ON platform.product_domains(domain_name)
     WHERE status = 'active';

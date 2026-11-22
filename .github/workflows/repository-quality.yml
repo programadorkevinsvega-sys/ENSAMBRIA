@@ -59,7 +59,14 @@ jobs:
           cat backend/core/src/identity_authentication/service.rs
           echo 'RUSTFMT_SERVICE_END'
           cargo fmt --all -- --check
-          cargo check --locked --workspace --all-targets
+          set +e
+          cargo check --workspace --all-targets
+          check_status=$?
+          set -e
+          echo 'LOCK_DIFF_BEGIN'
+          git diff -- Cargo.lock
+          echo 'LOCK_DIFF_END'
+          test "$check_status" -eq 0
           cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Create isolated PostgreSQL test roles and CORE and PLATFORM schemas

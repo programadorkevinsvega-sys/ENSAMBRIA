@@ -2,7 +2,7 @@ use std::{str::FromStr, time::Duration};
 
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
-    identity_authentication::crypto::password::{hash_password, verify_password, PasswordHash},
+    identity_authentication::crypto::password::{PasswordHash, hash_password, verify_password},
     postgres::{ActorContext, ActorId, PgPoolConfiguration, create_pool},
 };
 use sqlx::{PgPool, postgres::PgConnectOptions, types::Uuid};
@@ -58,12 +58,14 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
     .execute(&mut *transaction)
     .await
     .expect("identity must be inserted under its actor context");
-    sqlx::query("INSERT INTO core.identity_credentials (identity_id, password_hash) VALUES ($1, $2)")
-        .bind(identity_id)
-        .bind(stored_hash.as_str())
-        .execute(&mut *transaction)
-        .await
-        .expect("Argon2id credential must be inserted under its actor context");
+    sqlx::query(
+        "INSERT INTO core.identity_credentials (identity_id, password_hash) VALUES ($1, $2)",
+    )
+    .bind(identity_id)
+    .bind(stored_hash.as_str())
+    .execute(&mut *transaction)
+    .await
+    .expect("Argon2id credential must be inserted under its actor context");
     sqlx::query(
         "INSERT INTO core.auth_sessions (id, identity_id, refresh_token_hash, expires_at) VALUES ($1, $2, $3, clock_timestamp() + interval '1 day')",
     )
@@ -78,13 +80,12 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
         .await
         .expect("identity transaction must commit");
 
-    let lookup: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT identity_id, password_hash FROM core.auth_lookup_identity($1)",
-    )
-    .bind(&email)
-    .fetch_optional(&pool)
-    .await
-    .expect("narrow pre-auth lookup must be executable");
+    let lookup: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT identity_id, password_hash FROM core.auth_lookup_identity($1)")
+            .bind(&email)
+            .fetch_optional(&pool)
+            .await
+            .expect("narrow pre-auth lookup must be executable");
     let (found_identity, phc) = lookup.expect("active verified identity must be found");
     assert_eq!(found_identity, identity_id);
     let restored = PasswordHash::from_phc(&phc).expect("PHC hash must be valid");

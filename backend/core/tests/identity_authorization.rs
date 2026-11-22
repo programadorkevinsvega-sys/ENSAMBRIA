@@ -289,3 +289,118 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     assert_eq!(direct_credentials, 0);
     pool.close().await;
 }
+
+
+#[tokio::test]
+async fn one_global_identity_can_hold_independent_memberships_in_multiple_tenants() {
+    let pool = test_pool().await;
+    let actor = Uuid::now_v7();
+    let tenants = [Uuid::now_v7(), Uuid::now_v7()];
+
+    let mut identity_tx = pool.begin().await.expect("identity transaction must begin");
+    ActorContext::new(ActorId::new(actor))
+        .establish(&mut identity_tx)
+        .await
+        .expect("global identity actor context must be established");
+    sqlx::query(
+        "INSERT INTO core.identities (id, email_normalized, email_display, status, email_verified_at) VALUES ($1, $2, $2, 'active', clock_timestamp())",
+    )
+    .bind(actor)
+    .bind(format!("{actor}@example.test"))
+    .execute(&mut *identity_tx)
+    .await
+    .expect("one global identity must be created");
+    identity_tx.commit().await.expect("identity must commit");
+
+    for tenant in tenants {
+        let membership = Uuid::now_v7();
+        let role = Uuid::now_v7();
+        let mut tx = pool.begin().await.expect("tenant membership transaction must begin");
+        ActorContext::new(ActorId::new(actor))
+            .establish(&mut tx)
+            .await
+            .expect("actor context must be established");
+        TenantContext::new(TenantId::new(tenant))
+            .establish(&mut tx)
+            .await
+            .expect("tenant context must be established");
+        sqlx::query("INSERT INTO core.tenants (id, status) VALUES ($1, 'active')")
+            .bind(tenant)
+            .execute(&mut *tx)
+            .await
+            .expect("tenant must be created in its own scope");
+        sqlx::query(
+            "INSERT INTO core.tenant_memberships (id, tenant_id, identity_id, status) VALUES ($1, $2, $3, 'active')",
+        )
+        .bind(membership)
+        .bind(tenant)
+        .bind(actor)
+        .execute(&mut *tx)
+        .await
+        .expect("the same identity must join each tenant independently");
+        sqlx::query(
+            "INSERT INTO core.tenant_roles (id, tenant_id, code, display_name) VALUES ($1, $2, 'tenant_operator', 'Tenant operator')",
+        )
+        .bind(role)
+        .bind(tenant)
+        .execute(&mut *tx)
+        .await
+        .expect("each tenant must own its role");
+        sqlx::query(
+            "INSERT INTO core.tenant_role_permissions (tenant_id, role_id, permission_code) VALUES ($1, $2, 'branch.manage')",
+        )
+        .bind(tenant)
+        .bind(role)
+        .execute(&mut *tx)
+        .await
+        .expect("tenant role permission must be scoped");
+        sqlx::query(
+            "INSERT INTO core.membership_role_assignments (id, tenant_id, membership_id, role_id, scope_type) VALUES ($1, $2, $3, $4, 'tenant')",
+        )
+        .bind(Uuid::now_v7())
+        .bind(tenant)
+        .bind(membership)
+        .bind(role)
+        .execute(&mut *tx)
+        .await
+        .expect("tenant-scoped role assignment must be created");
+        tx.commit().await.expect("tenant membership must commit");
+    }
+
+    for (index, tenant) in tenants.into_iter().enumerate() {
+        let other_tenant = tenants[1 - index];
+        let mut tx = pool.begin().await.expect("authorization transaction must begin");
+        ActorContext::new(ActorId::new(actor))
+            .establish(&mut tx)
+            .await
+            .expect("actor context must be established");
+        TenantContext::new(TenantId::new(tenant))
+            .establish(&mut tx)
+            .await
+            .expect("current tenant context must be established");
+        let allowed: bool = sqlx::query_scalar(
+            "SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)",
+        )
+        .bind(actor)
+        .bind(tenant)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("current tenant permission must be evaluated");
+        let cross_tenant: bool = sqlx::query_scalar(
+            "SELECT core.has_permission($1, $2, 'branch.manage', NULL, NULL)",
+        )
+        .bind(actor)
+        .bind(other_tenant)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("foreign tenant permission must be evaluated");
+        assert!(allowed, "identity must retain its membership in each tenant");
+        assert!(
+            !cross_tenant,
+            "a valid identity and foreign tenant ID must not cross the transaction scope"
+        );
+        tx.rollback().await.expect("authorization transaction must roll back");
+    }
+
+    pool.close().await;
+}

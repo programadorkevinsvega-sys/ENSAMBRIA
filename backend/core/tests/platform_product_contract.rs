@@ -34,12 +34,9 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     let server = tokio::spawn(async move {
         Server::builder()
             .add_service(ProductCatalogServer::new(platform_service))
-            .serve_with_incoming_shutdown(
-                TcpListenerStream::new(listener),
-                async {
-                    let _ = shutdown_receiver.await;
-                },
-            )
+            .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
+                let _ = shutdown_receiver.await;
+            })
             .await
             .expect("PLATFORM ProductCatalog gRPC server must run");
     });

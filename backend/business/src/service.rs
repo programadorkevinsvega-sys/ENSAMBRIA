@@ -67,8 +67,33 @@ impl BusinessService {
 
         let mut transaction = self.business_pool.begin().await.map_err(|_| BusinessError::Storage)?;
         set_tenant(&mut transaction, tenant_id).await?;
+        let organization_active: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM core.organizations WHERE tenant_id = $1 AND id = $2 AND status = 'active')"
+        )
+        .bind(tenant_id)
+        .bind(organization_id)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(|_| BusinessError::Storage)?;
+        if !organization_active {
+            return Err(BusinessError::OrganizationUnavailable);
+        }
+        if let Some(branch_id) = branch_id {
+            let branch_active: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM core.branches WHERE tenant_id = $1 AND organization_id = $2 AND id = $3 AND status = 'active')"
+            )
+            .bind(tenant_id)
+            .bind(organization_id)
+            .bind(branch_id)
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(|_| BusinessError::Storage)?;
+            if !branch_active {
+                return Err(BusinessError::OrganizationUnavailable);
+            }
+        }
         let row = sqlx::query_as::<_, Establishment>(
-            "INSERT INTO business.establishments (id, tenant_id, organization_id, branch_id, display_name, status) SELECT $1, $2, $3, $4, $5, 'active' WHERE EXISTS (SELECT 1 FROM core.organizations WHERE tenant_id = $2 AND id = $3 AND status = 'active') AND ($4::uuid IS NULL OR EXISTS (SELECT 1 FROM core.branches WHERE tenant_id = $2 AND organization_id = $3 AND id = $4 AND status = 'active')) RETURNING id, tenant_id, organization_id, branch_id, display_name, status, created_at"
+            "INSERT INTO business.establishments (id, tenant_id, organization_id, branch_id, display_name, status) VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id, tenant_id, organization_id, branch_id, display_name, status, created_at"
         )
         .bind(Uuid::now_v7())
         .bind(tenant_id)

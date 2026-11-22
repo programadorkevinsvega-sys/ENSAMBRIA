@@ -90,8 +90,14 @@ impl ProductCatalogService for ProductCatalogRpc {
 }
 
 fn parse_product_id(value: &str) -> Result<Uuid, Status> {
-    Uuid::parse_str(value)
-        .map_err(|_| Status::invalid_argument("product_id must be a canonical UUID"))
+    let product_id = Uuid::parse_str(value)
+        .map_err(|_| Status::invalid_argument("product_id must be a canonical UUID"))?;
+    if product_id.to_string() != value {
+        return Err(Status::invalid_argument(
+            "product_id must use canonical UUID formatting",
+        ));
+    }
+    Ok(product_id)
 }
 
 fn map_catalog_error(error: ProductCatalogError) -> Status {

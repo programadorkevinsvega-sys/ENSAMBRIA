@@ -1,53 +1,62 @@
-use std::{error::Error, fmt, num::NonZeroU32};
+use std::{error::Error, fmt};
 
-use ring::{
-    pbkdf2,
-    rand::{SecureRandom, SystemRandom},
-};
+use argon2::{Algorithm, Argon2, Params, Version};
+use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
+use ring::rand::{SecureRandom, SystemRandom};
+use subtle::ConstantTimeEq;
 
-const ITERATIONS: u32 = 600_000;
+const MEMORY_KIB: u32 = 19_456;
+const ITERATIONS: u32 = 2;
+const LANES: u32 = 1;
 const SALT_LENGTH: usize = 16;
 const HASH_LENGTH: usize = 32;
 const MIN_PASSWORD_CHARACTERS: usize = 12;
 const MAX_PASSWORD_BYTES: usize = 1024;
+const PHC_PREFIX: &str = "$argon2id$v=19$m=19456,t=2,p=1$";
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct PasswordHash {
-    iterations: u32,
+    phc: String,
     salt: [u8; SALT_LENGTH],
     hash: [u8; HASH_LENGTH],
 }
 
 impl PasswordHash {
-    pub fn from_parts(
-        iterations: u32,
-        salt: &[u8],
-        hash: &[u8],
-    ) -> Result<Self, PasswordHashError> {
-        if iterations != ITERATIONS || salt.len() != SALT_LENGTH || hash.len() != HASH_LENGTH {
+    pub fn from_phc(phc: &str) -> Result<Self, PasswordHashError> {
+        if !phc.starts_with(PHC_PREFIX) || phc.len() > 512 {
+            return Err(PasswordHashError::InvalidHash);
+        }
+        let parts: Vec<&str> = phc.split('$').collect();
+        if parts.len() != 6
+            || !parts[0].is_empty()
+            || parts[1] != "argon2id"
+            || parts[2] != "v=19"
+            || parts[3] != "m=19456,t=2,p=1"
+        {
+            return Err(PasswordHashError::InvalidHash);
+        }
+        let salt = STANDARD_NO_PAD
+            .decode(parts[4])
+            .map_err(|_| PasswordHashError::InvalidHash)?;
+        let hash = STANDARD_NO_PAD
+            .decode(parts[5])
+            .map_err(|_| PasswordHashError::InvalidHash)?;
+        if salt.len() != SALT_LENGTH || hash.len() != HASH_LENGTH {
             return Err(PasswordHashError::InvalidHash);
         }
         let mut stored_salt = [0; SALT_LENGTH];
         let mut stored_hash = [0; HASH_LENGTH];
-        stored_salt.copy_from_slice(salt);
-        stored_hash.copy_from_slice(hash);
+        stored_salt.copy_from_slice(&salt);
+        stored_hash.copy_from_slice(&hash);
         Ok(Self {
-            iterations,
+            phc: phc.to_owned(),
             salt: stored_salt,
             hash: stored_hash,
         })
     }
 
-    pub fn iterations(&self) -> u32 {
-        self.iterations
-    }
-
-    pub fn salt(&self) -> &[u8] {
-        &self.salt
-    }
-
-    pub fn hash(&self) -> &[u8] {
-        &self.hash
+    pub fn as_str(&self) -> &str {
+        &self.phc
     }
 }
 
@@ -63,34 +72,35 @@ pub fn hash_password(password: &str) -> Result<PasswordHash, PasswordHashError> 
     SystemRandom::new()
         .fill(&mut salt)
         .map_err(|_| PasswordHashError::RandomGeneration)?;
-    let mut hash = [0; HASH_LENGTH];
-    pbkdf2::derive(
-        pbkdf2::PBKDF2_HMAC_SHA256,
-        NonZeroU32::new(ITERATIONS).ok_or(PasswordHashError::InvalidHash)?,
-        &salt,
-        password.as_bytes(),
-        &mut hash,
+    let mut output = [0; HASH_LENGTH];
+    argon2_engine()?
+        .hash_password_into(password.as_bytes(), &salt, &mut output)
+        .map_err(|_| PasswordHashError::HashingFailed)?;
+    let phc = format!(
+        "{}{}{}{}",
+        PHC_PREFIX,
+        STANDARD_NO_PAD.encode(salt),
+        "$",
+        STANDARD_NO_PAD.encode(output)
     );
-    Ok(PasswordHash {
-        iterations: ITERATIONS,
-        salt,
-        hash,
-    })
+    PasswordHash::from_phc(&phc)
 }
 
 pub fn verify_password(password: &str, stored: &PasswordHash) -> Result<bool, PasswordHashError> {
     if password.len() > MAX_PASSWORD_BYTES {
         return Err(PasswordHashError::PasswordTooLong);
     }
-    let iterations = NonZeroU32::new(stored.iterations).ok_or(PasswordHashError::InvalidHash)?;
-    Ok(pbkdf2::verify(
-        pbkdf2::PBKDF2_HMAC_SHA256,
-        iterations,
-        &stored.salt,
-        password.as_bytes(),
-        &stored.hash,
-    )
-    .is_ok())
+    let mut output = [0; HASH_LENGTH];
+    argon2_engine()?
+        .hash_password_into(password.as_bytes(), &stored.salt, &mut output)
+        .map_err(|_| PasswordHashError::HashingFailed)?;
+    Ok(bool::from(output.ct_eq(&stored.hash)))
+}
+
+fn argon2_engine() -> Result<Argon2<'static>, PasswordHashError> {
+    let params = Params::new(MEMORY_KIB, ITERATIONS, LANES, Some(HASH_LENGTH))
+        .map_err(|_| PasswordHashError::HashingFailed)?;
+    Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
 }
 
 fn validate_new_password(password: &str) -> Result<(), PasswordHashError> {
@@ -109,6 +119,7 @@ pub enum PasswordHashError {
     PasswordTooLong,
     InvalidHash,
     RandomGeneration,
+    HashingFailed,
 }
 
 impl fmt::Display for PasswordHashError {
@@ -118,6 +129,7 @@ impl fmt::Display for PasswordHashError {
             Self::PasswordTooLong => "password exceeds the maximum supported length",
             Self::InvalidHash => "stored password hash is invalid",
             Self::RandomGeneration => "secure password salt generation failed",
+            Self::HashingFailed => "password hashing operation failed",
         };
         formatter.write_str(message)
     }
@@ -135,15 +147,13 @@ mod tests {
         assert!(verify_password("correct horse battery staple", &stored).unwrap());
         assert!(!verify_password("incorrect horse battery staple", &stored).unwrap());
         assert!(!format!("{stored:?}").contains("correct horse"));
-        assert_eq!(stored.iterations(), 600_000);
-        let restored = PasswordHash::from_parts(stored.iterations(), stored.salt(), stored.hash())
-            .expect("stored parts must round-trip");
+        let restored = PasswordHash::from_phc(stored.as_str()).expect("PHC hash must parse");
         assert!(verify_password("correct horse battery staple", &restored).unwrap());
     }
 
     #[test]
     fn rejects_short_passwords_and_malformed_stored_hashes() {
         assert!(hash_password("short").is_err());
-        assert!(PasswordHash::from_parts(1, &[0; 16], &[0; 32]).is_err());
+        assert!(PasswordHash::from_phc("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA").is_err());
     }
 }

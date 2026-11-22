@@ -1,21 +1,40 @@
 -- Authentication records and opaque lookup indexes for CORE.
 -- Raw passwords and bearer tokens are never persisted.
 
-CREATE TABLE core.identity_login_lookup (
-    email_hmac bytea PRIMARY KEY CHECK (octet_length(email_hmac) = 32),
-    identity_id uuid NOT NULL UNIQUE REFERENCES core.identities(id),
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp()
-);
-
-CREATE TABLE core.password_credentials (
+CREATE TABLE core.identity_credentials (
     identity_id uuid PRIMARY KEY REFERENCES core.identities(id),
-    algorithm text NOT NULL CHECK (algorithm = 'pbkdf2-hmac-sha256'),
-    iterations integer NOT NULL CHECK (iterations = 600000),
-    salt bytea NOT NULL CHECK (octet_length(salt) = 16),
-    password_hash bytea NOT NULL CHECK (octet_length(password_hash) = 32),
+    password_hash text NOT NULL
+        CHECK (password_hash LIKE '$argon2id$v=19$%' AND length(password_hash) BETWEEN 32 AND 512),
     password_changed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+
+-- This narrowly scoped pre-authentication function returns only the selected
+-- identity ID and its verifier. Its non-login owner can bypass actor RLS;
+-- runtime callers cannot read the underlying rows without ActorContext.
+ALTER TABLE core.identity_credentials ENABLE ROW LEVEL SECURITY;
+CREATE POLICY identity_credentials_actor_scope ON core.identity_credentials
+    USING (identity_id = NULLIF(current_setting('app.actor_id', true), '')::uuid)
+    WITH CHECK (identity_id = NULLIF(current_setting('app.actor_id', true), '')::uuid);
+
+CREATE FUNCTION core.auth_lookup_identity(p_email text)
+RETURNS TABLE(identity_id uuid, password_hash text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, core
+AS $function$
+    SELECT i.id, c.password_hash
+    FROM core.identities AS i
+    INNER JOIN core.identity_credentials AS c ON c.identity_id = i.id
+    WHERE i.email_normalized = pg_catalog.lower(pg_catalog.btrim(p_email))
+      AND i.status = 'active'
+      AND i.email_verified_at IS NOT NULL
+$function$;
+
+ALTER FUNCTION core.auth_lookup_identity(text) OWNER TO core_schema_owner;
+REVOKE ALL ON FUNCTION core.auth_lookup_identity(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION core.auth_lookup_identity(text) TO core_runtime;
 
 CREATE TABLE core.sessions (
     id uuid PRIMARY KEY,
@@ -100,7 +119,6 @@ DECLARE
     table_name text;
 BEGIN
     FOREACH table_name IN ARRAY ARRAY[
-        'password_credentials',
         'sessions',
         'account_recovery_tokens',
         'identity_verification_tokens',
@@ -119,7 +137,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE ON
-    core.password_credentials,
+    core.identity_credentials,
     core.sessions,
     core.account_recovery_tokens,
     core.identity_verification_tokens,
@@ -127,14 +145,15 @@ GRANT SELECT, INSERT, UPDATE ON
 TO core_runtime;
 
 GRANT SELECT, INSERT, DELETE ON
-    core.identity_login_lookup,
     core.session_token_lookup,
     core.account_recovery_token_lookup,
     core.identity_verification_token_lookup
 TO core_runtime;
 
-COMMENT ON TABLE core.identity_login_lookup IS
-    'HMAC-only email lookup index; the HMAC key is held by CORE, never by PostgreSQL.';
+COMMENT ON TABLE core.identity_credentials IS
+    'Argon2id PHC verifier; actor-scoped for runtime access. Pre-auth lookup is restricted to core.auth_lookup_identity.';
+COMMENT ON FUNCTION core.auth_lookup_identity(text) IS
+    'Pre-auth lookup returns only identity ID and password verifier for an active, verified identity.';
 COMMENT ON TABLE core.session_token_lookup IS
     'SHA-256 lookup index for random 256-bit opaque session tokens; the raw token is never stored.';
 COMMENT ON TABLE core.mfa_credentials IS

@@ -186,7 +186,6 @@ CREATE INDEX security_audit_actor_time_idx
 
 -- Identity is global, but reads/writes are restricted to the authenticated actor.
 ALTER TABLE core.identities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE core.identities FORCE ROW LEVEL SECURITY;
 CREATE POLICY identities_actor_scope ON core.identities
     USING (id = NULLIF(current_setting('app.actor_id', true), '')::uuid)
     WITH CHECK (id = NULLIF(current_setting('app.actor_id', true), '')::uuid);

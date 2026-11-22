@@ -2,6 +2,7 @@ use std::{str::FromStr, time::Duration};
 
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
+    identity_authentication::crypto::password::{hash_password, verify_password, PasswordHash},
     postgres::{ActorContext, ActorId, PgPoolConfiguration, create_pool},
 };
 use sqlx::{PgPool, postgres::PgConnectOptions, types::Uuid};
@@ -37,35 +38,32 @@ async fn set_actor(transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>, acto
 }
 
 #[tokio::test]
-async fn credentials_and_sessions_are_actor_scoped_and_token_indexes_are_opaque() {
+async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow() {
     let pool = test_pool().await;
     let actor = Uuid::now_v7();
     let other_actor = Uuid::now_v7();
     let identity_id = actor;
     let session_id = Uuid::now_v7();
-    let email_hmac = vec![0x55; 32];
     let token_hash = vec![0x77; 32];
+    let email = format!("{identity_id}@example.test");
+    let stored_hash = hash_password("correct horse battery staple").expect("Argon2id hash");
     let mut transaction = pool.begin().await.expect("transaction must begin");
     set_actor(&mut transaction, actor).await;
 
-    let email = format!("{identity_id}@example.test");
     sqlx::query(
-        "INSERT INTO core.identities (id, email_normalized, email_display) VALUES ($1, $2, $2)",
+        "INSERT INTO core.identities (id, email_normalized, email_display, status, email_verified_at) VALUES ($1, $2, $2, 'active', clock_timestamp())",
     )
     .bind(identity_id)
     .bind(&email)
     .execute(&mut *transaction)
     .await
     .expect("identity must be inserted under its actor context");
-    sqlx::query(
-        "INSERT INTO core.password_credentials (identity_id, algorithm, iterations, salt, password_hash) VALUES ($1, 'pbkdf2-hmac-sha256', 600000, $2, $3)",
-    )
-    .bind(identity_id)
-    .bind(vec![0x11; 16])
-    .bind(vec![0x22; 32])
-    .execute(&mut *transaction)
-    .await
-    .expect("password credential must be inserted under its actor context");
+    sqlx::query("INSERT INTO core.identity_credentials (identity_id, password_hash) VALUES ($1, $2)")
+        .bind(identity_id)
+        .bind(stored_hash.as_str())
+        .execute(&mut *transaction)
+        .await
+        .expect("Argon2id credential must be inserted under its actor context");
     sqlx::query(
         "INSERT INTO core.sessions (id, identity_id, expires_at) VALUES ($1, $2, clock_timestamp() + interval '1 day')",
     )
@@ -83,21 +81,27 @@ async fn credentials_and_sessions_are_actor_scoped_and_token_indexes_are_opaque(
     .execute(&mut *transaction)
     .await
     .expect("opaque session lookup must be insertable");
-    sqlx::query("INSERT INTO core.identity_login_lookup (email_hmac, identity_id) VALUES ($1, $2)")
-        .bind(&email_hmac)
-        .bind(identity_id)
-        .execute(&mut *transaction)
-        .await
-        .expect("opaque email lookup must be insertable");
     transaction
         .commit()
         .await
         .expect("identity transaction must commit");
 
+    let lookup: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT identity_id, password_hash FROM core.auth_lookup_identity($1)",
+    )
+    .bind(&email)
+    .fetch_optional(&pool)
+    .await
+    .expect("narrow pre-auth lookup must be executable");
+    let (found_identity, phc) = lookup.expect("active verified identity must be found");
+    assert_eq!(found_identity, identity_id);
+    let restored = PasswordHash::from_phc(&phc).expect("PHC hash must be valid");
+    assert!(verify_password("correct horse battery staple", &restored).expect("verify password"));
+
     let mut transaction = pool.begin().await.expect("second transaction must begin");
     set_actor(&mut transaction, other_actor).await;
     let visible_credentials: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core.password_credentials WHERE identity_id = $1")
+        sqlx::query_scalar("SELECT count(*) FROM core.identity_credentials WHERE identity_id = $1")
             .bind(identity_id)
             .fetch_one(&mut *transaction)
             .await
@@ -110,19 +114,16 @@ async fn credentials_and_sessions_are_actor_scoped_and_token_indexes_are_opaque(
             .expect("session lookup must be scoped");
     assert_eq!(visible_credentials, 0);
     assert_eq!(visible_sessions, 0);
-
-    let indexed_identity: Uuid = sqlx::query_scalar(
-        "SELECT identity_id FROM core.identity_login_lookup WHERE email_hmac = $1",
-    )
-    .bind(&email_hmac)
-    .fetch_one(&mut *transaction)
-    .await
-    .expect("HMAC lookup index must be available to authentication");
-    assert_eq!(indexed_identity, identity_id);
-
     transaction
         .rollback()
         .await
         .expect("test transaction must roll back");
+
+    let direct_credentials: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM core.identity_credentials")
+            .fetch_one(&pool)
+            .await
+            .expect("pre-auth direct credential reads must remain blocked by RLS");
+    assert_eq!(direct_credentials, 0);
     pool.close().await;
 }

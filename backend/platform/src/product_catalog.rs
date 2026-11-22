@@ -1,5 +1,7 @@
 use serde_json::Value;
 use sqlx::{PgPool, types::Json};
+use std::time::SystemTime;
+
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -16,15 +18,15 @@ impl ProductCatalog {
         &self,
         product_id: Uuid,
     ) -> Result<Option<ProductCatalogEntry>, ProductCatalogError> {
-        let product = sqlx::query_as::<_, (Uuid, String, String, String, i32, String, Json<Value>)>(
-            "SELECT product_id, product_key, display_name, brand_name, configuration_version, schema_version, configuration FROM platform.active_product_catalog WHERE product_id = $1",
+        let product = sqlx::query_as::<_, (Uuid, String, String, String, i32, String, Json<Value>, SystemTime)>(
+            "SELECT product_id, product_key, display_name, brand_name, configuration_version, schema_version, configuration, published_at FROM platform.active_product_catalog WHERE product_id = $1",
         )
         .bind(product_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| ProductCatalogError::Storage)?;
 
-        let Some((id, key, display_name, brand_name, version, schema_version, configuration)) =
+        let Some((id, key, display_name, brand_name, version, schema_version, configuration, published_at)) =
             product
         else {
             return Ok(None);
@@ -102,6 +104,7 @@ impl ProductCatalog {
             configuration_version: version,
             configuration_schema_version: schema_version,
             configuration: configuration.0,
+            published_at,
             domains,
             markets,
             surfaces,
@@ -164,6 +167,12 @@ fn normalize_domain(domain: &str) -> Result<String, ProductCatalogError> {
                 || byte == b'-')
         })
         || !value.contains('.')
+        || value.split('.').any(|label| {
+            label.is_empty()
+                || label.len() > 63
+                || label.starts_with('-')
+                || label.ends_with('-')
+        })
     {
         return Err(ProductCatalogError::InvalidDomain);
     }
@@ -179,6 +188,7 @@ pub struct ProductCatalogEntry {
     pub configuration_version: i32,
     pub configuration_schema_version: String,
     pub configuration: Value,
+    pub published_at: SystemTime,
     pub domains: Vec<ProductDomain>,
     pub markets: Vec<ProductMarket>,
     pub surfaces: Vec<ProductSurface>,

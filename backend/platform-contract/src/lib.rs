@@ -169,9 +169,8 @@ pub mod platform {
             where
                 T: tonic::client::GrpcService<tonic::body::Body>,
                 T::Error: Into<tonic::codegen::StdError>,
-                T::ResponseBody: tonic::codegen::Body<Data = tonic::codegen::Bytes>
-                    + Send
-                    + 'static,
+                T::ResponseBody:
+                    tonic::codegen::Body<Data = tonic::codegen::Bytes> + Send + 'static,
                 <T::ResponseBody as tonic::codegen::Body>::Error:
                     Into<tonic::codegen::StdError> + Send,
             {
@@ -289,8 +288,8 @@ pub mod platform {
                     match request.uri().path() {
                         "/ensambria.platform.productcatalog.v1.ProductCatalog/GetActiveProduct" => {
                             struct Method<T: ProductCatalog>(Arc<T>);
-                            impl<T: ProductCatalog> tonic::server::UnaryService<GetActiveProductRequest>
-                                for Method<T>
+                            impl<T: ProductCatalog>
+                                tonic::server::UnaryService<GetActiveProductRequest> for Method<T>
                             {
                                 type Response = ProductCatalogEntry;
                                 type Future = BoxFuture<
@@ -306,15 +305,16 @@ pub mod platform {
                             }
                             let inner = Arc::clone(&self.inner);
                             Box::pin(async move {
-                                let mut grpc = tonic::server::Grpc::new(
-                                    tonic_prost::ProstCodec::default(),
-                                );
+                                let mut grpc =
+                                    tonic::server::Grpc::new(tonic_prost::ProstCodec::default());
                                 Ok(grpc.unary(Method(inner), request).await)
                             })
                         }
-                        "/ensambria.platform.productcatalog.v1.ProductCatalog/ResolveActiveDomain" => {
+                        "/ensambria.platform.productcatalog.v1.ProductCatalog/ResolveActiveDomain" =>
+                        {
                             struct Method<T: ProductCatalog>(Arc<T>);
-                            impl<T: ProductCatalog> tonic::server::UnaryService<ResolveActiveDomainRequest>
+                            impl<T: ProductCatalog>
+                                tonic::server::UnaryService<ResolveActiveDomainRequest>
                                 for Method<T>
                             {
                                 type Response = ProductCatalogEntry;
@@ -337,9 +337,11 @@ pub mod platform {
                                 Ok(grpc.unary(Method(inner), request).await)
                             })
                         }
-                        "/ensambria.platform.productcatalog.v1.ProductCatalog/GetPublishedConfiguration" => {
+                        "/ensambria.platform.productcatalog.v1.ProductCatalog/GetPublishedConfiguration" =>
+                        {
                             struct Method<T: ProductCatalog>(Arc<T>);
-                            impl<T: ProductCatalog> tonic::server::UnaryService<GetPublishedConfigurationRequest>
+                            impl<T: ProductCatalog>
+                                tonic::server::UnaryService<GetPublishedConfigurationRequest>
                                 for Method<T>
                             {
                                 type Response = ProductConfiguration;

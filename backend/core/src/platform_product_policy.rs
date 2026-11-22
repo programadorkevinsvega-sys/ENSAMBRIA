@@ -1,6 +1,5 @@
 use ensambria_platform_contract::platform::product_catalog::v1::{
-    GetActiveProductRequest, ProductCatalogClient, ProductCatalogEntry,
-    ResolveActiveDomainRequest,
+    GetActiveProductRequest, ProductCatalogClient, ProductCatalogEntry, ResolveActiveDomainRequest,
 };
 use tonic::{Code, transport::Channel};
 use uuid::Uuid;

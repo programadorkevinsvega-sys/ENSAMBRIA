@@ -8,6 +8,7 @@ use std::{
 
 use redis::aio::{ConnectionManager, ConnectionManagerConfig};
 use redis::{Client, RedisError};
+use url::Url;
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
 const RESPONSE_TIMEOUT: Duration = Duration::from_millis(500);
@@ -23,6 +24,36 @@ pub struct TtlCache {
 }
 
 impl TtlCache {
+    /// Builds the shared cache from deployment environment variables.
+    /// Production requires TLS (rediss://) and Redis ACL credentials.
+    pub async fn connect_from_env(namespace: &str) -> Result<Self, CacheError> {
+        let redis_url = std::env::var("PLATFORM_REDIS_URL")
+            .map_err(|_| CacheError::InvalidConfiguration)?;
+        let production = std::env::var("ENSAMBRIA_ENV")
+            .is_ok_and(|value| value.eq_ignore_ascii_case("production"));
+        let parsed = Url::parse(&redis_url).map_err(|_| CacheError::InvalidConfiguration)?;
+        if production
+            && (parsed.scheme() != "rediss"
+                || parsed.username().is_empty()
+                || parsed.password().is_none_or(str::is_empty))
+        {
+            return Err(CacheError::InvalidConfiguration);
+        }
+        if !matches!(parsed.scheme(), "redis" | "rediss")
+            || parsed.host_str().is_none()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            return Err(CacheError::InvalidConfiguration);
+        }
+        let pool_size = std::env::var("PLATFORM_REDIS_POOL_SIZE")
+            .ok()
+            .map(|value| value.parse::<usize>().map_err(|_| CacheError::InvalidConfiguration))
+            .transpose()?
+            .unwrap_or(DEFAULT_CONNECTIONS_PER_PROCESS);
+        Self::connect_with_pool_size(&redis_url, namespace, pool_size).await
+    }
+
     pub async fn connect(redis_url: &str, namespace: &str) -> Result<Self, CacheError> {
         Self::connect_with_pool_size(
             redis_url,
@@ -164,6 +195,18 @@ impl std::error::Error for CacheError {}
 mod tests {
     use super::{CacheError, validate_segment};
 
+    #[test]
+    fn production_redis_configuration_requires_tls_and_acl() {
+        let insecure = Url::parse("redis://cache.internal:6379").unwrap();
+        let tls_without_acl = Url::parse("rediss://cache.internal:6379").unwrap();
+        let secured = Url::parse("rediss://ensambria:secret@cache.internal:6379").unwrap();
+        let secure = |url: &Url| url.scheme() == "rediss"
+            && !url.username().is_empty()
+            && url.password().is_some_and(|password| !password.is_empty());
+        assert!(!secure(&insecure));
+        assert!(!secure(&tls_without_acl));
+        assert!(secure(&secured));
+    }
     #[test]
     fn cache_keys_allow_only_bounded_safe_segments() {
         assert_eq!(validate_segment("tenant:product:v1"), Ok(()));

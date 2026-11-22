@@ -6,7 +6,10 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use ring::{digest::{SHA256, digest}, hmac};
+use ring::{
+    digest::{SHA256, digest},
+    hmac,
+};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -109,7 +112,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
         let expires_at = SystemTime::now() + VERIFICATION_TOKEN_TTL;
 
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -127,7 +134,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .rows_affected();
 
         if inserted == 0 {
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Ok(());
         }
 
@@ -140,10 +150,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .await
         .map_err(|_| AuthenticationError::Storage)?;
 
-        let issued: bool = sqlx::query_scalar(
-            "SELECT core.auth_issue_verification_token($1, $2, $3, $4)",
-        )
-        .bind(identity_id)
+        let issued: bool =
+            sqlx::query_scalar("SELECT core.auth_issue_verification_token($1, $2, $3, $4)")
+                .bind(identity_id)
         .bind(Uuid::now_v7())
         .bind(token_hash.as_bytes())
         .bind(expires_at)
@@ -153,9 +162,16 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         if !issued {
             return Err(AuthenticationError::Storage);
         }
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
 
-        let link = format!("{}/verify-email?token={}", self.public_base_url, token.as_str());
+        let link = format!(
+            "{}/verify-email?token={}",
+            self.public_base_url,
+            token.as_str()
+        );
         self.email
             .send(EmailMessage {
                 recipient: email,
@@ -172,10 +188,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     pub async fn resend_verification(&self, email: &str) -> Result<(), AuthenticationError> {
         let email = normalize_email(email).map_err(|_| AuthenticationError::InvalidInput)?;
         self.enforce_rate_limit("recovery", &email).await?;
-        let pending: Option<Uuid> = sqlx::query_scalar(
-            "SELECT identity_id FROM core.auth_lookup_pending_identity($1)",
-        )
-        .bind(&email)
+        let pending: Option<Uuid> =
+            sqlx::query_scalar("SELECT identity_id FROM core.auth_lookup_pending_identity($1)")
+                .bind(&email)
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
@@ -230,19 +245,17 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let verifier =
             PasswordHash::from_phc(&encoded).map_err(|_| AuthenticationError::Storage)?;
         if !verify_password(password, &verifier).map_err(|_| AuthenticationError::Cryptography)? {
-            let _: Option<SystemTime> = sqlx::query_scalar(
-                "SELECT core.auth_record_login_failure($1, 5, 900)",
-            )
-            .bind(identity_id)
+            let _: Option<SystemTime> =
+                sqlx::query_scalar("SELECT core.auth_record_login_failure($1, 5, 900)")
+                    .bind(identity_id)
             .fetch_one(&self.pool)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
             return Err(AuthenticationError::InvalidCredentials);
         }
 
-        let authenticated: bool =
-            sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
-                .bind(identity_id)
+        let authenticated: bool = sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
+            .bind(identity_id)
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
@@ -250,9 +263,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             return Err(AuthenticationError::TemporarilyLocked);
         }
 
-        let mfa_enabled: bool =
-            sqlx::query_scalar("SELECT core.auth_mfa_is_enabled($1)")
-                .bind(identity_id)
+        let mfa_enabled: bool = sqlx::query_scalar("SELECT core.auth_mfa_is_enabled($1)")
+            .bind(identity_id)
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
@@ -260,10 +272,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             let (challenge, challenge_hash) =
                 SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
             let expires_at = SystemTime::now() + MFA_CHALLENGE_TTL;
-            let issued: bool = sqlx::query_scalar(
-                "SELECT core.auth_issue_mfa_challenge($1, $2, $3, $4)",
-            )
-            .bind(Uuid::now_v7())
+            let issued: bool =
+                sqlx::query_scalar("SELECT core.auth_issue_mfa_challenge($1, $2, $3, $4)")
+                    .bind(Uuid::now_v7())
             .bind(identity_id)
             .bind(challenge_hash.as_bytes())
             .bind(expires_at)
@@ -278,7 +289,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             });
         }
 
-        Ok(LoginOutcome::Authenticated(self.create_session(identity_id).await?))
+        Ok(LoginOutcome::Authenticated(
+            self.create_session(identity_id).await?,
+        ))
     }
 
     pub async fn verify_mfa_challenge(
@@ -304,7 +317,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             return Err(AuthenticationError::InvalidChallenge);
         }
 
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -351,24 +368,32 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .map_err(|_| AuthenticationError::Storage)?;
         }
         if !factor_valid {
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Err(AuthenticationError::InvalidMfaFactor);
         }
 
-        let consumed: Option<Uuid> = sqlx::query_scalar(
-            "SELECT core.auth_consume_mfa_challenge($1)",
-        )
-        .bind(challenge_hash.as_bytes())
+        let consumed: Option<Uuid> =
+            sqlx::query_scalar("SELECT core.auth_consume_mfa_challenge($1)")
+                .bind(challenge_hash.as_bytes())
         .fetch_one(&mut *transaction)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
         if consumed != Some(identity_id) {
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Err(AuthenticationError::InvalidChallenge);
         }
 
         let session = self.create_session_in_transaction(identity_id, &mut transaction).await?;
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(session)
     }
 
@@ -436,10 +461,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     pub async fn request_recovery(&self, email: &str) -> Result<(), AuthenticationError> {
         let email = normalize_email(email).map_err(|_| AuthenticationError::InvalidInput)?;
         self.enforce_rate_limit("recovery", &email).await?;
-        let identity: Option<Uuid> = sqlx::query_scalar(
-            "SELECT identity_id FROM core.auth_lookup_identity($1)",
-        )
-        .bind(&email)
+        let identity: Option<Uuid> =
+            sqlx::query_scalar("SELECT identity_id FROM core.auth_lookup_identity($1)")
+                .bind(&email)
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
@@ -449,10 +473,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
         let (token, token_hash) =
             SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
-        let issued: bool = sqlx::query_scalar(
-            "SELECT core.auth_issue_recovery_token($1, $2, $3, $4)",
-        )
-        .bind(identity_id)
+        let issued: bool =
+            sqlx::query_scalar("SELECT core.auth_issue_recovery_token($1, $2, $3, $4)")
+                .bind(identity_id)
         .bind(Uuid::now_v7())
         .bind(token_hash.as_bytes())
         .bind(SystemTime::now() + RECOVERY_TOKEN_TTL)
@@ -462,7 +485,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         if !issued {
             return Ok(());
         }
-        let link = format!("{}/reset-password?token={}", self.public_base_url, token.as_str());
+        let link = format!(
+            "{}/reset-password?token={}",
+            self.public_base_url,
+            token.as_str()
+        );
         self.email
             .send(EmailMessage {
                 recipient: email,
@@ -484,10 +511,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let verifier = hash_password(new_password).map_err(|_| AuthenticationError::InvalidInput)?;
         let token_hash = SessionTokenHash::from_presented(token)
             .map_err(|_| AuthenticationError::InvalidRecoveryToken)?;
-        let identity: Option<Uuid> = sqlx::query_scalar(
-            "SELECT core.auth_complete_recovery($1, $2)",
-        )
-        .bind(token_hash.as_bytes())
+        let identity: Option<Uuid> =
+            sqlx::query_scalar("SELECT core.auth_complete_recovery($1, $2)")
+                .bind(token_hash.as_bytes())
         .bind(verifier.as_str())
         .fetch_one(&self.pool)
         .await
@@ -498,10 +524,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     pub async fn verify_email(&self, token: &str) -> Result<Uuid, AuthenticationError> {
         let token_hash = SessionTokenHash::from_presented(token)
             .map_err(|_| AuthenticationError::InvalidVerificationToken)?;
-        let identity: Option<Uuid> = sqlx::query_scalar(
-            "SELECT core.auth_consume_verification_token($1)",
-        )
-        .bind(token_hash.as_bytes())
+        let identity: Option<Uuid> =
+            sqlx::query_scalar("SELECT core.auth_consume_verification_token($1)")
+                .bind(token_hash.as_bytes())
         .fetch_one(&self.pool)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
@@ -515,7 +540,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let secret = TotpSecret::generate().map_err(|_| AuthenticationError::Cryptography)?;
         let encrypted = self.mfa_protector.seal(identity_id, secret.as_bytes())
             .map_err(|_| AuthenticationError::Cryptography)?;
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -530,10 +559,16 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .await
         .map_err(|_| AuthenticationError::Storage)?;
         if row.is_none() {
-            transaction.rollback().await.map_err(|_| AuthenticationError::Storage)?;
+            transaction
+                .rollback()
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
             return Err(AuthenticationError::MfaAlreadyEnabled);
         }
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(format!(
             "otpauth://totp/ENSAMBRIA?secret={}&issuer=ENSAMBRIA&algorithm=SHA1&digits=6&period=30",
             secret.base32()
@@ -546,7 +581,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         code: &str,
         unix_seconds: u64,
     ) -> Result<Vec<String>, AuthenticationError> {
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -595,7 +634,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .map_err(|_| AuthenticationError::Storage)?;
             recovery_codes.push(code);
         }
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(recovery_codes)
     }
 
@@ -604,7 +646,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         identity_id: Uuid,
         current_password: &str,
     ) -> Result<(), AuthenticationError> {
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -630,7 +676,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .execute(&mut *transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(())
     }
 
@@ -638,7 +687,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let identity_id = self.authenticate_access_token(access_token).await?;
         let hash = SessionTokenHash::from_presented(access_token)
             .map_err(|_| AuthenticationError::InvalidAccessToken)?;
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -651,12 +704,19 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .execute(&mut *transaction)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(())
     }
 
     pub async fn logout_all(&self, identity_id: Uuid) -> Result<(), AuthenticationError> {
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         ActorContext::new(ActorId::new(identity_id))
             .establish(&mut transaction)
             .await
@@ -668,14 +728,24 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .execute(&mut *transaction)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(())
     }
 
     async fn create_session(&self, identity_id: Uuid) -> Result<AuthSession, AuthenticationError> {
-        let mut transaction = self.pool.begin().await.map_err(|_| AuthenticationError::Storage)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         let session = self.create_session_in_transaction(identity_id, &mut transaction).await?;
-        transaction.commit().await.map_err(|_| AuthenticationError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         Ok(session)
     }
 
@@ -692,10 +762,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let now = SystemTime::now();
         let access_expiry = now + ACCESS_TOKEN_TTL;
         let refresh_expiry = now + REFRESH_TOKEN_TTL;
-        let created: bool = sqlx::query_scalar(
-            "SELECT core.auth_create_session($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(session_id)
+        let created: bool =
+            sqlx::query_scalar("SELECT core.auth_create_session($1, $2, $3, $4, $5, $6)")
+                .bind(session_id)
         .bind(identity_id)
         .bind(access_hash.as_bytes())
         .bind(access_expiry)
@@ -724,10 +793,9 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     ) -> Result<(), AuthenticationError> {
         let input = format!("{action}:{subject}");
         let digest = hmac::sign(&self.rate_limit_key, input.as_bytes());
-        let allowed: bool = sqlx::query_scalar(
-            "SELECT core.auth_consume_rate_limit($1, $2, $3, $4, $5)",
-        )
-        .bind(digest.as_ref())
+        let allowed: bool =
+            sqlx::query_scalar("SELECT core.auth_consume_rate_limit($1, $2, $3, $4, $5)")
+                .bind(digest.as_ref())
         .bind(action)
         .bind(RATE_WINDOW_SECONDS)
         .bind(RATE_MAX_ATTEMPTS)
@@ -735,7 +803,11 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .fetch_one(&self.pool)
         .await
         .map_err(|_| AuthenticationError::Storage)?;
-        if allowed { Ok(()) } else { Err(AuthenticationError::RateLimited) }
+        if allowed {
+            Ok(())
+        } else {
+            Err(AuthenticationError::RateLimited)
+        }
     }
 }
 

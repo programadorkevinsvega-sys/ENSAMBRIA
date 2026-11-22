@@ -23,8 +23,8 @@ pub struct TtlCache {
     connections: Arc<Vec<ConnectionManager>>,
     next_connection: Arc<AtomicUsize>,
     namespace: String,
-    cluster: Option<Arc<tokio::sync::Mutex<redis::cluster_async::ClusterConnection>>>,
-    sentinel: Option<Arc<tokio::sync::Mutex<SentinelClient>>>,
+    cluster: Option<Arc<Vec<tokio::sync::Mutex<redis::cluster_async::ClusterConnection>>>>,
+    sentinel: Option<Arc<Vec<tokio::sync::Mutex<SentinelClient>>>>,
 }
 
 impl TtlCache {
@@ -45,8 +45,8 @@ impl TtlCache {
                 validate_redis_url(&url, production)?;
                 Self::connect_with_pool_size(&url, namespace, pool_size).await
             }
-            "cluster" => Self::connect_cluster(env_list("PLATFORM_REDIS_CLUSTER_URLS")?, namespace, production).await,
-            "sentinel" => Self::connect_sentinel_from_env(namespace, production).await,
+            "cluster" => Self::connect_cluster(env_list("PLATFORM_REDIS_CLUSTER_URLS")?, namespace, pool_size, production).await,
+            "sentinel" => Self::connect_sentinel_from_env(namespace, pool_size, production).await,
             _ => Err(CacheError::InvalidConfiguration),
         }
     }
@@ -99,24 +99,27 @@ impl TtlCache {
     }
 
 
-    async fn connect_cluster(nodes: Vec<String>, namespace: &str, production: bool) -> Result<Self, CacheError> {
+    async fn connect_cluster(nodes: Vec<String>, namespace: &str, pool_size: usize, production: bool) -> Result<Self, CacheError> {
         validate_segment(namespace)?;
         if nodes.is_empty() || nodes.iter().any(|node| validate_redis_url(node, production).is_err()) {
             return Err(CacheError::InvalidConfiguration);
         }
         let _ = rustls::crypto::ring::default_provider().install_default();
         let client = redis::cluster::ClusterClient::new(nodes).map_err(|_| CacheError::InvalidConfiguration)?;
-        let connection = client.get_async_connection().await.map_err(map_redis_error)?;
+        let mut connections = Vec::with_capacity(pool_size);
+        for _ in 0..pool_size {
+            connections.push(tokio::sync::Mutex::new(client.get_async_connection().await.map_err(map_redis_error)?));
+        }
         Ok(Self {
             connections: Arc::new(Vec::new()),
             next_connection: Arc::new(AtomicUsize::new(0)),
             namespace: namespace.to_owned(),
-            cluster: Some(Arc::new(tokio::sync::Mutex::new(connection))),
+            cluster: Some(Arc::new(connections)),
             sentinel: None,
         })
     }
 
-    async fn connect_sentinel_from_env(namespace: &str, production: bool) -> Result<Self, CacheError> {
+    async fn connect_sentinel_from_env(namespace: &str, pool_size: usize, production: bool) -> Result<Self, CacheError> {
         validate_segment(namespace)?;
         let nodes = env_list("PLATFORM_REDIS_SENTINEL_URLS")?;
         let master = std::env::var("PLATFORM_REDIS_SENTINEL_MASTER_NAME").map_err(|_| CacheError::InvalidConfiguration)?;
@@ -130,18 +133,22 @@ impl TtlCache {
         }
         let redis_info = RedisConnectionInfo::default().set_username(username).set_password(password);
         let node_info = SentinelNodeConnectionInfo::default()
-            .set_tls_mode(if production { TlsMode::Secure } else { TlsMode::Insecure })
+            .set_tls_mode(if production { TlsMode::Secure)
             .set_redis_connection_info(redis_info);
-        let mut client = SentinelClient::build(nodes, master, Some(node_info), SentinelServerType::Master)
-            .map_err(map_redis_error)?;
-        let mut probe = client.get_async_connection().await.map_err(map_redis_error)?;
-        redis::cmd("PING").query_async::<String>(&mut probe).await.map_err(map_redis_error)?;
+        let mut clients = Vec::with_capacity(pool_size);
+        for _ in 0..pool_size {
+            let mut client = SentinelClient::build(nodes.clone(), master.clone(), Some(node_info.clone()), SentinelServerType::Master)
+                .map_err(map_redis_error)?;
+            let mut probe = client.get_async_connection().await.map_err(map_redis_error)?;
+            redis::cmd("PING").query_async::<String>(&mut probe).await.map_err(map_redis_error)?;
+            clients.push(tokio::sync::Mutex::new(client));
+        }
         Ok(Self {
             connections: Arc::new(Vec::new()),
             next_connection: Arc::new(AtomicUsize::new(0)),
             namespace: namespace.to_owned(),
             cluster: None,
-            sentinel: Some(Arc::new(tokio::sync::Mutex::new(client))),
+            sentinel: Some(Arc::new(clients)),
         })
     }
 
@@ -154,11 +161,13 @@ impl TtlCache {
     pub async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {
         let key = self.qualified_key(key)?;
         if let Some(cluster) = &self.cluster {
-            let mut connection = cluster.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % cluster.len();
+            let mut connection = cluster[index].lock().await;
             return redis::cmd("GET").arg(key).query_async(&mut *connection).await.map_err(map_redis_error);
         }
         if let Some(sentinel) = &self.sentinel {
-            let mut client = sentinel.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % sentinel.len();
+            let mut client = sentinel[index].lock().await;
             let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
             return redis::cmd("GET").arg(key).query_async(&mut connection).await.map_err(map_redis_error);
         }
@@ -179,11 +188,13 @@ impl TtlCache {
         }
 
         if let Some(cluster) = &self.cluster {
-            let mut connection = cluster.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % cluster.len();
+            let mut connection = cluster[index].lock().await;
             return redis::cmd("SET").arg(key).arg(value).arg("EX").arg(ttl_seconds).query_async::<()>(&mut *connection).await.map_err(map_redis_error);
         }
         if let Some(sentinel) = &self.sentinel {
-            let mut client = sentinel.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % sentinel.len();
+            let mut client = sentinel[index].lock().await;
             let mut connection = client.get_async_connection().await.map_err(map_redis_error)?;
             return redis::cmd("SET").arg(key).arg(value).arg("EX").arg(ttl_seconds).query_async::<()>(&mut connection).await.map_err(map_redis_error);
         }
@@ -194,7 +205,8 @@ impl TtlCache {
     pub async fn delete(&self, key: &str) -> Result<(), CacheError> {
         let key = self.qualified_key(key)?;
         if let Some(cluster) = &self.cluster {
-            let mut connection = cluster.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % cluster.len();
+            let mut connection = cluster[index].lock().await;
             return redis::cmd("DEL").arg(key).query_async::<()>(&mut *connection).await.map_err(map_redis_error);
         }
         if let Some(sentinel) = &self.sentinel {
@@ -220,7 +232,8 @@ impl TtlCache {
         let key = self.qualified_key(key)?;
         let script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; if count > tonumber(ARGV[2]) then redis.call('EXPIRE', KEYS[1], ARGV[3]); return 0; end; return 1";
         let result = if let Some(cluster) = &self.cluster {
-            let mut connection = cluster.lock().await;
+            let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % cluster.len();
+            let mut connection = cluster[index].lock().await;
             redis::cmd("EVAL").arg(script).arg(1).arg(key).arg(window_seconds).arg(limit).arg(block_seconds).query_async::<i64>(&mut *connection).await
         } else if let Some(sentinel) = &self.sentinel {
             let mut client = sentinel.lock().await;

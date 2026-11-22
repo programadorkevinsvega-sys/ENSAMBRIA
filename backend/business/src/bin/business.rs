@@ -29,23 +29,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .connect(&business_url)
         .await?;
 
-    let auth_cache = TtlCache::connect_from_env("auth").await.ok();
+    let redis_required = std::env::var("ENSAMBRIA_REDIS_REQUIRED")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("true"));
+    let auth_cache = match TtlCache::connect_from_env("auth").await {
+        Ok(cache) => Some(cache),
+        Err(error) if redis_required => {
+            return Err(format!("required Redis auth cache is unavailable: {error}").into());
+        }
+        Err(error) => {
+            tracing::warn!(
+                event = "auth.rate_limit.redis_unavailable",
+                error = %error,
+                fallback = "postgres"
+            );
+            None
+        }
+    };
     let auth_service = authentication_service_from_env(core_pool.clone())?;
     let auth_service = match auth_cache {
         Some(cache) => auth_service.with_rate_limit_cache(cache),
-        None => {
-            tracing::warn!(
-                event = "auth.rate_limit.redis_unavailable",
-                fallback = "postgres"
-            );
-            auth_service
-        }
+        None => auth_service,
     };
     let auth = Arc::new(auth_service);
     let cache = match TtlCache::connect_from_env("business").await {
         Ok(cache) => Some(cache),
+        Err(error) if redis_required => {
+            return Err(format!("required Redis BUSINESS cache is unavailable: {error}").into());
+        }
         Err(error) => {
-            tracing::warn!(event="cache.redis.business_unavailable", error=%error, fallback="postgres");
+            tracing::warn!(
+                event = "cache.redis.business_unavailable",
+                error = %error,
+                fallback = "postgres"
+            );
             None
         }
     };

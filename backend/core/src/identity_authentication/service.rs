@@ -169,6 +169,39 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         Ok(())
     }
 
+    pub async fn resend_verification(&self, email: &str) -> Result<(), AuthenticationError> {
+        let email = normalize_email(email).map_err(|_| AuthenticationError::InvalidInput)?;
+        self.enforce_rate_limit("recovery", &email).await?;
+        let pending: Option<Uuid> = sqlx::query_scalar(
+            "SELECT identity_id FROM core.auth_lookup_pending_identity($1)",
+        )
+        .bind(&email)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
+        let Some(identity_id) = pending else { return Ok(()); };
+        let (token, token_hash) =
+            SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
+        let issued: bool = sqlx::query_scalar(
+            "SELECT core.auth_issue_verification_token($1, $2, $3, $4)",
+        )
+        .bind(identity_id)
+        .bind(Uuid::now_v7())
+        .bind(token_hash.as_bytes())
+        .bind(SystemTime::now() + VERIFICATION_TOKEN_TTL)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
+        if !issued { return Ok(()); }
+        let link = format!("{}/verify-email?token={}", self.public_base_url, token.as_str());
+        self.email.send(EmailMessage {
+            recipient: email,
+            subject: "Verifica tu cuenta ENSAMBRIA".into(),
+            text_body: format!("Confirma tu correo con este enlace de un solo uso, válido por 24 horas:\\n{link}"),
+        }).await.map_err(|_| AuthenticationError::EmailDelivery)?;
+        Ok(())
+    }
+
     pub async fn login(
         &self,
         email: &str,

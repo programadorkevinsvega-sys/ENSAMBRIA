@@ -18,6 +18,7 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION core.auth_record_security_event(
+    p_event_id uuid,
     p_actor_id uuid,
     p_action text,
     p_outcome text,
@@ -43,13 +44,13 @@ BEGIN
         id, actor_id, tenant_id, action, target_type, target_id,
         outcome, correlation_id, metadata
     ) VALUES (
-        gen_random_uuid(), p_actor_id, NULL, p_action, p_target_type, p_target_id,
+        p_event_id, p_actor_id, NULL, p_action, p_target_type, p_target_id,
         p_outcome, p_correlation_id, COALESCE(p_metadata, '{}'::jsonb)
     );
 END
 $$;
 
 REVOKE ALL ON FUNCTION core.auth_lookup_pending_identity(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_record_security_event(uuid, text, text, uuid, text, uuid, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION core.auth_lookup_pending_identity(text) TO core_runtime;
 GRANT EXECUTE ON FUNCTION core.auth_record_security_event(uuid, text, text, uuid, text, uuid, jsonb) TO core_runtime;

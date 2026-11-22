@@ -1,6 +1,6 @@
 use serde_json::Value;
 use sqlx::{PgPool, types::Json};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use uuid::Uuid;
 
@@ -18,15 +18,15 @@ impl ProductCatalog {
         &self,
         product_id: Uuid,
     ) -> Result<Option<ProductCatalogEntry>, ProductCatalogError> {
-        let product = sqlx::query_as::<_, (Uuid, String, String, String, i32, String, Json<Value>, SystemTime)>(
-            "SELECT product_id, product_key, display_name, brand_name, configuration_version, schema_version, configuration, published_at FROM platform.active_product_catalog WHERE product_id = $1",
+        let product = sqlx::query_as::<_, (Uuid, String, String, String, i32, String, Json<Value>, i64)>(
+            "SELECT product_id, product_key, display_name, brand_name, configuration_version, schema_version, configuration, extract(epoch FROM published_at)::bigint FROM platform.active_product_catalog WHERE product_id = $1",
         )
         .bind(product_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| ProductCatalogError::Storage)?;
 
-        let Some((id, key, display_name, brand_name, version, schema_version, configuration, published_at)) =
+        let Some((id, key, display_name, brand_name, version, schema_version, configuration, published_at_epoch)) =
             product
         else {
             return Ok(None);
@@ -104,7 +104,7 @@ impl ProductCatalog {
             configuration_version: version,
             configuration_schema_version: schema_version,
             configuration: configuration.0,
-            published_at,
+            published_at: UNIX_EPOCH + Duration::from_secs(published_at_epoch.max(0) as u64),
             domains,
             markets,
             surfaces,
@@ -135,8 +135,8 @@ impl ProductCatalog {
         product_id: Uuid,
         version: i32,
     ) -> Result<Option<ProductConfiguration>, ProductCatalogError> {
-        let configuration = sqlx::query_as::<_, (String, Json<Value>, Option<std::time::SystemTime>)>(
-            "SELECT schema_version, configuration, published_at FROM platform.product_configurations WHERE product_id = $1 AND version = $2 AND status = 'published'",
+        let configuration = sqlx::query_as::<_, (String, Json<Value>, Option<i64>)>(
+            "SELECT schema_version, configuration, extract(epoch FROM published_at)::bigint FROM platform.product_configurations WHERE product_id = $1 AND version = $2 AND status = 'published'",
         )
         .bind(product_id)
         .bind(version)
@@ -149,7 +149,7 @@ impl ProductCatalog {
                 version,
                 schema_version,
                 canonical_json: configuration.0,
-                published_at,
+                published_at: published_at.map(|epoch| UNIX_EPOCH + Duration::from_secs(epoch.max(0) as u64)),
             }
         }))
     }

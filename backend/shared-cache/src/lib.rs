@@ -39,6 +39,9 @@ impl TtlCache {
             .map(|value| value.parse::<usize>().map_err(|_| CacheError::InvalidConfiguration))
             .transpose()?
             .unwrap_or(DEFAULT_CONNECTIONS_PER_PROCESS);
+        if !(1..=MAX_CONNECTIONS_PER_PROCESS).contains(&pool_size) {
+            return Err(CacheError::InvalidConfiguration);
+        }
         match mode.as_str() {
             "direct" => {
                 let url = std::env::var("PLATFORM_REDIS_URL").map_err(|_| CacheError::InvalidConfiguration)?;

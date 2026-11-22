@@ -82,6 +82,8 @@ AS $$
       FROM core.identities AS i
       JOIN core.identity_credentials AS c ON c.identity_id = i.id
      WHERE i.email_normalized = lower(btrim(p_email_normalized))
+       AND i.status = 'active'
+       AND i.email_verified_at IS NOT NULL
      LIMIT 1
 $$;
 
@@ -211,7 +213,6 @@ BEGIN
     FOREACH relation_name IN ARRAY ARRAY[
         'identity_credentials',
         'auth_sessions',
-        'account_recovery_tokens',
         'identity_mfa_totp',
         'identity_mfa_recovery_codes'
     ]

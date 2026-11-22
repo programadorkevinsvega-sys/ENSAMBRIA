@@ -312,7 +312,7 @@ async fn totp_enrollment_mfa_challenge_recovery_code_and_disable_complete() {
     };
 
     let enrollment_uri = service
-        .begin_totp_enrollment(&initial_session.access_token)
+        .begin_totp_enrollment(&initial_session.access_token, password)
         .await
         .expect("authenticated identity must begin TOTP enrollment");
     let encoded_secret = enrollment_uri
@@ -325,7 +325,7 @@ async fn totp_enrollment_mfa_challenge_recovery_code_and_disable_complete() {
     let current_step = unix_time_now().expect("server clock must be available") / 30;
     let current_code = secret.code_at_step(current_step);
     let recovery_codes = service
-        .confirm_totp_enrollment(&initial_session.access_token, &current_code)
+        .confirm_totp_enrollment(&initial_session.access_token, password, &current_code)
         .await
         .expect("valid TOTP code must confirm enrollment");
     assert_eq!(recovery_codes.len(), 10);

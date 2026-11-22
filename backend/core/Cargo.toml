@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 lettre = { version = "0.11.19", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
 tracing = "0.1"
+zeroize = "1.9.2"
 argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "zeroize"] }
 base64 = "0.22.1"
 ring = "0.17.14"

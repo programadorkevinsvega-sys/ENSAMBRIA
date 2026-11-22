@@ -130,7 +130,7 @@ async fn resend_verification<D: EmailDelivery>(State(state): State<Arc<ApiState<
     }
 }
 async fn mfa_begin<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, headers: HeaderMap, Json(request): Json<PasswordRequest>) -> impl IntoResponse {
-    let token = match bearer_token(&headers) { Ok(token) => token, Err(response) => return response };
+    let token = match bearer_token(&headers) { Ok(token) => token, Err(status) => return status.into_response() };
     match state.auth.begin_totp_enrollment(token, &request.current_password).await {
         Ok(uri) => (StatusCode::OK, Json(serde_json::json!({"status":"pending","otpauth_uri":uri}))).into_response(),
         Err(error) => auth_error(error),
@@ -164,17 +164,17 @@ async fn logout_all<D: EmailDelivery>(State(state): State<Arc<ApiState<D>>>, hea
         Err(error) => auth_error(error),
     }
 }
-fn bearer_token(headers: &HeaderMap) -> Result<&str, axum::response::Response> {
+fn bearer_token(headers: &HeaderMap) -> Result<&str, StatusCode> {
     headers.get(AUTHORIZATION).and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer ")).filter(|value| !value.is_empty())
-        .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())
+        .ok_or(StatusCode::UNAUTHORIZED)
 }
 
 async fn list_establishments<D: EmailDelivery>(
     State(state): State<Arc<ApiState<D>>>, headers: HeaderMap,
 ) -> impl IntoResponse {
     let (identity, tenant) = match authenticate_request(&state, &headers).await {
-        Ok(value) => value, Err(response) => return response,
+        Ok(value) => value, Err(status) => return status.into_response(),
     };
     match state.business.list_establishments(identity, tenant).await {
         Ok(items) => (StatusCode::OK, Json(items)).into_response(),
@@ -193,13 +193,13 @@ async fn create_establishment<D: EmailDelivery>(
     }
 }
 
-async fn authenticate_request<D: EmailDelivery>(state: &ApiState<D>, headers: &HeaderMap) -> Result<(Uuid, Uuid), axum::response::Response> {
+async fn authenticate_request<D: EmailDelivery>(state: &ApiState<D>, headers: &HeaderMap) -> Result<(Uuid, Uuid), StatusCode> {
     let token = bearer_token(headers)?;
     let tenant = headers.get("x-tenant-id").and_then(|v| v.to_str().ok())
         .and_then(|v| Uuid::parse_str(v).ok())
-        .ok_or_else(|| StatusCode::BAD_REQUEST.into_response())?;
+        .ok_or(StatusCode::BAD_REQUEST)?;
     let identity = state.auth.authenticate_access_token(token).await
-        .map_err(|_| StatusCode::UNAUTHORIZED.into_response())?;
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
     Ok((identity, tenant))
 }
 

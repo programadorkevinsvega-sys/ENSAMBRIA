@@ -179,14 +179,6 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -f backend/business/migrations/bootstrap/00000000000000_business_schema.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "SET ROLE business_schema_owner" \
-            -f backend/business/migrations/20261122000001_business_establishments.sql
-
       - name: Refresh locked dependencies and patch known advisory
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo update -p url --precise 2.5.9
@@ -194,6 +186,17 @@ jobs:
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --workspace
+
+      - name: Apply BUSINESS schema after CORE migrations
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: |
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/business/migrations/bootstrap/00000000000000_business_schema.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE business_schema_owner" \
+            -f backend/business/migrations/20261122000001_business_establishments.sql
 
   security-dependencies:
     name: security-dependencies

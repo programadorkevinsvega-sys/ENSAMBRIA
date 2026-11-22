@@ -110,7 +110,10 @@ jobs:
             -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker;"
+            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker, core_outbox_relay;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
@@ -122,7 +125,10 @@ jobs:
             -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime;"
+            -c "CREATE ROLE platform_event_consumer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime, platform_event_consumer;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT platform_schema_owner TO core_migrator;"
@@ -133,6 +139,10 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_schema_owner" \
             -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_schema_owner" \
+            -f backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE platform_schema_owner;
           BEGIN;

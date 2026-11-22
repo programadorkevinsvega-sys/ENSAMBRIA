@@ -1,9 +1,6 @@
 use std::{env, error::Error, io, net::SocketAddr};
 
-use ensambria_platform::{
-    product_catalog::ProductCatalog,
-    product_catalog_rpc::ProductCatalogRpc,
-};
+use ensambria_platform::{product_catalog::ProductCatalog, product_catalog_rpc::ProductCatalogRpc};
 use ensambria_platform_contract::platform::product_catalog::v1::ProductCatalogServer;
 use ensambria_shared_cache::TtlCache;
 use sqlx::PgPool;
@@ -45,10 +42,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
-        let mut terminate = tokio::signal::unix::signal(
-            tokio::signal::unix::SignalKind::terminate(),
-        )
-        .expect("SIGTERM handler must be installed");
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("SIGTERM handler must be installed");
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = terminate.recv() => {}

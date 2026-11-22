@@ -20,6 +20,8 @@ CREATE TABLE core.email_outbox (
 CREATE INDEX email_outbox_pending_idx
     ON core.email_outbox (available_at, created_at)
     WHERE status IN ('pending', 'processing');
+GRANT USAGE ON SCHEMA core TO core_runtime, core_email_worker;
 GRANT INSERT ON core.email_outbox TO core_runtime;
+GRANT SELECT, UPDATE ON core.email_outbox TO core_email_worker;
 COMMENT ON TABLE core.email_outbox IS
     'Durable transactional email queue. Payloads contain one-time links; access is restricted to CORE runtime workers.';

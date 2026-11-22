@@ -35,12 +35,12 @@ async fn core_enforces_platform_published_product_and_capability_contract() {
         .execute(&mut *transaction).await.expect("tenant RLS context must be set");
     sqlx::query("INSERT INTO core.tenants (id, status) VALUES ($1, 'active')")
         .bind(tenant_id).execute(&mut *transaction).await.expect("tenant fixture must be inserted");
-    sqlx::query(
-        "INSERT INTO core.tenant_products (tenant_id, product_id, product_config_version, association_status, validated_at) VALUES ($1, $2, 1, 'active', clock_timestamp())",
-    )
-    .bind(tenant_id).bind(product_id).execute(&mut *transaction).await
-        .expect("tenant product association must be inserted");
     transaction.commit().await.expect("tenant fixture must commit");
+
+    let associated_product = policy.associate_tenant_product(
+        &core_pool, tenant_id, product_id, "identity.auth", "v1",
+    ).await.expect("CORE must activate only after PLATFORM validates the capability");
+    assert_eq!(associated_product.product_key, "ensambria-core");
 
     let tenant_product = policy.require_tenant_capability(
         &core_pool, tenant_id, product_id, "identity.auth", "v1",

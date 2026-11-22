@@ -4,6 +4,7 @@ use ring::{
     hmac,
     rand::{SecureRandom, SystemRandom},
 };
+use zeroize::Zeroize;
 
 const SECRET_LENGTH: usize = 20;
 const STEP_SECONDS: u64 = 30;
@@ -64,6 +65,12 @@ impl TotpSecret {
             }
         }
         None
+    }
+}
+
+impl Drop for TotpSecret {
+    fn drop(&mut self) {
+        self.0.zeroize();
     }
 }
 

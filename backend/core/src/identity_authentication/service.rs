@@ -387,8 +387,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         &self,
         challenge_token: &str,
         factor: &str,
-        unix_seconds: u64,
     ) -> Result<AuthSession, AuthenticationError> {
+        let unix_seconds = unix_time_now()?;
         let challenge_hash = SessionTokenHash::from_presented(challenge_token)
             .map_err(|_| AuthenticationError::InvalidChallenge)?;
         self.enforce_rate_limit("mfa", challenge_token).await?;
@@ -705,8 +705,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         &self,
         identity_id: Uuid,
         code: &str,
-        unix_seconds: u64,
     ) -> Result<Vec<String>, AuthenticationError> {
+        let unix_seconds = unix_time_now()?;
         let mut transaction = self
             .pool
             .begin()

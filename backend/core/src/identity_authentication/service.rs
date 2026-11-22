@@ -7,17 +7,16 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use ensambria_shared_cache::TtlCache;
+use lettre::{
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor, message::Mailbox,
+    transport::smtp::authentication::Credentials,
+};
 use ring::{
     digest::{SHA256, digest},
     hmac,
 };
-use lettre::{
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
-    message::Mailbox,
-    transport::smtp::authentication::Credentials,
-};
 use sqlx::{PgPool, Row};
-use ensambria_shared_cache::TtlCache;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -75,7 +74,6 @@ impl fmt::Display for EmailDeliveryError {
     }
 }
 impl Error for EmailDeliveryError {}
-
 
 pub struct SmtpEmailDelivery {
     transport: AsyncSmtpTransport<Tokio1Executor>,
@@ -262,8 +260,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             self.public_base_url,
             token.as_str()
         );
-        self.record_audit(Some(identity_id), "auth.identity.registration_requested", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.identity.registration_requested",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         self.email
             .send(EmailMessage {
                 recipient: email,
@@ -338,8 +342,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
         let Some((identity_id, encoded, status, verified, locked)) = record else {
             let dummy = dummy_password_hash()?;
-            let _ = verify_password(password, &dummy)
-                .map_err(|_| AuthenticationError::Cryptography)?;
+            let _ =
+                verify_password(password, &dummy).map_err(|_| AuthenticationError::Cryptography)?;
             self.record_audit(None, "auth.login.failed", "failure", None, None)
                 .await?;
             return Err(AuthenticationError::InvalidCredentials);
@@ -353,26 +357,45 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                     .fetch_one(&self.pool)
                     .await
                     .map_err(|_| AuthenticationError::Storage)?;
-            self.record_audit(Some(identity_id), "auth.login.failed", "failure", Some("identity"), Some(identity_id))
-                .await?;
+            self.record_audit(
+                Some(identity_id),
+                "auth.login.failed",
+                "failure",
+                Some("identity"),
+                Some(identity_id),
+            )
+            .await?;
             return Err(AuthenticationError::InvalidCredentials);
         }
         if status != "active" || !verified {
-            self.record_audit(Some(identity_id), "auth.login.denied", "denied", Some("identity"), Some(identity_id))
-                .await?;
+            self.record_audit(
+                Some(identity_id),
+                "auth.login.denied",
+                "denied",
+                Some("identity"),
+                Some(identity_id),
+            )
+            .await?;
             return Err(AuthenticationError::InvalidCredentials);
         }
         if locked {
-            self.record_audit(Some(identity_id), "auth.login.locked", "denied", Some("identity"), Some(identity_id))
-                .await?;
+            self.record_audit(
+                Some(identity_id),
+                "auth.login.locked",
+                "denied",
+                Some("identity"),
+                Some(identity_id),
+            )
+            .await?;
             return Err(AuthenticationError::TemporarilyLocked);
         }
 
-        let authenticated: Option<bool> = sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
-            .bind(identity_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| AuthenticationError::Storage)?;
+        let authenticated: Option<bool> =
+            sqlx::query_scalar("SELECT core.auth_record_login_success($1)")
+                .bind(identity_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
         if authenticated != Some(true) {
             return Err(AuthenticationError::TemporarilyLocked);
         }
@@ -398,8 +421,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             if !issued {
                 return Err(AuthenticationError::Storage);
             }
-            self.record_audit(Some(identity_id), "auth.login.mfa_challenge", "success", Some("identity"), Some(identity_id))
-                .await?;
+            self.record_audit(
+                Some(identity_id),
+                "auth.login.mfa_challenge",
+                "success",
+                Some("identity"),
+                Some(identity_id),
+            )
+            .await?;
             return Ok(LoginOutcome::MfaRequired {
                 challenge_token: challenge.as_str().to_owned(),
             });
@@ -517,8 +546,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.session.created", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.session.created",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(session)
     }
 
@@ -574,8 +609,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .map_err(|_| AuthenticationError::Storage)?;
         match result {
             Some((Some(identity_id), true, false)) => {
-                self.record_audit(Some(identity_id), "auth.session.refreshed", "success", Some("identity"), Some(identity_id))
-                    .await?;
+                self.record_audit(
+                    Some(identity_id),
+                    "auth.session.refreshed",
+                    "success",
+                    Some("identity"),
+                    Some(identity_id),
+                )
+                .await?;
                 Ok(AuthSession {
                     identity_id,
                     session_id,
@@ -586,8 +627,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 })
             }
             Some((Some(identity_id), false, true)) => {
-                self.record_audit(Some(identity_id), "auth.refresh.reuse_detected", "failure", Some("identity"), Some(identity_id))
-                    .await?;
+                self.record_audit(
+                    Some(identity_id),
+                    "auth.refresh.reuse_detected",
+                    "failure",
+                    Some("identity"),
+                    Some(identity_id),
+                )
+                .await?;
                 Err(AuthenticationError::RefreshReuseDetected)
             }
             _ => Err(AuthenticationError::InvalidRefreshToken),
@@ -611,20 +658,27 @@ impl<D: EmailDelivery> AuthenticationService<D> {
 
         let (token, token_hash) =
             SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
-        let issued: bool =
-            sqlx::query_scalar("SELECT core.auth_issue_recovery_token($1, $2, $3, to_timestamp($4::double precision))")
-                .bind(identity_id)
-                .bind(Uuid::now_v7())
-                .bind(token_hash.as_bytes())
-                .bind(unix_timestamp(SystemTime::now() + RECOVERY_TOKEN_TTL)?)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|_| AuthenticationError::Storage)?;
+        let issued: bool = sqlx::query_scalar(
+            "SELECT core.auth_issue_recovery_token($1, $2, $3, to_timestamp($4::double precision))",
+        )
+        .bind(identity_id)
+        .bind(Uuid::now_v7())
+        .bind(token_hash.as_bytes())
+        .bind(unix_timestamp(SystemTime::now() + RECOVERY_TOKEN_TTL)?)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
         if !issued {
             return Ok(());
         }
-        self.record_audit(Some(identity_id), "auth.recovery.requested", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.recovery.requested",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         let link = format!(
             "{}/reset-password?token={}",
             self.public_base_url,
@@ -662,8 +716,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
         let identity = identity.ok_or(AuthenticationError::InvalidRecoveryToken)?;
-        self.record_audit(Some(identity), "auth.recovery.completed", "success", Some("identity"), Some(identity))
-            .await?;
+        self.record_audit(
+            Some(identity),
+            "auth.recovery.completed",
+            "success",
+            Some("identity"),
+            Some(identity),
+        )
+        .await?;
         Ok(identity)
     }
 
@@ -677,8 +737,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
         let identity = identity.ok_or(AuthenticationError::InvalidVerificationToken)?;
-        self.record_audit(Some(identity), "auth.email.verified", "success", Some("identity"), Some(identity))
-            .await?;
+        self.record_audit(
+            Some(identity),
+            "auth.email.verified",
+            "success",
+            Some("identity"),
+            Some(identity),
+        )
+        .await?;
         Ok(identity)
     }
 
@@ -702,8 +768,12 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .establish(&mut transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.verify_current_password_in_transaction(identity_id, current_password, &mut transaction)
-            .await?;
+        self.verify_current_password_in_transaction(
+            identity_id,
+            current_password,
+            &mut transaction,
+        )
+        .await?;
         let row = sqlx::query(
             "INSERT INTO core.identity_mfa_totp (identity_id, encrypted_secret, encryption_key_version) VALUES ($1, $2, $3) ON CONFLICT (identity_id) DO UPDATE SET encrypted_secret = EXCLUDED.encrypted_secret, encryption_key_version = EXCLUDED.encryption_key_version, confirmed_at = NULL, last_accepted_step = NULL, updated_at = clock_timestamp() WHERE core.identity_mfa_totp.confirmed_at IS NULL RETURNING identity_id",
         )
@@ -724,8 +794,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.mfa.enrollment_started", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.mfa.enrollment_started",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(format!(
             "otpauth://totp/ENSAMBRIA?secret={}&issuer=ENSAMBRIA&algorithm=SHA1&digits=6&period=30",
             secret.base32()
@@ -749,8 +825,12 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .establish(&mut transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.verify_current_password_in_transaction(identity_id, current_password, &mut transaction)
-            .await?;
+        self.verify_current_password_in_transaction(
+            identity_id,
+            current_password,
+            &mut transaction,
+        )
+        .await?;
         let row = sqlx::query(
             "SELECT encrypted_secret, encryption_key_version FROM core.identity_mfa_totp WHERE identity_id = $1 AND confirmed_at IS NULL",
         )
@@ -807,8 +887,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.mfa.enabled", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.mfa.enabled",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(recovery_codes)
     }
 
@@ -827,8 +913,12 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .establish(&mut transaction)
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.verify_current_password_in_transaction(identity_id, current_password, &mut transaction)
-            .await?;
+        self.verify_current_password_in_transaction(
+            identity_id,
+            current_password,
+            &mut transaction,
+        )
+        .await?;
         sqlx::query("DELETE FROM core.identity_mfa_recovery_codes WHERE identity_id = $1")
             .bind(identity_id)
             .execute(&mut *transaction)
@@ -843,8 +933,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.mfa.disabled", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.mfa.disabled",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(())
     }
 
@@ -873,8 +969,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.session.revoked", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.session.revoked",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(())
     }
 
@@ -900,8 +1002,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.sessions.revoked_all", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.sessions.revoked_all",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(())
     }
 
@@ -941,8 +1049,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        self.record_audit(Some(identity_id), "auth.session.created", "success", Some("identity"), Some(identity_id))
-            .await?;
+        self.record_audit(
+            Some(identity_id),
+            "auth.session.created",
+            "success",
+            Some("identity"),
+            Some(identity_id),
+        )
+        .await?;
         Ok(session)
     }
 
@@ -991,11 +1105,25 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let input = format!("{action}:{subject}");
         let digest = hmac::sign(&self.rate_limit_key, input.as_bytes());
         if let Some(cache) = &self.rate_limit_cache {
-            let key = digest.as_ref().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
-            match cache.consume_rate_limit(&format!("{action}:{key}"), RATE_WINDOW_SECONDS as u64, RATE_MAX_ATTEMPTS as u64, RATE_BLOCK_SECONDS as u64).await {
+            let key = digest
+                .as_ref()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            match cache
+                .consume_rate_limit(
+                    &format!("{action}:{key}"),
+                    RATE_WINDOW_SECONDS as u64,
+                    RATE_MAX_ATTEMPTS as u64,
+                    RATE_BLOCK_SECONDS as u64,
+                )
+                .await
+            {
                 Ok(true) => return Ok(()),
                 Ok(false) => return Err(AuthenticationError::RateLimited),
-                Err(error) => tracing::warn!(event = "auth.rate_limit.redis_fallback", error = %error, fallback = "postgres"),
+                Err(error) => {
+                    tracing::warn!(event = "auth.rate_limit.redis_fallback", error = %error, fallback = "postgres")
+                }
             }
         }
         let allowed: bool =
@@ -1038,7 +1166,6 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .map_err(|_| AuthenticationError::Storage)?;
         Ok(())
     }
-
 }
 
 pub enum LoginOutcome {
@@ -1068,8 +1195,6 @@ impl fmt::Debug for AuthSession {
             .finish()
     }
 }
-
-
 
 fn dummy_password_hash() -> Result<PasswordHash, AuthenticationError> {
     static DUMMY_HASH: OnceLock<Result<PasswordHash, AuthenticationError>> = OnceLock::new();

@@ -15,7 +15,10 @@ pub struct BusinessService {
 
 impl BusinessService {
     pub fn new(business_pool: PgPool, cache: Option<TtlCache>) -> Self {
-        Self { business_pool, cache }
+        Self {
+            business_pool,
+            cache,
+        }
     }
 
     pub async fn list_establishments(
@@ -23,7 +26,11 @@ impl BusinessService {
         identity_id: Uuid,
         tenant_id: Uuid,
     ) -> Result<Vec<Establishment>, BusinessError> {
-        let mut transaction = self.business_pool.begin().await.map_err(|_| BusinessError::Storage)?;
+        let mut transaction = self
+            .business_pool
+            .begin()
+            .await
+            .map_err(|_| BusinessError::Storage)?;
         set_tenant(&mut transaction, tenant_id).await?;
         require_active_membership(&mut transaction, identity_id, tenant_id).await?;
         let cache_key = format!("tenant:{tenant_id}:establishments:v1");
@@ -31,7 +38,10 @@ impl BusinessService {
             && let Ok(Some(value)) = cache.get(&cache_key).await
             && let Ok(items) = serde_json::from_slice::<Vec<Establishment>>(&value)
         {
-            transaction.commit().await.map_err(|_| BusinessError::Storage)?;
+            transaction
+                .commit()
+                .await
+                .map_err(|_| BusinessError::Storage)?;
             return Ok(items);
         }
 
@@ -42,7 +52,10 @@ impl BusinessService {
         .fetch_all(&mut *transaction)
         .await
         .map_err(|_| BusinessError::Storage)?;
-        transaction.commit().await.map_err(|_| BusinessError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| BusinessError::Storage)?;
 
         if let (Some(cache), Ok(value)) = (&self.cache, serde_json::to_vec(&rows)) {
             let _ = cache.put(&cache_key, &value, ESTABLISHMENT_LIST_TTL).await;
@@ -63,7 +76,11 @@ impl BusinessService {
             return Err(BusinessError::InvalidInput);
         }
 
-        let mut transaction = self.business_pool.begin().await.map_err(|_| BusinessError::Storage)?;
+        let mut transaction = self
+            .business_pool
+            .begin()
+            .await
+            .map_err(|_| BusinessError::Storage)?;
         set_tenant(&mut transaction, tenant_id).await?;
         require_active_membership(&mut transaction, identity_id, tenant_id).await?;
         let organization_active: bool = sqlx::query_scalar(
@@ -103,14 +120,18 @@ impl BusinessService {
         .await
         .map_err(|_| BusinessError::Storage)?
         .ok_or(BusinessError::OrganizationUnavailable)?;
-        transaction.commit().await.map_err(|_| BusinessError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| BusinessError::Storage)?;
 
         if let Some(cache) = &self.cache {
-            let _ = cache.delete(&format!("tenant:{tenant_id}:establishments:v1")).await;
+            let _ = cache
+                .delete(&format!("tenant:{tenant_id}:establishments:v1"))
+                .await;
         }
         Ok(row)
     }
-
 }
 
 async fn require_active_membership(

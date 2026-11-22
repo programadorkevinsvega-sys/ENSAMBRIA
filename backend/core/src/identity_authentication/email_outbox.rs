@@ -46,8 +46,11 @@ pub async fn run_smtp_worker_from_env(
     poll_interval: Duration,
     batch_size: i64,
 ) -> Result<(), EmailOutboxError> {
-    let smtp = SmtpEmailDelivery::from_env().map_err(|_| EmailOutboxError::InvalidSmtpConfiguration)?;
-    EmailOutboxWorker.run(pool, smtp, poll_interval, batch_size).await
+    let smtp =
+        SmtpEmailDelivery::from_env().map_err(|_| EmailOutboxError::InvalidSmtpConfiguration)?;
+    EmailOutboxWorker
+        .run(pool, smtp, poll_interval, batch_size)
+        .await
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -85,7 +88,11 @@ impl EmailOutboxWorker {
 
         let mut delivered = 0;
         for (id, recipient, subject, text_body, attempts) in messages {
-            let message = EmailMessage { recipient, subject, text_body };
+            let message = EmailMessage {
+                recipient,
+                subject,
+                text_body,
+            };
             match delivery.send(message).await {
                 Ok(()) => {
                     sqlx::query(

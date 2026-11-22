@@ -51,7 +51,10 @@ impl PlatformProductPolicy {
         contract_version: &str,
         configuration_version: i32,
     ) -> Result<ProductCatalogEntry, PlatformContractError> {
-        let product = self.catalog.get_active_product(product_id).await
+        let product = self
+            .catalog
+            .get_active_product(product_id)
+            .await
             .map_err(|_| PlatformContractError::PlatformUnavailable)?
             .ok_or(PlatformContractError::ProductUnavailable)?;
 
@@ -59,9 +62,11 @@ impl PlatformProductPolicy {
             return Err(PlatformContractError::ConfigurationVersionMismatch);
         }
 
-        let capability = product.capabilities.iter().find(|capability| {
-            capability.capability_code == capability_code
-        }).ok_or(PlatformContractError::CapabilityUnavailable)?;
+        let capability = product
+            .capabilities
+            .iter()
+            .find(|capability| capability.capability_code == capability_code)
+            .ok_or(PlatformContractError::CapabilityUnavailable)?;
 
         if capability.contract_version != contract_version {
             return Err(PlatformContractError::ContractVersionMismatch);
@@ -78,17 +83,24 @@ impl PlatformProductPolicy {
         capability_code: &str,
         contract_version: &str,
     ) -> Result<ProductCatalogEntry, PlatformContractError> {
-        let product = self.catalog.get_active_product(product_id).await
+        let product = self
+            .catalog
+            .get_active_product(product_id)
+            .await
             .map_err(|_| PlatformContractError::PlatformUnavailable)?
             .ok_or(PlatformContractError::ProductUnavailable)?;
-        let product = self.require_capability(
-            product_id,
-            capability_code,
-            contract_version,
-            product.configuration_version,
-        ).await?;
+        let product = self
+            .require_capability(
+                product_id,
+                capability_code,
+                contract_version,
+                product.configuration_version,
+            )
+            .await?;
 
-        let mut transaction = pool.begin().await
+        let mut transaction = pool
+            .begin()
+            .await
             .map_err(|_| PlatformContractError::CoreUnavailable)?;
         sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
             .bind(tenant_id.to_string())
@@ -96,13 +108,12 @@ impl PlatformProductPolicy {
             .await
             .map_err(|_| PlatformContractError::CoreUnavailable)?;
 
-        let tenant_status: Option<String> = sqlx::query_scalar(
-            "SELECT status FROM core.tenants WHERE id = $1",
-        )
-        .bind(tenant_id)
-        .fetch_optional(&mut *transaction)
-        .await
-        .map_err(|_| PlatformContractError::CoreUnavailable)?;
+        let tenant_status: Option<String> =
+            sqlx::query_scalar("SELECT status FROM core.tenants WHERE id = $1")
+                .bind(tenant_id)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(|_| PlatformContractError::CoreUnavailable)?;
         if tenant_status.as_deref() != Some("active") {
             return Err(PlatformContractError::TenantUnavailable);
         }
@@ -117,7 +128,9 @@ impl PlatformProductPolicy {
         .await
         .map_err(|_| PlatformContractError::CoreUnavailable)?;
 
-        transaction.commit().await
+        transaction
+            .commit()
+            .await
             .map_err(|_| PlatformContractError::CoreUnavailable)?;
         Ok(product)
     }
@@ -132,7 +145,9 @@ impl PlatformProductPolicy {
         capability_code: &str,
         contract_version: &str,
     ) -> Result<ProductCatalogEntry, PlatformContractError> {
-        let mut transaction = pool.begin().await
+        let mut transaction = pool
+            .begin()
+            .await
             .map_err(|_| PlatformContractError::CoreUnavailable)?;
         sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
             .bind(tenant_id.to_string())
@@ -149,17 +164,20 @@ impl PlatformProductPolicy {
         .await
         .map_err(|_| PlatformContractError::CoreUnavailable)?;
 
-        transaction.rollback().await
+        transaction
+            .rollback()
+            .await
             .map_err(|_| PlatformContractError::CoreUnavailable)?;
-        let configuration_version = association
-            .ok_or(PlatformContractError::TenantProductNotActive)?;
+        let configuration_version =
+            association.ok_or(PlatformContractError::TenantProductNotActive)?;
 
         self.require_capability(
             product_id,
             capability_code,
             contract_version,
             configuration_version,
-        ).await
+        )
+        .await
     }
 
     /// Resolves a verified active domain using PLATFORM's canonical domain resolver.
@@ -167,7 +185,9 @@ impl PlatformProductPolicy {
         &self,
         domain: &str,
     ) -> Result<Option<ProductCatalogEntry>, PlatformContractError> {
-        self.catalog.resolve_active_domain(domain).await
+        self.catalog
+            .resolve_active_domain(domain)
+            .await
             .map_err(|_| PlatformContractError::PlatformUnavailable)
     }
 }
@@ -188,12 +208,18 @@ impl std::fmt::Display for PlatformContractError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::ProductUnavailable => "PLATFORM product is not active or published",
-            Self::TenantProductNotActive => "CORE tenant does not have an active association with this product",
+            Self::TenantProductNotActive => {
+                "CORE tenant does not have an active association with this product"
+            }
             Self::TenantUnavailable => "CORE tenant is not active",
             Self::CoreUnavailable => "CORE tenant product association could not be read",
             Self::CapabilityUnavailable => "PLATFORM product capability is not available",
-            Self::ConfigurationVersionMismatch => "PLATFORM product configuration version does not match CORE association",
-            Self::ContractVersionMismatch => "PLATFORM capability contract version does not match CORE requirement",
+            Self::ConfigurationVersionMismatch => {
+                "PLATFORM product configuration version does not match CORE association"
+            }
+            Self::ContractVersionMismatch => {
+                "PLATFORM capability contract version does not match CORE requirement"
+            }
             Self::PlatformUnavailable => "PLATFORM product contract could not be read",
         })
     }

@@ -27,7 +27,6 @@ impl TotpSecret {
         Self(secret)
     }
 
-
     pub fn from_base32(encoded: &str) -> Result<Self, TotpError> {
         if encoded.len() != 32 {
             return Err(TotpError::InvalidEncoding);
@@ -52,9 +51,8 @@ impl TotpSecret {
         if bits != 0 && buffer != 0 {
             return Err(TotpError::InvalidEncoding);
         }
-        let secret: [u8; SECRET_LENGTH] = decoded
-            .try_into()
-            .map_err(|_| TotpError::InvalidEncoding)?;
+        let secret: [u8; SECRET_LENGTH] =
+            decoded.try_into().map_err(|_| TotpError::InvalidEncoding)?;
         Ok(Self(secret))
     }
 

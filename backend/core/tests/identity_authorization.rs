@@ -6,7 +6,12 @@ use ensambria_core::{
 };
 use sqlx::{PgPool, postgres::PgConnectOptions, types::Uuid};
 
-type RegionalContext = (Option<String>, Option<String>, Option<String>, Option<String>);
+type RegionalContext = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 async fn test_pool() -> PgPool {
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
@@ -248,7 +253,11 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     .fetch_one(&pool)
     .await
     .expect("PostgreSQL context state must be readable");
-    assert_eq!(residual_context, (None, None), "transaction-local security context must not leak after commit");
+    assert_eq!(
+        residual_context,
+        (None, None),
+        "transaction-local security context must not leak after commit"
+    );
 
     let denied_without_context: bool =
         sqlx::query_scalar("SELECT core.has_permission($1, $2, 'branch.manage', $3, $4)")

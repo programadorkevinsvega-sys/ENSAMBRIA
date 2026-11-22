@@ -15,8 +15,8 @@ use ensambria_core::{
             totp::TotpSecret,
         },
         service::{
-            AuthenticationService, EmailDelivery, EmailDeliveryError, EmailMessage,
-            LoginOutcome, unix_time_now,
+            AuthenticationService, EmailDelivery, EmailDeliveryError, EmailMessage, LoginOutcome,
+            unix_time_now,
         },
     },
     postgres::{ActorContext, ActorId, PgPoolConfiguration, create_pool},
@@ -29,7 +29,9 @@ async fn test_pool() -> PgPool {
     let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
     if let Err(error) = run_core_migrations_from_path(&migration_url, &migrations).await {
         let source = std::error::Error::source(&error).map(|source| format!("{source:?}"));
-        panic!("CORE migrations must apply with the restricted migration identity: {error:?}; source={source:?}");
+        panic!(
+            "CORE migrations must apply with the restricted migration identity: {error:?}; source={source:?}"
+        );
     }
     let database_url = std::env::var("CORE_TEST_DATABASE_URL")
         .expect("isolated PostgreSQL runtime URL must be configured");
@@ -138,7 +140,6 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
     pool.close().await;
 }
 
-
 struct FailingEmailDelivery;
 
 impl EmailDelivery for FailingEmailDelivery {
@@ -150,9 +151,7 @@ impl EmailDelivery for FailingEmailDelivery {
     }
 }
 
-fn failing_authentication_service(
-    pool: PgPool,
-) -> AuthenticationService<FailingEmailDelivery> {
+fn failing_authentication_service(pool: PgPool) -> AuthenticationService<FailingEmailDelivery> {
     let protector = Aes256GcmSecretProtector::new("test-kms-v1".into(), &[0x42; 32])
         .expect("test MFA key must be valid");
     AuthenticationService::new(
@@ -172,7 +171,10 @@ struct CapturingEmailDelivery {
 
 impl CapturingEmailDelivery {
     fn token_from_latest_message(&self, marker: &str) -> String {
-        let messages = self.messages.lock().expect("email capture lock must be healthy");
+        let messages = self
+            .messages
+            .lock()
+            .expect("email capture lock must be healthy");
         let body = messages
             .iter()
             .rev()
@@ -226,7 +228,11 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
     let registration_email = format!("{}@example.test", Uuid::now_v7());
 
     failing_service
-        .register(&registration_email, Some("Delivery Failure Test"), "correct horse battery staple")
+        .register(
+            &registration_email,
+            Some("Delivery Failure Test"),
+            "correct horse battery staple",
+        )
         .await
         .expect("registration response must not reveal email delivery or account state");
     failing_service
@@ -238,7 +244,11 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
     let working_service = authentication_service(pool.clone(), capture.clone());
     let recovery_email = format!("{}@example.test", Uuid::now_v7());
     working_service
-        .register(&recovery_email, Some("Recovery Delivery Test"), "correct horse battery staple")
+        .register(
+            &recovery_email,
+            Some("Recovery Delivery Test"),
+            "correct horse battery staple",
+        )
         .await
         .expect("registration email must be captured");
     let verification_token = capture.token_from_latest_message("verify-email?token=");
@@ -301,7 +311,10 @@ async fn registration_login_refresh_reuse_and_recovery_are_single_use() {
         "rotated access token must no longer authenticate"
     );
     assert_eq!(
-        service.refresh_session(&first_session.refresh_token).await.unwrap_err(),
+        service
+            .refresh_session(&first_session.refresh_token)
+            .await
+            .unwrap_err(),
         ensambria_core::identity_authentication::service::AuthenticationError::RefreshReuseDetected,
         "reusing a rotated refresh token must be detected"
     );

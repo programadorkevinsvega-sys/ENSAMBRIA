@@ -2,8 +2,7 @@ use std::{error::Error, time::Duration};
 
 use ensambria_core::{
     identity_authentication::email_outbox::run_smtp_worker_from_env,
-    observability::initialize_tracing,
-    postgres::PgDatabaseConfiguration,
+    observability::initialize_tracing, postgres::PgDatabaseConfiguration,
 };
 
 #[tokio::main]

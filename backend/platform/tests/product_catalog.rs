@@ -21,7 +21,10 @@ async fn published_product_catalog_contract_is_readable_by_runtime_role() {
         .expect("active published product must be visible");
     assert_eq!(product.product_key, "ensambria-core");
     assert_eq!(product.configuration_schema_version, "product-config.v1");
-    assert_eq!(product.configuration["branding"]["displayName"], "ENSAMBRIA Core");
+    assert_eq!(
+        product.configuration["branding"]["displayName"],
+        "ENSAMBRIA Core"
+    );
     assert_eq!(product.domains.len(), 1);
     assert_eq!(product.domains[0].domain_name, "shop.example.test");
     assert_eq!(product.markets.len(), 1);
@@ -46,7 +49,10 @@ async fn published_product_catalog_contract_is_readable_by_runtime_role() {
         .expect("published configuration query must succeed")
         .expect("published configuration version must exist");
     assert_eq!(configuration.schema_version, "product-config.v1");
-    assert_eq!(configuration.canonical_json["branding"]["displayName"], "ENSAMBRIA Core");
+    assert_eq!(
+        configuration.canonical_json["branding"]["displayName"],
+        "ENSAMBRIA Core"
+    );
 
     assert!(
         catalog

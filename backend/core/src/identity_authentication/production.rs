@@ -3,17 +3,15 @@ use std::{env, error::Error, fmt};
 use sqlx::PgPool;
 use zeroize::Zeroizing;
 
-use super::{
-    email_outbox::OutboxEmailDelivery,
-    service::AuthenticationService,
-};
+use super::{email_outbox::OutboxEmailDelivery, service::AuthenticationService};
 use crate::identity_authentication::crypto::secret_encryption::Aes256GcmSecretProtector;
 
 /// Builds the production authentication service with durable email enqueueing.
 /// Secrets are injected by the deployment secret manager as hexadecimal values.
 pub fn authentication_service_from_env(
     pool: PgPool,
-) -> Result<AuthenticationService<OutboxEmailDelivery>, ProductionAuthenticationConfigurationError> {
+) -> Result<AuthenticationService<OutboxEmailDelivery>, ProductionAuthenticationConfigurationError>
+{
     let mfa_key_version = required("CORE_MFA_ENCRYPTION_KEY_VERSION")?;
     let mfa_key = decode_hex_secret("CORE_MFA_ENCRYPTION_KEY_HEX", 32)?;
     let rate_limit_secret = decode_hex_secret("CORE_AUTH_RATE_LIMIT_SECRET_HEX", 32)?;
@@ -35,7 +33,9 @@ fn required(name: &'static str) -> Result<String, ProductionAuthenticationConfig
     let value = env::var(name)
         .map_err(|_| ProductionAuthenticationConfigurationError::MissingVariable(name))?;
     if value.trim().is_empty() {
-        return Err(ProductionAuthenticationConfigurationError::InvalidVariable(name));
+        return Err(ProductionAuthenticationConfigurationError::InvalidVariable(
+            name,
+        ));
     }
     Ok(value)
 }
@@ -50,8 +50,10 @@ fn decode_hex_secret(
     }
     let mut decoded = Zeroizing::new(Vec::with_capacity(encoded.len() / 2));
     for pair in encoded.as_bytes().as_chunks::<2>().0 {
-        let high = hex_nibble(pair[0]).ok_or(ProductionAuthenticationConfigurationError::InvalidSecret)?;
-        let low = hex_nibble(pair[1]).ok_or(ProductionAuthenticationConfigurationError::InvalidSecret)?;
+        let high =
+            hex_nibble(pair[0]).ok_or(ProductionAuthenticationConfigurationError::InvalidSecret)?;
+        let low =
+            hex_nibble(pair[1]).ok_or(ProductionAuthenticationConfigurationError::InvalidSecret)?;
         decoded.push((high << 4) | low);
     }
     Ok(decoded)
@@ -77,10 +79,18 @@ pub enum ProductionAuthenticationConfigurationError {
 impl fmt::Display for ProductionAuthenticationConfigurationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingVariable(name) => write!(formatter, "required environment variable {name} is missing"),
-            Self::InvalidVariable(name) => write!(formatter, "environment variable {name} is invalid"),
-            Self::InvalidSecret => formatter.write_str("authentication secret configuration is invalid"),
-            Self::InvalidPublicConfiguration => formatter.write_str("public authentication configuration is invalid"),
+            Self::MissingVariable(name) => {
+                write!(formatter, "required environment variable {name} is missing")
+            }
+            Self::InvalidVariable(name) => {
+                write!(formatter, "environment variable {name} is invalid")
+            }
+            Self::InvalidSecret => {
+                formatter.write_str("authentication secret configuration is invalid")
+            }
+            Self::InvalidPublicConfiguration => {
+                formatter.write_str("public authentication configuration is invalid")
+            }
         }
     }
 }

@@ -1,9 +1,9 @@
+use ensambria_shared_cache::TtlCache;
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashSet;
 use sqlx::{PgPool, types::Json};
+use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use ensambria_shared_cache::TtlCache;
 
 use uuid::Uuid;
 
@@ -19,7 +19,10 @@ impl ProductCatalog {
     }
 
     pub fn with_cache(pool: PgPool, cache: TtlCache) -> Self {
-        Self { pool, cache: Some(cache) }
+        Self {
+            pool,
+            cache: Some(cache),
+        }
     }
 
     pub async fn get_active_product(
@@ -34,8 +37,16 @@ impl ProductCatalog {
         .await
         .map_err(|_| ProductCatalogError::Storage)?;
 
-        let Some((id, key, display_name, brand_name, version, schema_version, configuration, published_at_epoch)) =
-            product
+        let Some((
+            id,
+            key,
+            display_name,
+            brand_name,
+            version,
+            schema_version,
+            configuration,
+            published_at_epoch,
+        )) = product
         else {
             return Ok(None);
         };
@@ -204,11 +215,11 @@ impl ProductCatalog {
             version,
             schema_version,
             canonical_json: configuration.0,
-            published_at: published_at.map(|epoch| UNIX_EPOCH + Duration::from_secs(epoch.max(0) as u64)),
+            published_at: published_at
+                .map(|epoch| UNIX_EPOCH + Duration::from_secs(epoch.max(0) as u64)),
         }))
     }
 }
-
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -276,7 +287,10 @@ fn validate_product_configuration(
         .map_err(|_| ProductCatalogError::InvalidConfiguration)?;
 
     if let Some(branding) = configuration.branding {
-        for name in [branding.display_name, branding.brand_name].into_iter().flatten() {
+        for name in [branding.display_name, branding.brand_name]
+            .into_iter()
+            .flatten()
+        {
             let length = name.chars().count();
             if !(1..=160).contains(&length) {
                 return Err(ProductCatalogError::InvalidConfiguration);
@@ -295,8 +309,8 @@ fn validate_product_configuration(
     if let Some(domains) = configuration.domains {
         let mut normalized_domains = HashSet::with_capacity(domains.len());
         for domain in domains {
-            let normalized = normalize_domain(&domain)
-                .map_err(|_| ProductCatalogError::InvalidConfiguration)?;
+            let normalized =
+                normalize_domain(&domain).map_err(|_| ProductCatalogError::InvalidConfiguration)?;
             if normalized != domain || !normalized_domains.insert(normalized) {
                 return Err(ProductCatalogError::InvalidConfiguration);
             }
@@ -308,9 +322,15 @@ fn validate_product_configuration(
         for market in markets {
             let locale_length = market.locale.chars().count();
             if market.country_code.len() != 2
-                || !market.country_code.bytes().all(|byte| byte.is_ascii_uppercase())
+                || !market
+                    .country_code
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase())
                 || market.currency_code.len() != 3
-                || !market.currency_code.bytes().all(|byte| byte.is_ascii_uppercase())
+                || !market
+                    .currency_code
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase())
                 || !(2..=35).contains(&locale_length)
                 || !unique_markets.insert((
                     market.country_code,
@@ -356,9 +376,7 @@ fn valid_contract_code(value: &str, maximum_length: usize) -> bool {
     matches!(bytes.next(), Some(first) if first.is_ascii_lowercase())
         && (2..=maximum_length).contains(&value.len())
         && bytes.all(|byte| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(byte, b'_' | b'.' | b'-')
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'.' | b'-')
         })
 }
 
@@ -368,17 +386,11 @@ fn normalize_domain(domain: &str) -> Result<String, ProductCatalogError> {
         || value.len() > 253
         || !value.is_ascii()
         || value.bytes().any(|byte| {
-            !(byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || byte == b'.'
-                || byte == b'-')
+            !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'.' || byte == b'-')
         })
         || !value.contains('.')
         || value.split('.').any(|label| {
-            label.is_empty()
-                || label.len() > 63
-                || label.starts_with('-')
-                || label.ends_with('-')
+            label.is_empty() || label.len() > 63 || label.starts_with('-') || label.ends_with('-')
         })
     {
         return Err(ProductCatalogError::InvalidDomain);
@@ -453,7 +465,9 @@ impl std::fmt::Display for ProductCatalogError {
         formatter.write_str(match self {
             Self::InvalidDomain => "product domain is invalid",
             Self::InvalidConfiguration => "published product configuration is invalid",
-            Self::UnsupportedConfigurationSchema => "product configuration schema version is unsupported",
+            Self::UnsupportedConfigurationSchema => {
+                "product configuration schema version is unsupported"
+            }
             Self::Storage => "PLATFORM product catalogue query failed",
         })
     }
@@ -467,9 +481,18 @@ mod tests {
 
     #[test]
     fn normalizes_ascii_domains_without_accepting_urls_or_paths() {
-        assert_eq!(normalize_domain("  SHOP.Example.COM. ").unwrap(), "shop.example.com");
-        assert_eq!(normalize_domain("https://shop.example.com").unwrap_err(), ProductCatalogError::InvalidDomain);
-        assert_eq!(normalize_domain("shop.example.com/path").unwrap_err(), ProductCatalogError::InvalidDomain);
+        assert_eq!(
+            normalize_domain("  SHOP.Example.COM. ").unwrap(),
+            "shop.example.com"
+        );
+        assert_eq!(
+            normalize_domain("https://shop.example.com").unwrap_err(),
+            ProductCatalogError::InvalidDomain
+        );
+        assert_eq!(
+            normalize_domain("shop.example.com/path").unwrap_err(),
+            ProductCatalogError::InvalidDomain
+        );
     }
 
     #[test]
@@ -494,7 +517,10 @@ mod tests {
                 "contractVersion": "v1"
             }]
         });
-        assert_eq!(validate_product_configuration("product-config.v1", &valid), Ok(()));
+        assert_eq!(
+            validate_product_configuration("product-config.v1", &valid),
+            Ok(())
+        );
         assert_eq!(
             validate_product_configuration("product-config.v2", &valid),
             Err(ProductCatalogError::UnsupportedConfigurationSchema)

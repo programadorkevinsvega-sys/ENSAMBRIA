@@ -53,4 +53,4 @@ $$;
 REVOKE ALL ON FUNCTION core.auth_lookup_pending_identity(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION core.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION core.auth_lookup_pending_identity(text) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_record_security_event(uuid, text, text, uuid, text, uuid, jsonb) TO core_runtime;
+GRANT EXECUTE ON FUNCTION core.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) TO core_runtime;

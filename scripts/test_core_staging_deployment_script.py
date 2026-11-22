@@ -19,6 +19,12 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_email_worker_is_packaged_and_installed_without_auto_enabling(self):
+        self.assertIn("ensambria-core-email-worker.service", self.script_source)
+        self.assertIn("core-email-worker", self.script_source)
+        self.assertIn("email-worker.env", self.script_source)
+        self.assertNotIn('systemctl enable "$email_worker_service_name"', self.script_source)
+
     def test_embedded_python_syntax(self):
         start_marker = "| python3 -c '\n"
         end_marker = "\n'; then"

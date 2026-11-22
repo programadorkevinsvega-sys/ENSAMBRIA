@@ -140,6 +140,32 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
 
 
 #[derive(Clone, Default)]
+struct FailingEmailDelivery;
+
+impl EmailDelivery for FailingEmailDelivery {
+    fn send<'a>(
+        &'a self,
+        _message: EmailMessage,
+    ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
+        Box::pin(std::future::ready(Err(EmailDeliveryError)))
+    }
+}
+
+fn failing_authentication_service(
+    pool: PgPool,
+) -> AuthenticationService<FailingEmailDelivery> {
+    let protector = Aes256GcmSecretProtector::new("test-kms-v1".into(), &[0x42; 32])
+        .expect("test MFA key must be valid");
+    AuthenticationService::new(
+        pool,
+        FailingEmailDelivery,
+        protector,
+        &[0x43; 32],
+        "https://app.example.test".into(),
+    )
+    .expect("test authentication service configuration must be valid")
+}
+
 struct CapturingEmailDelivery {
     messages: Arc<Mutex<Vec<EmailMessage>>>,
 }
@@ -191,6 +217,45 @@ fn authentication_service(
         "https://app.example.test".into(),
     )
     .expect("test authentication service configuration must be valid")
+}
+
+#[tokio::test]
+async fn transactional_email_delivery_failures_are_reported_to_callers() {
+    use ensambria_core::identity_authentication::service::AuthenticationError;
+
+    let pool = test_pool().await;
+    let failing_service = failing_authentication_service(pool.clone());
+    let registration_email = format!("{}@example.test", Uuid::now_v7());
+
+    assert!(matches!(
+        failing_service
+            .register(&registration_email, Some("Delivery Failure Test"), "correct horse battery staple")
+            .await,
+        Err(AuthenticationError::EmailDelivery)
+    ));
+    assert!(matches!(
+        failing_service.resend_verification(&registration_email).await,
+        Err(AuthenticationError::EmailDelivery)
+    ));
+
+    let capture = CapturingEmailDelivery::default();
+    let working_service = authentication_service(pool.clone(), capture.clone());
+    let recovery_email = format!("{}@example.test", Uuid::now_v7());
+    working_service
+        .register(&recovery_email, Some("Recovery Delivery Test"), "correct horse battery staple")
+        .await
+        .expect("registration email must be captured");
+    let verification_token = capture.token_from_latest_message("verify-email?token=");
+    working_service
+        .verify_email(&verification_token)
+        .await
+        .expect("captured verification token must activate the identity");
+
+    assert!(matches!(
+        failing_service.request_recovery(&recovery_email).await,
+        Err(AuthenticationError::EmailDelivery)
+    ));
+    pool.close().await;
 }
 
 #[tokio::test]

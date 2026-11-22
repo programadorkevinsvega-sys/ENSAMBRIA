@@ -251,6 +251,7 @@ GRANT SELECT, INSERT, UPDATE ON
     core.membership_role_assignments,
     core.tenant_products
 TO core_runtime;
+GRANT DELETE ON core.organizations, core.branches TO core_runtime;
 GRANT SELECT ON core.permissions TO core_runtime;
 GRANT SELECT, INSERT ON core.security_audit_events TO core_runtime;
 

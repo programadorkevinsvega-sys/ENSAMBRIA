@@ -6,7 +6,7 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
-argon2 = { version = "0.6.0", default-features = false, features = ["zeroize"] }
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "zeroize"] }
 base64 = "0.22.1"
 ring = "0.17.14"
 subtle = "2.6.1"

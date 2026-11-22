@@ -17,7 +17,7 @@ impl PlatformProductPolicy {
     /// connection/configuration failures leave PostgreSQL as the authoritative fallback.
     pub async fn from_env(pool: PgPool) -> Self {
         let catalog = match std::env::var("PLATFORM_REDIS_URL") {
-            Ok(redis_url) => match TtlCache::connect(&redis_url, "platform").await {
+            Ok(_) => match TtlCache::connect_from_env("platform").await {
                 Ok(cache) => ProductCatalog::with_cache(pool.clone(), cache),
                 Err(_) => {
                     tracing::warn!(

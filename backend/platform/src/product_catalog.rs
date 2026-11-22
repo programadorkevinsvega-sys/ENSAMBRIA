@@ -1,4 +1,6 @@
+use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashSet;
 use sqlx::{PgPool, types::Json};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -96,6 +98,7 @@ impl ProductCatalog {
         )
         .collect();
 
+        validate_product_configuration(&schema_version, &configuration.0)?;
         Ok(Some(ProductCatalogEntry {
             product_id: id,
             product_key: key,
@@ -143,16 +146,159 @@ impl ProductCatalog {
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| ProductCatalogError::Storage)?;
-        Ok(configuration.map(|(schema_version, configuration, published_at)| {
-            ProductConfiguration {
-                product_id,
-                version,
-                schema_version,
-                canonical_json: configuration.0,
-                published_at: published_at.map(|epoch| UNIX_EPOCH + Duration::from_secs(epoch.max(0) as u64)),
-            }
+        let Some((schema_version, configuration, published_at)) = configuration else {
+            return Ok(None);
+        };
+        validate_product_configuration(&schema_version, &configuration.0)?;
+        Ok(Some(ProductConfiguration {
+            product_id,
+            version,
+            schema_version,
+            canonical_json: configuration.0,
+            published_at: published_at.map(|epoch| UNIX_EPOCH + Duration::from_secs(epoch.max(0) as u64)),
         }))
     }
+}
+
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ProductConfigurationV1 {
+    branding: Option<ProductBrandingV1>,
+    domains: Option<Vec<String>>,
+    markets: Option<Vec<ProductMarketV1>>,
+    surfaces: Option<Vec<ProductSurfaceV1>>,
+    capabilities: Option<Vec<ProductCapabilityV1>>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ProductBrandingV1 {
+    display_name: Option<String>,
+    brand_name: Option<String>,
+    logo_uri: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ProductMarketV1 {
+    country_code: String,
+    currency_code: String,
+    locale: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ProductSurfaceV1 {
+    code: String,
+    configuration_version: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ProductCapabilityV1 {
+    code: String,
+    contract_version: String,
+}
+
+fn validate_product_configuration(
+    schema_version: &str,
+    value: &Value,
+) -> Result<(), ProductCatalogError> {
+    if schema_version != "product-config.v1" {
+        return Err(ProductCatalogError::UnsupportedConfigurationSchema);
+    }
+    if !value.is_object() {
+        return Err(ProductCatalogError::InvalidConfiguration);
+    }
+    let configuration: ProductConfigurationV1 = serde_json::from_value(value.clone())
+        .map_err(|_| ProductCatalogError::InvalidConfiguration)?;
+
+    if let Some(branding) = configuration.branding {
+        for name in [branding.display_name, branding.brand_name].into_iter().flatten() {
+            let length = name.chars().count();
+            if !(1..=160).contains(&length) {
+                return Err(ProductCatalogError::InvalidConfiguration);
+            }
+        }
+        if let Some(logo_uri) = branding.logo_uri {
+            let length = logo_uri.chars().count();
+            let uri = http::Uri::try_from(logo_uri.as_str())
+                .map_err(|_| ProductCatalogError::InvalidConfiguration)?;
+            if length > 2048 || uri.scheme().is_none() || uri.authority().is_none() {
+                return Err(ProductCatalogError::InvalidConfiguration);
+            }
+        }
+    }
+
+    if let Some(domains) = configuration.domains {
+        let mut normalized_domains = HashSet::with_capacity(domains.len());
+        for domain in domains {
+            let normalized = normalize_domain(&domain)
+                .map_err(|_| ProductCatalogError::InvalidConfiguration)?;
+            if normalized != domain || !normalized_domains.insert(normalized) {
+                return Err(ProductCatalogError::InvalidConfiguration);
+            }
+        }
+    }
+
+    if let Some(markets) = configuration.markets {
+        let mut unique_markets = HashSet::with_capacity(markets.len());
+        for market in markets {
+            let locale_length = market.locale.chars().count();
+            if market.country_code.len() != 2
+                || !market.country_code.bytes().all(|byte| byte.is_ascii_uppercase())
+                || market.currency_code.len() != 3
+                || !market.currency_code.bytes().all(|byte| byte.is_ascii_uppercase())
+                || !(2..=35).contains(&locale_length)
+                || !unique_markets.insert((
+                    market.country_code,
+                    market.currency_code,
+                    market.locale,
+                ))
+            {
+                return Err(ProductCatalogError::InvalidConfiguration);
+            }
+        }
+    }
+
+    if let Some(surfaces) = configuration.surfaces {
+        let mut unique_surfaces = HashSet::with_capacity(surfaces.len());
+        for surface in surfaces {
+            if !valid_contract_code(&surface.code, 64)
+                || surface.configuration_version == 0
+                || !unique_surfaces.insert((surface.code, surface.configuration_version))
+            {
+                return Err(ProductCatalogError::InvalidConfiguration);
+            }
+        }
+    }
+
+    if let Some(capabilities) = configuration.capabilities {
+        let mut unique_capabilities = HashSet::with_capacity(capabilities.len());
+        for capability in capabilities {
+            let version_length = capability.contract_version.chars().count();
+            if !valid_contract_code(&capability.code, 120)
+                || !(1..=64).contains(&version_length)
+                || !unique_capabilities.insert((capability.code, capability.contract_version))
+            {
+                return Err(ProductCatalogError::InvalidConfiguration);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn valid_contract_code(value: &str, maximum_length: usize) -> bool {
+    let mut bytes = value.bytes();
+    matches!(bytes.next(), Some(first) if first.is_ascii_lowercase())
+        && (1..maximum_length).contains(&value.len())
+        && bytes.all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'_' | b'.' | b'-')
+        })
 }
 
 fn normalize_domain(domain: &str) -> Result<String, ProductCatalogError> {
@@ -236,6 +382,8 @@ pub struct ProductCapability {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ProductCatalogError {
     InvalidDomain,
+    InvalidConfiguration,
+    UnsupportedConfigurationSchema,
     Storage,
 }
 
@@ -243,6 +391,8 @@ impl std::fmt::Display for ProductCatalogError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(match self {
             Self::InvalidDomain => "product domain is invalid",
+            Self::InvalidConfiguration => "published product configuration is invalid",
+            Self::UnsupportedConfigurationSchema => "product configuration schema version is unsupported",
             Self::Storage => "PLATFORM product catalogue query failed",
         })
     }

@@ -27,9 +27,10 @@ async fn test_pool() -> PgPool {
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("isolated PostgreSQL migration URL must be configured");
     let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
-    run_core_migrations_from_path(&migration_url, &migrations)
-        .await
-        .expect("CORE migrations must apply with the restricted migration identity");
+    if let Err(error) = run_core_migrations_from_path(&migration_url, &migrations).await {
+        let source = std::error::Error::source(&error).map(|source| format!("{source:?}"));
+        panic!("CORE migrations must apply with the restricted migration identity: {error:?}; source={source:?}");
+    }
     let database_url = std::env::var("CORE_TEST_DATABASE_URL")
         .expect("isolated PostgreSQL runtime URL must be configured");
     let options =

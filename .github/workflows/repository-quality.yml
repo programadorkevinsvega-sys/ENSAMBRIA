@@ -268,10 +268,10 @@ jobs:
           '
           docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
             psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_runtime LOGIN PASSWORD '''ensambria-ci-only''';"
+            -c "CREATE ROLE core_runtime LOGIN PASSWORD 'ensambria-ci-only';"
           docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
             psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_runtime LOGIN PASSWORD '''ensambria-ci-only''';"
+            -c "CREATE ROLE business_runtime LOGIN PASSWORD 'ensambria-ci-only';"
 
       - name: Build the actual BUSINESS HTTP runtime
         run: cargo build --locked -p ensambria-business --bin business

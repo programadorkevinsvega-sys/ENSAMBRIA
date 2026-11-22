@@ -17,6 +17,7 @@ use lettre::{
     transport::smtp::authentication::Credentials,
 };
 use sqlx::{PgPool, Row};
+use ensambria_shared_cache::TtlCache;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -156,6 +157,7 @@ pub struct AuthenticationService<D: EmailDelivery> {
     mfa_protector: Aes256GcmSecretProtector,
     rate_limit_key: hmac::Key,
     public_base_url: String,
+    rate_limit_cache: Option<TtlCache>,
 }
 
 impl<D: EmailDelivery> AuthenticationService<D> {
@@ -178,7 +180,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             mfa_protector,
             rate_limit_key: hmac::Key::new(hmac::HMAC_SHA256, rate_limit_secret),
             public_base_url: public_base_url.trim_end_matches('/').to_owned(),
+            rate_limit_cache: None,
         })
+    }
+
+    pub fn with_rate_limit_cache(mut self, cache: TtlCache) -> Self {
+        self.rate_limit_cache = Some(cache);
+        self
     }
 
     pub async fn register(
@@ -982,6 +990,14 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     ) -> Result<(), AuthenticationError> {
         let input = format!("{action}:{subject}");
         let digest = hmac::sign(&self.rate_limit_key, input.as_bytes());
+        if let Some(cache) = &self.rate_limit_cache {
+            let key = digest.as_ref().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+            match cache.consume_rate_limit(&format!("{action}:{key}"), RATE_WINDOW_SECONDS as u64, RATE_MAX_ATTEMPTS as u64, RATE_BLOCK_SECONDS as u64).await {
+                Ok(true) => return Ok(()),
+                Ok(false) => return Err(AuthenticationError::RateLimited),
+                Err(error) => tracing::warn!(event = "auth.rate_limit.redis_fallback", error = %error, fallback = "postgres"),
+            }
+        }
         let allowed: bool =
             sqlx::query_scalar("SELECT core.auth_consume_rate_limit($1, $2, $3, $4, $5)")
                 .bind(digest.as_ref())

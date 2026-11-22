@@ -40,15 +40,18 @@ const preAllocatedVUs = positiveNumber('PREALLOCATED_VUS');
 const maxVUs = positiveNumber('MAX_VUS');
 const p95Threshold = positiveNumber('P95_THRESHOLD_MS');
 const p99Threshold = positiveNumber('P99_THRESHOLD_MS');
-const errorRateThreshold = positiveNumber('ERROR_RATE_THRESHOLD');
+const errorRateThreshold = Number(required('ERROR_RATE_THRESHOLD'));
 const duration = required('DURATION');
 
 if (!Number.isInteger(rate) || !Number.isInteger(preAllocatedVUs) ||
     !Number.isInteger(maxVUs) || maxVUs < preAllocatedVUs) {
   throw new Error('ARRIVAL_RATE, PREALLOCATED_VUS, and MAX_VUS must be valid integers; MAX_VUS must be >= PREALLOCATED_VUS');
 }
-if (errorRateThreshold >= 1) {
-  throw new Error('ERROR_RATE_THRESHOLD must be a fraction between 0 and 1');
+if (!Number.isFinite(errorRateThreshold) || errorRateThreshold < 0 || errorRateThreshold >= 1) {
+  throw new Error('ERROR_RATE_THRESHOLD must be a fraction >= 0 and < 1');
+}
+if (p99Threshold < p95Threshold) {
+  throw new Error('P99_THRESHOLD_MS must be >= P95_THRESHOLD_MS');
 }
 if (!/^\d+(\.\d+)?(ms|s|m|h)$/.test(duration)) {
   throw new Error('DURATION must be an explicit k6 duration such as 30s or 5m');
@@ -72,7 +75,7 @@ export const options = {
     },
   },
   thresholds: {
-    http_req_failed: [`rate<${errorRateThreshold}`],
+    http_req_failed: [`rate<=${errorRateThreshold}`],
     http_req_duration: [`p(95)<${p95Threshold}`, `p(99)<${p99Threshold}`],
     functional_request_failures: [`rate<${errorRateThreshold}`],
     functional_request_latency: [`p(95)<${p95Threshold}`, `p(99)<${p99Threshold}`],

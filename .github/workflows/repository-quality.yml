@@ -296,7 +296,8 @@ jobs:
             for attempt in $(seq 1 60); do
               state="$(redis-cli -p 7005 --raw CLUSTER INFO 2>/dev/null | tr -d "\\r" | grep "^cluster_state:" || true)"
               nodes="$(redis-cli -p 7005 --raw CLUSTER NODES 2>/dev/null || true)"
-              if [ "$state" = "cluster_state:ok" ] && printf "%s\\n" "$nodes" | grep -Eq "172.29.0.25:7005@17005 master"; then
+              myid="$(redis-cli -p 7005 --raw CLUSTER MYID 2>/dev/null || true)"
+              if [ "$state" = "cluster_state:ok" ] && printf "%s\\n" "$nodes" | grep -Eq "^$myid .*master"; then
                 echo "Replica 172.29.0.25:7005 was promoted and cluster state is healthy"
                 promoted=true
                 break

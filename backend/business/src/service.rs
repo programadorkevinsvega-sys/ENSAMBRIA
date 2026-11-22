@@ -27,13 +27,12 @@ impl BusinessService {
         set_tenant(&mut transaction, tenant_id).await?;
         require_active_membership(&mut transaction, identity_id, tenant_id).await?;
         let cache_key = format!("tenant:{tenant_id}:establishments:v1");
-        if let Some(cache) = &self.cache {
-            if let Ok(Some(value)) = cache.get(&cache_key).await {
-                if let Ok(items) = serde_json::from_slice::<Vec<Establishment>>(&value) {
-                    transaction.commit().await.map_err(|_| BusinessError::Storage)?;
-                    return Ok(items);
-                }
-            }
+        if let Some(cache) = &self.cache
+            && let Ok(Some(value)) = cache.get(&cache_key).await
+            && let Ok(items) = serde_json::from_slice::<Vec<Establishment>>(&value)
+        {
+            transaction.commit().await.map_err(|_| BusinessError::Storage)?;
+            return Ok(items);
         }
 
         let rows = sqlx::query_as::<_, Establishment>(

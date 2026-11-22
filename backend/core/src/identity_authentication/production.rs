@@ -5,7 +5,7 @@ use zeroize::Zeroizing;
 
 use super::{
     email_outbox::OutboxEmailDelivery,
-    service::{AuthenticationError, AuthenticationService},
+    service::AuthenticationService,
 };
 use crate::identity_authentication::crypto::secret_encryption::Aes256GcmSecretProtector;
 
@@ -49,7 +49,7 @@ fn decode_hex_secret(
         return Err(ProductionAuthenticationConfigurationError::InvalidSecret);
     }
     let mut decoded = Zeroizing::new(Vec::with_capacity(encoded.len() / 2));
-    for pair in encoded.as_bytes().chunks_exact(2) {
+    for pair in encoded.as_bytes().as_chunks::<2>().0 {
         let high = hex_nibble(pair[0]).ok_or(ProductionAuthenticationConfigurationError::InvalidSecret)?;
         let low = hex_nibble(pair[1]).ok_or(ProductionAuthenticationConfigurationError::InvalidSecret)?;
         decoded.push((high << 4) | low);

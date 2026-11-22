@@ -172,6 +172,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             self.public_base_url,
             token.as_str()
         );
+        self.record_audit(Some(identity_id), "auth.identity.registration_requested", "success", Some("identity"), Some(identity_id))
+            .await?;
         self.email
             .send(EmailMessage {
                 recipient: email,
@@ -241,12 +243,18 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .map_err(|_| AuthenticationError::Storage)?;
 
         let Some((identity_id, encoded, status, verified, locked)) = record else {
+            self.record_audit(None, "auth.login.failed", "failure", None, None)
+                .await?;
             return Err(AuthenticationError::InvalidCredentials);
         };
         if status != "active" || !verified {
+            self.record_audit(Some(identity_id), "auth.login.denied", "denied", Some("identity"), Some(identity_id))
+                .await?;
             return Err(AuthenticationError::InvalidCredentials);
         }
         if locked {
+            self.record_audit(Some(identity_id), "auth.login.locked", "denied", Some("identity"), Some(identity_id))
+                .await?;
             return Err(AuthenticationError::TemporarilyLocked);
         }
         let verifier =
@@ -258,6 +266,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                     .fetch_one(&self.pool)
                     .await
                     .map_err(|_| AuthenticationError::Storage)?;
+            self.record_audit(Some(identity_id), "auth.login.failed", "failure", Some("identity"), Some(identity_id))
+                .await?;
             return Err(AuthenticationError::InvalidCredentials);
         }
 
@@ -291,6 +301,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             if !issued {
                 return Err(AuthenticationError::Storage);
             }
+            self.record_audit(Some(identity_id), "auth.login.mfa_challenge", "success", Some("identity"), Some(identity_id))
+                .await?;
             return Ok(LoginOutcome::MfaRequired {
                 challenge_token: challenge.as_str().to_owned(),
             });
@@ -534,7 +546,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
-        identity.ok_or(AuthenticationError::InvalidRecoveryToken)
+        let identity = identity.ok_or(AuthenticationError::InvalidRecoveryToken)?;
+        self.record_audit(Some(identity), "auth.recovery.completed", "success", Some("identity"), Some(identity))
+            .await?;
+        Ok(identity)
     }
 
     pub async fn verify_email(&self, token: &str) -> Result<Uuid, AuthenticationError> {
@@ -546,7 +561,10 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|_| AuthenticationError::Storage)?;
-        identity.ok_or(AuthenticationError::InvalidVerificationToken)
+        let identity = identity.ok_or(AuthenticationError::InvalidVerificationToken)?;
+        self.record_audit(Some(identity), "auth.email.verified", "success", Some("identity"), Some(identity))
+            .await?;
+        Ok(identity)
     }
 
     pub async fn begin_totp_enrollment(
@@ -587,6 +605,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.mfa.enrollment_started", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(format!(
             "otpauth://totp/ENSAMBRIA?secret={}&issuer=ENSAMBRIA&algorithm=SHA1&digits=6&period=30",
             secret.base32()
@@ -662,6 +682,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.mfa.enabled", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(recovery_codes)
     }
 
@@ -707,6 +729,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.mfa.disabled", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(())
     }
 
@@ -735,6 +759,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.session.revoked", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(())
     }
 
@@ -759,6 +785,8 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .commit()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
+        self.record_audit(Some(identity_id), "auth.sessions.revoked_all", "success", Some("identity"), Some(identity_id))
+            .await?;
         Ok(())
     }
 
@@ -838,6 +866,31 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             Err(AuthenticationError::RateLimited)
         }
     }
+    async fn record_audit(
+        &self,
+        actor_id: Option<Uuid>,
+        action: &str,
+        outcome: &str,
+        target_type: Option<&str>,
+        target_id: Option<Uuid>,
+    ) -> Result<(), AuthenticationError> {
+        sqlx::query(
+            "SELECT core.auth_record_security_event($1, $2, $3, $4, $5, $6, $7, $8::jsonb)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(actor_id)
+        .bind(action)
+        .bind(outcome)
+        .bind(Uuid::now_v7())
+        .bind(target_type)
+        .bind(target_id)
+        .bind("{}")
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
+        Ok(())
+    }
+
 }
 
 pub enum LoginOutcome {

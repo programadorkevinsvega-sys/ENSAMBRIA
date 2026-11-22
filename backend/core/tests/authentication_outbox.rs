@@ -9,7 +9,7 @@ use ensambria_core::{
     },
 };
 use sqlx::PgPool;
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
 use sqlx::postgres::PgConnectOptions;
 use uuid::Uuid;
 
@@ -99,5 +99,4 @@ async fn registration_and_recovery_are_enqueued_then_delivered_by_the_worker() {
 
     runtime.close().await;
     worker_pool.close().await;
-    let _ = Duration::from_secs(0);
 }

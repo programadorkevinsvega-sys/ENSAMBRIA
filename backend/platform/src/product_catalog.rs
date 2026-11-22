@@ -136,7 +136,7 @@ impl ProductCatalog {
         version: i32,
     ) -> Result<Option<ProductConfiguration>, ProductCatalogError> {
         let configuration = sqlx::query_as::<_, (String, Json<Value>, Option<i64>)>(
-            "SELECT schema_version, configuration, extract(epoch FROM published_at)::bigint FROM platform.product_configurations WHERE product_id = $1 AND version = $2 AND status = 'published'",
+            "SELECT c.schema_version, c.configuration, extract(epoch FROM c.published_at)::bigint FROM platform.product_configurations c JOIN platform.products p ON p.id = c.product_id AND p.status = 'active' WHERE c.product_id = $1 AND c.version = $2 AND c.status = 'published'",
         )
         .bind(product_id)
         .bind(version)

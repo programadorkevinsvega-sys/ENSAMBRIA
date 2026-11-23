@@ -106,7 +106,10 @@ pub async fn publish_pending_once(
         let message_id = event.event_id.to_string();
         match publish_confirmed(jetstream, SUBJECT, &message_id, bytes).await {
             Ok(()) => {
-                if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_PUBACK_EVENT_ID", event.event_id) {
+                if fault_injection_matches(
+                    "ENSAMBRIA_TEST_PAUSE_AFTER_PUBACK_EVENT_ID",
+                    event.event_id,
+                ) {
                     tracing::error!(
                         event_id = %event.event_id,
                         "FAULT_INJECTION: paused after JetStream PubAck and before Outbox published update"

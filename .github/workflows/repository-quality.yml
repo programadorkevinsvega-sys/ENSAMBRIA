@@ -20,8 +20,6 @@ concurrency:
 jobs:
   repository-quality:
     name: repository-quality
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -42,31 +40,9 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo fmt --all -- --check
 
-      - name: Resolve event-bus dependencies and compile workspace
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: cargo check --workspace --all-targets
       - name: Compile Rust workspace (cargo check)
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo check --locked --workspace --all-targets
-      - name: Preserve resolved Cargo lockfile for commit
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
-        with:
-          name: resolved-cargo-lock-${{ github.run_id }}
-          path: Cargo.lock
-          if-no-files-found: error
-          retention-days: 3
-      - name: Commit the generated dependency lockfile
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if ! git diff --quiet -- Cargo.lock; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add Cargo.lock
-            git commit -m "chore(deps): lock CORE PLATFORM JetStream dependencies"
-            git push origin "HEAD:refs/heads/$PR_BRANCH"
-          fi
 
       - name: Lint Rust workspace (cargo clippy)
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
@@ -217,9 +193,6 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
-      - name: Resolve event-bus dependency lock for PostgreSQL integration
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: cargo check --workspace
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
@@ -382,8 +355,6 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal
 
-      - name: Resolve event-bus lockfile before locked Redis builds
-        run: cargo check --workspace
 
       - name: Provision Redis Sentinel and Cluster on the GitHub runner
         run: docker compose -f infra/redis-ha/compose.ci.yml up -d
@@ -604,10 +575,7 @@ jobs:
         with:
           tool: cargo-audit,cargo-deny
 
-      - name: Resolve workspace dependency graph before audit
-        if: steps.cargo_manifests.outputs.present == 'true'
-        run: cargo check --workspace
-      - name: Audit resolved Cargo.lock for vulnerabilities (cargo audit)
+      - name: Audit committed Cargo.lock for vulnerabilities (cargo audit)
         if: steps.cargo_manifests.outputs.present == 'true'
         run: cargo audit
 

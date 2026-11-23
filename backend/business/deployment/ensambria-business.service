@@ -1,6 +1,7 @@
 [Unit]
 Description=ENSAMBRIA BUSINESS HTTP API
 After=network-online.target ensambria-core.service
+Requires=ensambria-core.service
 Wants=network-online.target
 
 [Service]

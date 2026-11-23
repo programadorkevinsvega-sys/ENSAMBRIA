@@ -4,4 +4,4 @@ After=ensambria-core.service ensambria-core-email-worker.service ensambria-busin
 
 [Service]
 Type=oneshot
-ExecStart=/bin/systemctl try-restart ensambria-core.service ensambria-core-email-worker.service ensambria-business.service
+ExecStart=/bin/systemctl restart ensambria-core.service ensambria-core-email-worker.service ensambria-business.service

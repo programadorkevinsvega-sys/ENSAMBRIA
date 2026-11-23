@@ -198,7 +198,7 @@ jobs:
         run: cargo test --locked --workspace
       - name: Start real NATS JetStream cluster for CORE to PLATFORM flow
         run: docker compose -f infra/nats/compose.ci.yml up -d --wait
-      - name: Verify CORE Outbox relay to PLATFORM Inbox end to end
+      - name: Verify CORE to PLATFORM redelivery and crash recovery end to end
         env:
           ENSAMBRIA_NATS_URL: nats://127.0.0.1:4222
         run: bash scripts/ci/check-core-platform-tenant-onboarding.sh

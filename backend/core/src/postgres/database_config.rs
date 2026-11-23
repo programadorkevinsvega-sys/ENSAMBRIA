@@ -237,7 +237,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn rejects_invalid_pool_settings_by_name_without_echoing_values() {
         let result = PgDatabaseConfiguration::from_values(|name| match name {

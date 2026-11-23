@@ -1,5 +1,5 @@
 use crate::tenant_onboarding::{TenantCreatedEvent, TenantOnboardingOutcome, apply_tenant_created};
-use ensambria_event_bus::{async_nats::jetstream::consumer::AckPolicy, jetstream::Context};
+use ensambria_event_bus::{async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy}, jetstream::Context};
 use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
 use serde::Deserialize;
@@ -8,7 +8,7 @@ use std::{env, error::Error, time::Duration};
 use uuid::Uuid;
 
 const STREAM: &str = "ENSAMBRIA";
-const DURABLE: &str = "platform-tenant-onboarding";
+const DEFAULT_DURABLE: &str = "platform-tenant-onboarding";
 const SUBJECT: &str = "ensambria.core.tenant.created.v1";
 
 #[derive(Deserialize)]
@@ -37,10 +37,7 @@ impl TenantCreatedEnvelope {
         let tenant_id = self.tenant_id.to_string();
         let payload_tenant_id = self.payload.get("tenantId").and_then(|v| v.as_str());
         let payload_product_id = self.payload.get("productId").and_then(|v| v.as_str());
-        let payload_config_version = self
-            .payload
-            .get("productConfigVersion")
-            .and_then(|v| v.as_i64());
+        let payload_config_version = self.payload.get("productConfigVersion").and_then(|v| v.as_i64());
         let product_id = payload_product_id
             .and_then(|value| Uuid::parse_str(value).ok())
             .ok_or("invalid product ID in tenant-created payload")?;
@@ -86,45 +83,45 @@ pub async fn consume_one(
     jetstream: &Context,
 ) -> Result<TenantOnboardingOutcome, Box<dyn Error + Send + Sync>> {
     let stream = jetstream.get_stream(STREAM).await?;
-    let consumer = stream
-        .get_or_create_consumer(
-            DURABLE,
-            ensambria_event_bus::async_nats::jetstream::consumer::pull::Config {
-                durable_name: Some(DURABLE.to_owned()),
-                filter_subject: SUBJECT.to_owned(),
-                ack_policy: AckPolicy::Explicit,
-                ack_wait: configured_ack_wait(),
-                max_deliver: 12,
-                max_ack_pending: 100,
-                ..Default::default()
-            },
-        )
-        .await?;
+    let durable = env::var("PLATFORM_TENANT_ONBOARDING_DURABLE")
+        .unwrap_or_else(|_| DEFAULT_DURABLE.to_owned());
+    let start_sequence = env::var("PLATFORM_TENANT_ONBOARDING_START_SEQUENCE")
+        .ok()
+        .map(|value| value.parse::<u64>())
+        .transpose()?;
+    let mut config = ensambria_event_bus::async_nats::jetstream::consumer::pull::Config {
+        durable_name: Some(durable),
+        filter_subject: SUBJECT.to_owned(),
+        ack_policy: AckPolicy::Explicit,
+        ack_wait: configured_ack_wait(),
+        max_deliver: 12,
+        max_ack_pending: 100,
+        ..Default::default()
+    };
+    if let Some(sequence) = start_sequence {
+        if sequence == 0 {
+            return Err("PLATFORM_TENANT_ONBOARDING_START_SEQUENCE must be greater than zero".into());
+        }
+        config.deliver_policy = DeliverPolicy::ByStartSequence;
+        config.opt_start_seq = Some(sequence);
+    }
+    let consumer = stream.get_or_create_consumer(
+        config.durable_name.as_deref().unwrap_or(DEFAULT_DURABLE),
+        config,
+    ).await?;
     let mut messages = consumer.messages().await?;
-    let message = messages
-        .next()
-        .await
-        .ok_or("JetStream consumer ended without a message")??;
+    let message = messages.next().await.ok_or("JetStream consumer ended without a message")??;
     let envelope: TenantCreatedEnvelope = serde_json::from_slice(&message.payload)?;
-    let event = envelope
-        .into_event(&message.payload)
-        .map_err(std::io::Error::other)?;
+    let event = envelope.into_event(&message.payload).map_err(std::io::Error::other)?;
     if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event.event_id) {
-        tracing::error!(
-            event_id = %event.event_id,
-            "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction"
-        );
+        tracing::error!(event_id = %event.event_id, "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction");
         tokio::time::sleep(Duration::from_secs(60)).await;
     }
     let outcome = apply_tenant_created(pool, &event).await?;
     if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event.event_id) {
-        tracing::error!(
-            event_id = %event.event_id,
-            "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK"
-        );
+        tracing::error!(event_id = %event.event_id, "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK");
         tokio::time::sleep(Duration::from_secs(60)).await;
     }
-    // ACK only after Inbox + onboarding have committed in PostgreSQL.
     message.ack().await?;
     Ok(outcome)
 }
@@ -132,9 +129,7 @@ pub async fn consume_one(
 pub async fn run(pool: PgPool, jetstream: Context) -> Result<(), Box<dyn Error + Send + Sync>> {
     loop {
         match consume_one(&pool, &jetstream).await {
-            Ok(outcome) => {
-                tracing::info!(?outcome, "PLATFORM tenant event committed and ACKed")
-            }
+            Ok(outcome) => tracing::info!(?outcome, "PLATFORM tenant event committed and ACKed"),
             Err(error) => {
                 tracing::error!(error = %error, "PLATFORM tenant consumer iteration failed");
                 tokio::time::sleep(Duration::from_secs(2)).await;

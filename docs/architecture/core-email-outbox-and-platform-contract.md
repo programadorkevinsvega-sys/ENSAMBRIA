@@ -52,6 +52,10 @@ Worker environment file: `/etc/apps/ensambria/core/email-worker.env`, owned by r
 - `CORE_SMTP_PASSWORD`
 - `CORE_SMTP_FROM`
 
+The staging provider is Resend over SMTP; no provider-specific Rust SDK is required because the worker already uses the generic Lettre STARTTLS transport. Configure `smtp.resend.com`, port `587`, username `resend`, and a Resend API key as the SMTP password. Port 587 is intentional: the worker uses STARTTLS, while Resend's port 465 is implicit TLS and is not compatible with this STARTTLS transport. Create a Resend API key with sending permission limited to the verified sender domain, and set `CORE_SMTP_FROM` to an address on that verified domain.
+
+Add the sending-domain records shown by Resend to the authoritative Cloudflare DNS zone, preserving each record's exact name and value. Do not change the registrar at IONOS or replace Cloudflare nameservers for this integration. Do not overwrite existing root MX records used to receive mail. If an SPF TXT record already exists at a hostname where Resend asks for one, merge the authorized senders into a single SPF policy rather than publishing multiple SPF records. Keep provider-specific MX/SPF records on the return-path hostname Resend specifies. Verify the domain in Resend before enabling the worker.
+
 The worker validates the SMTP configuration at startup and uses STARTTLS. Missing SMTP credentials mean delivery is not configured; CI's fake transport does not prove real provider delivery. After provisioning the secret file, an operator can enable and start `ensambria-core-email-worker.service`.
 
 Messages are claimed with row locks and expiring leases, so crashed workers do not strand jobs. Failures are retried with exponential backoff, up to ten attempts; exhausted messages become `dead` for operator inspection. Delivery is at-least-once: a crash after SMTP accepts a message but before the database marks it sent can cause a duplicate. Message bodies contain short-lived links and are scrubbed after success or terminal failure; database access to the outbox must remain restricted.

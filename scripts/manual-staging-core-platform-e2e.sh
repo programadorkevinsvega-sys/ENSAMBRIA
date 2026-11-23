@@ -9,7 +9,7 @@ usage() {
 Usage:
   ENSAMBRIA_STAGING_SSH_TARGET=user@staging-host \
   ENSAMBRIA_STAGING_ENV_FILE=/etc/apps/ensambria/e2e-staging.env \
-    scripts/manual-staging-core-platform-e2e.sh
+    bash scripts/manual-staging-core-platform-e2e.sh
 
 Required local settings:
   ENSAMBRIA_STAGING_SSH_TARGET  SSH destination (user@host or SSH config alias)
@@ -35,7 +35,6 @@ command -v ssh >/dev/null || fail "ssh is required"
 command -v scp >/dev/null || fail "scp is required"
 command -v tar >/dev/null || fail "tar is required"
 [[ -f Cargo.toml && -d backend/core && -d backend/platform ]] || fail "run from the ENSAMBRIA repository root"
-[[ -f "${ENSAMBRIA_STAGING_ENV_FILE}" ]] || fail "remote env-file path is not configured (it must exist on the VM)"
 [[ -f scripts/manual-staging-core-platform-e2e-remote.sh ]] || fail "remote runner is missing"
 printf 'This will create one real tenant and Outbox event in STAGING, publish to the real staging JetStream, and write PLATFORM Inbox/onboarding rows. It will not restart shared infrastructure or systemd services.\n'
 read -r -p 'Type RUN-STAGING-E2E to continue: ' confirmation
@@ -60,5 +59,19 @@ ssh "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET" \
   "umask 077 && mkdir -p '$remote_dir' && chmod 700 '$remote_dir'"
 scp "${ssh_opts[@]}" "$archive" "$ENSAMBRIA_STAGING_SSH_TARGET:$remote_dir/source.tar.gz"
 printf 'Uploading source snapshot to staging host; no service or infrastructure is restarted.\n'
-ssh -tt "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET" \
-  "tar -xzf '$remote_dir/source.tar.gz' -C '$remote_dir' && ENSAMBRIA_STAGING_EXPECTED_HOSTNAME='${ENSAMBRIA_STAGING_EXPECTED_HOSTNAME:-}' bash '$remote_dir/scripts/manual-staging-core-platform-e2e-remote.sh' '$remote_dir' '$ENSAMBRIA_STAGING_ENV_FILE'; status=\$?; rm -rf '$remote_dir'; exit \$status"
+if ssh -tt "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET" \
+  "tar -xzf '$remote_dir/source.tar.gz' -C '$remote_dir' && ENSAMBRIA_STAGING_EXPECTED_HOSTNAME='${ENSAMBRIA_STAGING_EXPECTED_HOSTNAME:-}' bash '$remote_dir/scripts/manual-staging-core-platform-e2e-remote.sh' '$remote_dir' '$ENSAMBRIA_STAGING_ENV_FILE'; status=\$?; if [[ -f '$remote_dir/.manual-staging-e2e/report.txt' ]]; then cp '$remote_dir/.manual-staging-e2e/report.txt' '$remote_dir/report.txt'; fi; exit \$status"
+then
+  run_status=0
+else
+  run_status=$?
+fi
+mkdir -p reports/manual-staging-e2e
+local_report="reports/manual-staging-e2e/staging-e2e-$(date -u +%Y%m%dT%H%M%SZ).txt"
+if scp "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET:$remote_dir/report.txt" "$local_report" 2>/dev/null; then
+  printf 'Local report: %s\\n' "$local_report"
+else
+  printf 'WARNING: remote report was not available to copy.\\n' >&2
+fi
+ssh "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET" "rm -rf '$remote_dir'" || true
+exit "$run_status"

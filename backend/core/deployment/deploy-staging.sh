@@ -254,7 +254,7 @@ grep -Fqx 'UnsetEnvironment=DATABASE_URL BUSINESS_DATABASE_URL BUSINESS_DATABASE
 grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
     "${staging_directory}/ensambria-core-email-worker.service" \
     || fail "email worker must use the shared CORE environment file"
-grep -Fqx 'UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL' \
+grep -Fqx 'UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL BUSINESS_DATABASE_URL BUSINESS_DATABASE_MAX_CONNECTIONS BUSINESS_HTTP_LISTEN_ADDRESS ENSAMBRIA_REDIS_REQUIRED' \
     "${staging_directory}/ensambria-core-email-worker.service" \
     || fail "email worker must exclude runtime and migration credentials"
 grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \

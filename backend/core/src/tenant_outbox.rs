@@ -20,6 +20,7 @@ pub enum TenantOutboxError {
 }
 
 /// Appends the tenant-created fact using the caller's existing CORE transaction.
+/// The caller must establish `app.tenant_id` to the new tenant ID before calling.
 /// This function deliberately does not begin or commit a transaction.
 pub async fn enqueue_tenant_created(
     connection: &mut PgConnection,

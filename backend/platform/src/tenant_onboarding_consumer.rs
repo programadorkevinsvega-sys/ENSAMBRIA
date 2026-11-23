@@ -110,8 +110,9 @@ pub async fn consume_one(
                 "PLATFORM_TENANT_ONBOARDING_START_SEQUENCE must be greater than zero".into(),
             );
         }
-        config.deliver_policy = DeliverPolicy::ByStartSequence;
-        config.opt_start_seq = Some(sequence);
+        config.deliver_policy = DeliverPolicy::ByStartSequence {
+            start_sequence: sequence,
+        };
     }
     let consumer = stream.get_or_create_consumer(&durable_name, config).await?;
     let mut messages = consumer.messages().await?;

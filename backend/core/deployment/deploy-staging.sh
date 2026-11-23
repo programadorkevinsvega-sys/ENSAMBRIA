@@ -209,7 +209,7 @@ rollback() {
         curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/health >/dev/null || return 1
     else
         rm -f -- "$current_link"
-        systemctl stop "$service_name" || return 1
+        systemctl stop "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
     fi
 }
 
@@ -236,6 +236,9 @@ for required_file in \
     "${staging_directory}/ensambria-core.service" \
     "${staging_directory}/ensambria-core-migrate.service" \
     "${staging_directory}/ensambria-core-email-worker.service" \
+    "${staging_directory}/ensambria-business.service" \
+    "${staging_directory}/ensambria-env-reload.service" \
+    "${staging_directory}/ensambria-env-reload.path" \
     "${staging_directory}/core-staging.tar.gz"
 do
     [[ -s "$required_file" ]] || fail "required deployment file is missing"

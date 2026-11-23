@@ -81,7 +81,7 @@ jobs:
           test -n "$(find "$artifacts/migrations" -type f -name '*.sql' -print -quit)"
           test -n "$(find "$artifacts/business-migrations" -type f -name '*.sql' -print -quit)"
           tar --create --gzip --file "$package" --directory "$artifacts" \
-            core core-migrate core-email-worker business migrations business-migrations
+            core core-migrate core-email-worker business business-migrate migrations business-migrations
           echo "path=$package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings

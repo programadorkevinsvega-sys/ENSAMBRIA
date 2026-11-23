@@ -50,10 +50,7 @@ pub async fn publish_pending_once(
     batch_size: i64,
 ) -> Result<usize, Box<dyn Error + Send + Sync>> {
     let mut tx = pool.begin().await?;
-    let rows = sqlx::query_as::<
-        _,
-        (Uuid, String, i32, Uuid, i64, Uuid, Json<Value>, i32, String),
-    >(
+    let rows = sqlx::query_as::<_, (Uuid, String, i32, Uuid, i64, Uuid, Json<Value>, i32, String)>(
         "WITH candidates AS (
             SELECT event_id FROM core.outbox_events
              WHERE (status IN ('pending', 'retry_wait') AND available_at <= clock_timestamp())
@@ -129,8 +126,7 @@ pub async fn publish_pending_once(
                 // Stable per-event jitter spreads retry load without adding a
                 // random-number dependency to the relay worker.
                 let base_delay = (1_i64 << event.attempt_count.min(8)).min(299) as f64;
-                let jitter_millis =
-                    f64::from(event.event_id.as_bytes()[0]) * 1000.0 / 255.0;
+                let jitter_millis = f64::from(event.event_id.as_bytes()[0]) * 1000.0 / 255.0;
                 let delay_seconds = base_delay + jitter_millis / 1000.0;
                 sqlx::query(
                     "UPDATE core.outbox_events

@@ -233,22 +233,22 @@ jobs:
           psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $body$
           BEGIN
-              IF NOT has_table_privilege('core_runtime', 'core.outbox_events', 'INSERT') THEN
+              IF NOT has_table_privilege('core_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
                   RAISE EXCEPTION 'core_runtime must append Outbox rows in the tenant transaction';
               END IF;
-              IF NOT has_table_privilege('core_outbox_relay', 'core.outbox_events', 'SELECT,UPDATE') THEN
+              IF NOT has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'SELECT,UPDATE') THEN
                   RAISE EXCEPTION 'core_outbox_relay must claim and publish Outbox rows';
               END IF;
-              IF has_table_privilege('core_outbox_relay', 'core.outbox_events', 'INSERT') THEN
+              IF has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
                   RAISE EXCEPTION 'core_outbox_relay must not create business events';
               END IF;
-              IF NOT has_table_privilege('platform_event_consumer', 'platform.inbox_messages', 'INSERT,UPDATE,SELECT') THEN
+              IF NOT has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'inbox_messages'), 'INSERT,UPDATE,SELECT') THEN
                   RAISE EXCEPTION 'platform_event_consumer must maintain Inbox records';
               END IF;
-              IF NOT has_table_privilege('platform_event_consumer', 'platform.tenant_onboardings', 'INSERT,SELECT') THEN
+              IF NOT has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'tenant_onboardings'), 'INSERT,SELECT') THEN
                   RAISE EXCEPTION 'platform_event_consumer must create and inspect onboarding records';
               END IF;
-              IF has_table_privilege('platform_event_consumer', 'platform.tenant_onboardings', 'DELETE') THEN
+              IF has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'tenant_onboardings'), 'DELETE') THEN
                   RAISE EXCEPTION 'platform_event_consumer must not delete onboarding history';
               END IF;
           END

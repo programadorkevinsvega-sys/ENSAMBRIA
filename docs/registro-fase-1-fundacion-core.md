@@ -171,7 +171,7 @@ La evidencia y los criterios completos se mantienen en [contrato Redis](architec
 | CORE Outbox → JetStream | Relay con lease recuperable, PubAck durable y `Nats-Msg-Id=event_id`. | El relay se detiene tras PubAck y antes de marcar `published`; al reiniciar tras expirar el lease, publica el mismo ID y JetStream conserva una sola copia. |
 | JetStream → PLATFORM Inbox | Consumer durable con ACK explícito después del commit PostgreSQL. | Reinicio del clúster JetStream de tres nodos; caída del consumer antes de aplicar y después del commit pero antes del ACK; redelivery del mismo mensaje. |
 | PLATFORM Inbox → onboarding | Inbox, onboarding y estado `applied` en una transacción; colisión de ID diferenciada de duplicado idéntico. | Tras redelivery, outcome `Duplicate`, un Inbox `applied` y exactamente un onboarding `onboarding_pending` ligado al event ID original. |
-| Recuperación/operación | Fault injection opt-in, limitada a procesos de CI mediante variable explícita. | Script `scripts/ci/check-core-platform-tenant-onboarding.sh`, ejecutado dentro del job PostgreSQL con PostgreSQL y JetStream reales. |
+| Recuperación/operación | Fault injection opt-in, compilada solo en builds de depuración y activada en CI mediante variable explícita. | Script `scripts/ci/check-core-platform-tenant-onboarding.sh`, ejecutado dentro del job PostgreSQL con PostgreSQL y JetStream reales. |
 
 La aceptación no declara entrega exactamente-una-vez en el transporte: el transporte puede redeliverar y el relay puede volver a publicar; el efecto de negocio se hace idempotente mediante Inbox/constraints en PLATFORM. No se crean planes, suscripciones, trial, facturas, cobros ni entitlements automáticos.
 

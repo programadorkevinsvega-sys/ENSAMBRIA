@@ -1,6 +1,6 @@
 # ADR-0002: Hecho durable de alta de tenant de CORE a PLATFORM
 
-- **Estado:** flujo base ratificado; implementación CORE→PLATFORM presente en el repositorio; pruebas de redelivery y recuperación integral incorporadas en esta entrega y pendientes de CI/aceptación
+- **Estado:** flujo base ratificado; implementación CORE→PLATFORM y resiliencia integral validadas por CI #400 en HEAD `4c342a350a067889adedc49cc9c274bc0bd17984`, fusionado a `main` en `4fa23605f1d6797bf9ae20b47b2f64ca2b8f82dc`; aceptación formal de subfase pendiente
 - **Fecha:** 2026-11-10
 - **Ámbito:** creación de tenant en CORE y recepción de la solicitud de onboarding por PLATFORM
 - **Requisito:** flujo durable CORE→PLATFORM para cada alta operativa de tenant, implementado en la subfase 1.3 conforme a la secuencia ratificada
@@ -117,4 +117,4 @@ La aceptación de entrega durable se comprueba con el mismo `event_id` y servici
 
 Los puntos de pausa solo existen en builds de depuración y se habilitan mediante `ENSAMBRIA_ENABLE_FAULT_INJECTION=1` y variables de evento explícitas; los binarios de release no ejecutan estos hooks. En CI el script `scripts/ci/check-core-platform-tenant-onboarding.sh` controla los procesos, provoca los cortes y verifica las invariantes SQL. La configuración de fault injection no se activa en el arranque normal.
 
-**Estado de esta entrega:** implementado en la rama de trabajo; **VALIDADO** queda pendiente hasta que el workflow `repository-quality` termine correctamente para el HEAD del PR. No declarar cierre formal de 1.3 sin CI verde, revisión de evidencia y aceptación explícita del propietario.
+**Estado de esta entrega:** **VALIDADO TÉCNICAMENTE**. CI #400 pasó en el HEAD `4c342a350a067889adedc49cc9c274bc0bd17984`; los cinco jobs finalizaron SUCCESS y el step `Verify CORE to PLATFORM redelivery and crash recovery end to end` terminó SUCCESS con el marcador PASS de los escenarios. La entrega está fusionada a `main` mediante `4fa23605f1d6797bf9ae20b47b2f64ca2b8f82dc`. Esto valida la implementación y las pruebas de esta entrega; no constituye por sí solo la aceptación formal ni el cierre de toda la subfase 1.3.

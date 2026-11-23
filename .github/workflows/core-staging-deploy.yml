@@ -156,7 +156,6 @@ jobs:
             "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
 
       - name: Verify BUSINESS runtime on the staging VM
-        env:
         run: |
           # Reuse the existing staging tailnet access established by the deploy job.
           ssh \

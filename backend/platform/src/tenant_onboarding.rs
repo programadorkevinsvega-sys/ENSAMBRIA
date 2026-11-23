@@ -118,9 +118,9 @@ pub async fn apply_tenant_created(
             }
             "quarantined" => {
                 transaction
-        .commit()
-        .await
-        .map_err(|_| TenantOnboardingError::Storage)?;
+                    .commit()
+                    .await
+                    .map_err(|_| TenantOnboardingError::Storage)?;
                 return Ok(TenantOnboardingOutcome::Quarantined);
             }
             "received" => {}
@@ -209,7 +209,10 @@ pub async fn apply_tenant_created(
     .await
     .map_err(|_| TenantOnboardingError::Storage)?;
 
-    transaction.commit().await.map_err(|_| TenantOnboardingError::Storage)?;
+    transaction
+        .commit()
+        .await
+        .map_err(|_| TenantOnboardingError::Storage)?;
     Ok(TenantOnboardingOutcome::Applied)
 }
 

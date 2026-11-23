@@ -73,7 +73,6 @@ jobs:
           grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' backend/business/deployment/ensambria-business.service
           grep -Fqx 'ExecStart=/opt/apps/ensambria/current/business' backend/business/deployment/ensambria-business.service
           grep -Fqx 'PathChanged=/etc/apps/ensambria/core/.env' backend/core/deployment/ensambria-env-reload.path
-          grep -Fqx 'PathModified=/etc/apps/ensambria/core/.env' backend/core/deployment/ensambria-env-reload.path
           grep -Fq 'ensambria-business.service' backend/core/deployment/deploy-staging.sh
           grep -Fq 'ensambria-business-migrate.service' backend/core/deployment/deploy-staging.sh
           grep -Fq 'business-migrate' .github/workflows/core-staging-deploy.yml

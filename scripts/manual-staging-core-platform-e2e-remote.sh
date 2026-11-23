@@ -129,7 +129,7 @@ start_sequence=$((last_sequence + 1))
 durable="manual-staging-e2e-${$}-${RANDOM}"
 export PLATFORM_TENANT_ONBOARDING_DURABLE="$durable"
 export PLATFORM_TENANT_ONBOARDING_START_SEQUENCE="$start_sequence"
-printf 'JETSTREAM_STREAM=ENSAMBRIA\\nJETSTREAM_START_SEQUENCE=%s\\nJETSTREAM_DURABLE=%s\\n' "$start_sequence" "$durable"
+printf 'JETSTREAM_STREAM=ENSAMBRIA\nJETSTREAM_START_SEQUENCE=%s\nJETSTREAM_DURABLE=%s\n' "$start_sequence" "$durable"
 
 e2e_output="$(target/debug/core-tenant-onboarding-e2e)"
 printf '%s\n' "$e2e_output"

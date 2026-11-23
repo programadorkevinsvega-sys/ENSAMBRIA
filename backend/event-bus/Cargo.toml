@@ -1,0 +1,10 @@
+[package]
+name = "ensambria-event-bus"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[dependencies]
+async-nats = "0.53.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

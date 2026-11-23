@@ -31,6 +31,11 @@ CREATE TABLE core.outbox_events (
     ),
     CONSTRAINT outbox_error_shape CHECK (
         status NOT IN ('retry_wait', 'quarantined') OR last_error_code IS NOT NULL
+    ),
+    CONSTRAINT outbox_tenant_created_payload_shape CHECK (
+        payload->>'tenantId' = aggregate_id::text
+        AND payload->>'productId' = product_id::text
+        AND payload->>'productConfigVersion' = product_config_version::text
     )
 );
 

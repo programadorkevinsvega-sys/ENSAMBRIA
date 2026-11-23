@@ -252,6 +252,12 @@ grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
 grep -Fqx 'UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL' \
     "${staging_directory}/ensambria-core-email-worker.service" \
     || fail "email worker must exclude runtime and migration credentials"
+grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
+    "${staging_directory}/ensambria-business.service" \
+    || fail "BUSINESS must use the shared environment file"
+grep -Fqx 'UnsetEnvironment=MIGRATIONS_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
+    "${staging_directory}/ensambria-business.service" \
+    || fail "BUSINESS must exclude migration and email-worker secrets"
 
 ensure_group "$service_group"
 ensure_group "$migrator_group"
@@ -307,8 +313,18 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-core-email-worker.service" \
     /etc/systemd/system/ensambria-core-email-worker.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-business.service" \
+    /etc/systemd/system/ensambria-business.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-env-reload.service" \
+    /etc/systemd/system/ensambria-env-reload.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-env-reload.path" \
+    /etc/systemd/system/ensambria-env-reload.path
 systemctl daemon-reload
-systemctl enable "$service_name"
+systemctl enable "$service_name" "$email_worker_service_name" "$business_service_name" "$env_reload_path_name"
+systemctl enable --now "$env_reload_path_name"
 
 temporary_directory="$(mktemp -d "${release_root}/.incoming.XXXXXX")"
 archive="${staging_directory}/core-staging.tar.gz"
@@ -332,7 +348,8 @@ mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payloa
 chown -R "root:${artifact_group}" "$release_directory"
 chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker" "$release_directory/business"
 chmod 0750 "$release_directory/migrations"
-chmod 0640 "$release_directory"/migrations/*.sql "$release_directory"/business-migrations/*.sql "$release_directory"/business-migrations/bootstrap/*.sql
+find "$release_directory/migrations" "$release_directory/business-migrations" -type d -exec chmod 0750 {} +
+find "$release_directory/migrations" "$release_directory/business-migrations" -type f -name '*.sql' -exec chmod 0640 {} +
 
 previous_release=""
 if [[ -L "$current_link" ]]; then

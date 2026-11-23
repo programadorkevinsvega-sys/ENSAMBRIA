@@ -70,6 +70,13 @@ jobs:
         run: |
           set -euo pipefail
           bash -n backend/core/deployment/deploy-staging.sh
+          grep -Fq 'flock -n 9' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'validate_staging_package.py' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'SHA256SUMS' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'SHA256SUMS' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'scripts/validate_staging_package.py' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'StartLimitBurst=5' backend/business/deployment/ensambria-business.service
+          grep -Fq 'chmod 0550' backend/core/deployment/deploy-staging.sh
           python3 scripts/check_expand_contract_migrations.py backend/core/migrations backend/business/migrations
           python3 -m unittest discover -s scripts -p 'test_staging_package_validation.py'
           python3 -m unittest discover -s scripts -p 'test_expand_contract_migration_policy.py'

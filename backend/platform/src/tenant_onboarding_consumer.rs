@@ -105,10 +105,8 @@ pub async fn consume_one(
         config.deliver_policy = DeliverPolicy::ByStartSequence;
         config.opt_start_seq = Some(sequence);
     }
-    let consumer = stream.get_or_create_consumer(
-        config.durable_name.as_deref().unwrap_or(DEFAULT_DURABLE),
-        config,
-    ).await?;
+    let consumer_name = config.durable_name.clone().unwrap_or_else(|| DEFAULT_DURABLE.to_owned());
+    let consumer = stream.get_or_create_consumer(&consumer_name, config).await?;
     let mut messages = consumer.messages().await?;
     let message = messages.next().await.ok_or("JetStream consumer ended without a message")??;
     let envelope: TenantCreatedEnvelope = serde_json::from_slice(&message.payload)?;

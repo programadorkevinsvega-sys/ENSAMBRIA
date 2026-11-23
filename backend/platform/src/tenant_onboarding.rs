@@ -233,3 +233,15 @@ async fn quarantine(
     .map_err(|_| TenantOnboardingError::Storage)?;
     Ok(())
 }
+
+impl std::fmt::Display for TenantOnboardingError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidEvent => "tenant-created event is invalid",
+            Self::EventIdCollision => "tenant-created event ID collision detected",
+            Self::Storage => "PLATFORM tenant onboarding storage operation failed",
+        })
+    }
+}
+
+impl std::error::Error for TenantOnboardingError {}

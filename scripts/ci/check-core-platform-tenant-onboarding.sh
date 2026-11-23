@@ -2,6 +2,9 @@
 set -euo pipefail
 
 export ENSAMBRIA_NATS_URL="${ENSAMBRIA_NATS_URL:-nats://127.0.0.1:4222}"
+docker compose -f infra/nats/compose.ci.yml exec -T nats-box \
+  nats --server nats://nats-1:4222 stream add ENSAMBRIA \
+  --subjects "ensambria.>" --storage file --replicas 3 --retention limits --defaults
 : "${CORE_TENANT_DATABASE_URL:?CORE_TENANT_DATABASE_URL is required}"
 : "${CORE_OUTBOX_DATABASE_URL:?CORE_OUTBOX_DATABASE_URL is required}"
 : "${PLATFORM_EVENT_DATABASE_URL:?PLATFORM_EVENT_DATABASE_URL is required}"

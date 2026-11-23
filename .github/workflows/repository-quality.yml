@@ -367,6 +367,9 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal
 
+      - name: Resolve event-bus lockfile before locked Redis builds
+        run: cargo check --workspace
+
       - name: Provision Redis Sentinel and Cluster on the GitHub runner
         run: docker compose -f infra/redis-ha/compose.ci.yml up -d
 

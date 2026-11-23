@@ -7,6 +7,7 @@ readonly service_name=ensambria-core.service
 readonly migration_service_name=ensambria-core-migrate.service
 readonly email_worker_service_name=ensambria-core-email-worker.service
 readonly business_service_name=ensambria-business.service
+readonly business_migration_service_name=ensambria-business-migrate.service
 readonly env_reload_path_name=ensambria-env-reload.path
 readonly business_service_user=ensambria-business
 readonly business_service_group=ensambria-business
@@ -237,6 +238,7 @@ for required_file in \
     "${staging_directory}/ensambria-core-migrate.service" \
     "${staging_directory}/ensambria-core-email-worker.service" \
     "${staging_directory}/ensambria-business.service" \
+    "${staging_directory}/ensambria-business-migrate.service" \
     "${staging_directory}/ensambria-env-reload.service" \
     "${staging_directory}/ensambria-env-reload.path" \
     "${staging_directory}/core-staging.tar.gz"
@@ -261,6 +263,9 @@ grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
 grep -Fqx 'UnsetEnvironment=MIGRATIONS_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
     "${staging_directory}/ensambria-business.service" \
     || fail "BUSINESS must exclude migration and email-worker secrets"
+grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
+    "${staging_directory}/ensambria-business-migrate.service" \
+    || fail "BUSINESS migrations must use the shared environment file"
 
 ensure_group "$service_group"
 ensure_group "$migrator_group"
@@ -320,6 +325,9 @@ install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-business.service" \
     /etc/systemd/system/ensambria-business.service
 install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-business-migrate.service" \
+    /etc/systemd/system/ensambria-business-migrate.service
+install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-env-reload.service" \
     /etc/systemd/system/ensambria-env-reload.service
 install -o root -g root -m 0644 \
@@ -334,22 +342,22 @@ archive="${staging_directory}/core-staging.tar.gz"
 payload="${temporary_directory}/payload"
 mkdir "$payload"
 tar -tzf "$archive" | while IFS= read -r entry; do
-    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == business || "$entry" == migrations/ || "$entry" == business-migrations/ || "$entry" == business-migrations/bootstrap/ ]] && continue
+    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == business || "$entry" == business-migrate || "$entry" == migrations/ || "$entry" == business-migrations/ || "$entry" == business-migrations/bootstrap/ ]] && continue
     [[ "$entry" =~ ^migrations/[0-9]{14}_[a-z0-9_]+\.sql$ || "$entry" =~ ^business-migrations/([a-z0-9_-]+/)?[0-9]{14}_[a-z0-9_]+\.sql$ ]] \
         || fail "deployment package contains an unexpected path"
 done || fail "deployment package contains unexpected files"
 tar -xzf "$archive" -C "$payload" --no-same-owner --no-same-permissions \
     || fail "could not extract deployment package"
-[[ -s "$payload/core" && -s "$payload/core-migrate" && -s "$payload/core-email-worker" && -s "$payload/business" ]] \
+[[ -s "$payload/core" && -s "$payload/core-migrate" && -s "$payload/core-email-worker" && -s "$payload/business" && -s "$payload/business-migrate" ]] \
     || fail "deployment package is missing a binary"
 find "$payload/migrations" -maxdepth 1 -type f -name '*.sql' -print -quit | grep -q . \
     || fail "deployment package is missing SQL migrations"
 
 release_directory="${release_root}/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 mkdir "$release_directory"
-mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/business" "$payload/migrations" "$payload/business-migrations" "$release_directory/"
+mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/business" "$payload/business-migrate" "$payload/migrations" "$payload/business-migrations" "$release_directory/"
 chown -R "root:${artifact_group}" "$release_directory"
-chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker" "$release_directory/business"
+chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker" "$release_directory/business" "$release_directory/business-migrate"
 chmod 0750 "$release_directory/migrations"
 find "$release_directory/migrations" "$release_directory/business-migrations" -type d -exec chmod 0750 {} +
 find "$release_directory/migrations" "$release_directory/business-migrations" -type f -name '*.sql' -exec chmod 0640 {} +
@@ -372,8 +380,10 @@ mv -Tf "$temporary_link" "$current_link"
 release_activated=true
 if ! systemctl start "$migration_service_name"; then
     report_migration_failure
-    fail "automatic staging migrations failed"
+    fail "automatic CORE staging migrations failed"
 fi
+systemctl start "$business_migration_service_name" \
+    || fail "automatic BUSINESS staging migrations failed"
 systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || fail "one or more ENSAMBRIA services failed to restart"
 wait_until_healthy "$health_address" || fail "CORE readiness check failed"
 for attempt in $(seq 1 30); do

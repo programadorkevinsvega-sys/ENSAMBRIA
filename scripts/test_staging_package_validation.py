@@ -14,13 +14,13 @@ MIGRATIONS = ("migrations/20261122000001_core_test.sql", "business-migrations/20
 
 def write_package(path: Path, *, omit=(), non_executable=()):
     files = {name: (b"binary-content", 0o750) for name in BINARIES}
-    files.update({name: (b"SELECT 1;\\n", 0o640) for name in MIGRATIONS})
+    files.update({name: (b"SELECT 1;\n", 0o640) for name in MIGRATIONS})
     for name in non_executable:
         files[name] = (files[name][0], 0o640)
     for name in omit:
         files.pop(name, None)
     manifest = "".join(
-        f"{hashlib.sha256(data).hexdigest()}  {name}\\n"
+        f"{hashlib.sha256(data).hexdigest()}  {name}\n"
         for name, (data, _) in sorted(files.items())
     ).encode("ascii")
     files["SHA256SUMS"] = (manifest, 0o640)

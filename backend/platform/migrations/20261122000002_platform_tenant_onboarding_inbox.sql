@@ -30,6 +30,16 @@ CREATE INDEX inbox_messages_unapplied_idx
     ON platform.inbox_messages (received_at, event_id)
     WHERE status = 'received';
 
+-- Both tables carry tenant data. The durable consumer sets this transaction-local
+-- context from the validated event before touching either table.
+ALTER TABLE platform.inbox_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform.inbox_messages FORCE ROW LEVEL SECURITY;
+CREATE POLICY inbox_tenant_scope ON platform.inbox_messages
+    USING (aggregate_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (aggregate_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+
+
+
 CREATE TABLE platform.tenant_onboardings (
     tenant_id uuid NOT NULL,
     product_id uuid NOT NULL REFERENCES platform.products(id),

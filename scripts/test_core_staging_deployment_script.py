@@ -43,6 +43,13 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
         self.assertNotIn("email-worker.env", self.script_source)
         self.assertNotIn('systemctl enable "$email_worker_service_name"', self.script_source)
 
+    def test_business_health_uses_configured_non_conflicting_listener(self):
+        self.assertIn('BUSINESS_HTTP_LISTEN_ADDRESS', self.script_source)
+        self.assertIn('business_health_url', self.script_source)
+        self.assertIn('report_business_migration_failure', self.script_source)
+        self.assertNotIn('127.0.0.1:8080/health', self.script_source)
+        self.assertIn('127.0.0.1:${business_address##*:}', self.script_source)
+
     def test_embedded_python_syntax(self):
         start_marker = "| python3 -c '\n"
         end_marker = "\n'; then"

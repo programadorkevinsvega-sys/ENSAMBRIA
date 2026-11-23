@@ -198,6 +198,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE core_runtime;
+          BEGIN;
+          SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+          INSERT INTO core.outbox_events (
+              event_id, event_type, schema_version, aggregate_type, aggregate_id,
+              aggregate_version, product_id, product_config_version, correlation_id,
+              payload, occurred_at
+          ) VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789b0',
+              'core.tenant.created.v1', 1, 'tenant',
+              '018f0f2a-7b3c-7abc-8def-0123456789ae', 1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ab', 1,
+              '018f0f2a-7b3c-7abc-8def-0123456789af',
+              '{"tenantId":"018f0f2a-7b3c-7abc-8def-0123456789ae","productId":"018f0f2a-7b3c-7abc-8def-0123456789ab","productConfigVersion":1}'::jsonb,
+              clock_timestamp()
+          );
+          COMMIT;
+          RESET ROLE;
+          SET ROLE core_outbox_relay;
+          DO $body$
+          BEGIN
+              IF NOT EXISTS (
+                  SELECT 1 FROM core.outbox_events
+                   WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789b0'
+              ) THEN
+                  RAISE EXCEPTION 'CORE outbox relay cannot read the committed event';
+              END IF;
+          END
+          $body$;
+          RESET ROLE;
+          SQL
           psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $body$
           BEGIN

@@ -266,6 +266,26 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
+      - name: Apply CORE migrations twice and verify rollback compatibility
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        env:
+          MIGRATIONS_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+        run: |
+          set -euo pipefail
+          cargo run --locked --package ensambria-core --bin core-migrate -- backend/core/migrations
+          cargo run --locked --package ensambria-core --bin core-migrate -- backend/core/migrations
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $body$
+          BEGIN
+              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone)') IS NULL THEN
+                  RAISE EXCEPTION 'previous CORE release refresh-token function contract is missing';
+              END IF;
+              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone,bytea,timestamp with time zone)') IS NULL THEN
+                  RAISE EXCEPTION 'current CORE access-token refresh function contract is missing';
+              END IF;
+          END
+          $body$;
+          SQL
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace

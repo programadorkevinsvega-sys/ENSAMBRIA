@@ -47,6 +47,21 @@ CREATE INDEX outbox_events_expired_lease_idx
     ON core.outbox_events (lease_until, occurred_at, event_id)
     WHERE status = 'leased';
 
+ALTER TABLE core.outbox_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE core.outbox_events FORCE ROW LEVEL SECURITY;
+CREATE POLICY outbox_tenant_insert ON core.outbox_events
+    FOR INSERT TO core_runtime
+    WITH CHECK (
+        aggregate_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    );
+CREATE POLICY outbox_relay_read ON core.outbox_events
+    FOR SELECT TO core_outbox_relay
+    USING (true);
+CREATE POLICY outbox_relay_update ON core.outbox_events
+    FOR UPDATE TO core_outbox_relay
+    USING (true)
+    WITH CHECK (true);
+
 REVOKE ALL ON core.outbox_events FROM PUBLIC;
 GRANT USAGE ON SCHEMA core TO core_outbox_relay;
 GRANT INSERT ON core.outbox_events TO core_runtime;

@@ -1,6 +1,4 @@
-use crate::tenant_onboarding::{
-    TenantCreatedEvent, TenantOnboardingOutcome, apply_tenant_created,
-};
+use crate::tenant_onboarding::{TenantCreatedEvent, TenantOnboardingOutcome, apply_tenant_created};
 use ensambria_event_bus::{async_nats::jetstream::consumer::AckPolicy, jetstream::Context};
 use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
@@ -31,13 +29,19 @@ impl TenantCreatedEnvelope {
     fn into_event(self, raw: &[u8]) -> Result<TenantCreatedEvent, &'static str> {
         let tenant_id = self.aggregate_id.to_string();
         let product_id = self.product_id.to_string();
+        let payload_tenant_id = self.payload.get("tenantId").and_then(|v| v.as_str());
+        let payload_product_id = self.payload.get("productId").and_then(|v| v.as_str());
+        let payload_config_version = self
+            .payload
+            .get("productConfigVersion")
+            .and_then(|v| v.as_i64());
+
         if self.event_type != "core.tenant.created.v1"
             || self.schema_version != 1
             || self.aggregate_type != "tenant"
-            || self.payload.get("tenantId").and_then(|v| v.as_str()) != Some(&tenant_id)
-            || self.payload.get("productId").and_then(|v| v.as_str()) != Some(&product_id)
-            || self.payload.get("productConfigVersion").and_then(|v| v.as_i64())
-                != Some(i64::from(self.product_config_version))
+            || payload_tenant_id != Some(tenant_id.as_str())
+            || payload_product_id != Some(product_id.as_str())
+            || payload_config_version != Some(i64::from(self.product_config_version))
         {
             return Err("invalid tenant-created event contract");
         }
@@ -91,10 +95,7 @@ pub async fn consume_one(
     Ok(outcome)
 }
 
-pub async fn run(
-    pool: PgPool,
-    jetstream: Context,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn run(pool: PgPool, jetstream: Context) -> Result<(), Box<dyn Error + Send + Sync>> {
     loop {
         match consume_one(&pool, &jetstream).await {
             Ok(outcome) => {

@@ -13,6 +13,19 @@ Required authentication secrets/configuration are injected into the API process 
 
 The AES key is loaded from a secret-manager-provided environment variable and is not committed. This is an environment-backed key protector, not a native KMS/Vault integration; KMS/Vault key unwrap and rotation remain a deployment/security integration requirement before production acceptance.
 
+## PostgreSQL login-role provisioning before CORE migrations
+
+The restricted `core_migrator` identity cannot create PostgreSQL roles. Before the first staging migration, the database operator must provision all login roles referenced by CORE grants and row-level-security policies. CI creates these roles explicitly; staging must do the equivalent through the approved database administration channel and inject unique passwords from the secret manager:
+
+```sql
+CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<runtime-secret>';
+CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<email-worker-secret>';
+CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<outbox-relay-secret>';
+GRANT CONNECT ON DATABASE ensambria TO core_runtime, core_email_worker, core_outbox_relay;
+```
+
+Do not grant these roles superuser, database-creation, role-creation, or schema-creation privileges. The migrations grant only the schema/table/function permissions each role needs. The migrator performs a preflight check for all three role names and fails before applying SQL if any are absent; it does not create or alter login roles. Configure the API, email worker, and Outbox relay with their respective dedicated credentials. Never commit passwords or place them in CI logs.
+
 ## SMTP worker process
 
 Build and run the separate `core-email-worker` binary. It connects using its own PostgreSQL login, polls every five seconds, and processes batches of 25. The systemd unit is installed by staging deployment but intentionally is not enabled automatically: enable it only after the dedicated worker environment file has been provisioned.

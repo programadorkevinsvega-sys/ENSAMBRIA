@@ -21,19 +21,26 @@ struct ClaimedEvent {
     correlation_id: Uuid,
     payload: Json<Value>,
     attempt_count: i32,
+    occurred_at: String,
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+struct EventAggregate {
+    #[serde(rename = "type")]
+    aggregate_type: &'static str,
+    id: Uuid,
+    version: i64,
+}
+
+#[derive(Serialize)]
 struct EventEnvelope<'a> {
     event_id: Uuid,
     event_type: &'a str,
     schema_version: i32,
-    aggregate_type: &'static str,
-    aggregate_id: Uuid,
-    aggregate_version: i64,
-    product_id: Uuid,
-    product_config_version: i32,
+    occurred_at: &'a str,
+    producer: &'static str,
+    tenant_id: Uuid,
+    aggregate: EventAggregate,
     correlation_id: Uuid,
     payload: &'a Value,
 }
@@ -58,6 +65,7 @@ pub async fn publish_pending_once(
             Uuid,
             Json<Value>,
             i32,
+            String,
         ),
     >(
         "WITH candidates AS (
@@ -73,7 +81,9 @@ pub async fn publish_pending_once(
            FROM candidates c WHERE o.event_id = c.event_id
          RETURNING o.event_id, o.event_type, o.schema_version, o.aggregate_id,
                    o.aggregate_version, o.product_id, o.product_config_version,
-                   o.correlation_id, o.payload, o.attempt_count",
+                   o.correlation_id, o.payload, o.attempt_count,
+                   to_char(o.occurred_at AT TIME ZONE 'UTC',
+                           'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')",
     )
     .bind(relay_id)
     .bind(batch_size.clamp(1, 100))
@@ -95,21 +105,26 @@ pub async fn publish_pending_once(
             correlation_id: row.7,
             payload: row.8,
             attempt_count: row.9,
+            occurred_at: row.10,
         };
         let envelope = EventEnvelope {
             event_id: event.event_id,
             event_type: &event.event_type,
             schema_version: event.schema_version,
-            aggregate_type: "tenant",
-            aggregate_id: event.aggregate_id,
-            aggregate_version: event.aggregate_version,
-            product_id: event.product_id,
-            product_config_version: event.product_config_version,
+            occurred_at: &event.occurred_at,
+            producer: "core",
+            tenant_id: event.aggregate_id,
+            aggregate: EventAggregate {
+                aggregate_type: "tenant",
+                id: event.aggregate_id,
+                version: event.aggregate_version,
+            },
             correlation_id: event.correlation_id,
             payload: &event.payload.0,
         };
         let bytes = serde_json::to_vec(&envelope)?;
-        match publish_confirmed(jetstream, SUBJECT, bytes).await {
+        let message_id = event.event_id.to_string();
+        match publish_confirmed(jetstream, SUBJECT, &message_id, bytes).await {
             Ok(()) => {
                 let changed = sqlx::query(
                     "UPDATE core.outbox_events SET status='published',

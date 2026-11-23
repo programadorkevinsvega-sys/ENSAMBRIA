@@ -9,13 +9,18 @@ pub async fn connect_jetstream(url: &str) -> Result<jetstream::Context, EventBus
     Ok(jetstream::new(async_nats::connect(url).await?))
 }
 
+/// Waits for the durable JetStream PubAck and uses the Outbox event ID for
+/// broker-side deduplication within the stream's configured duplicate window.
 pub async fn publish_confirmed(
     context: &jetstream::Context,
     subject: &str,
+    message_id: &str,
     payload: Vec<u8>,
 ) -> Result<(), EventBusError> {
+    let mut headers = async_nats::HeaderMap::new();
+    headers.insert("Nats-Msg-Id", message_id.to_owned());
     context
-        .publish(subject.to_owned(), payload.into())
+        .publish_with_headers(subject.to_owned(), headers, payload.into())
         .await?
         .await?;
     Ok(())

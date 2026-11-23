@@ -5,45 +5,65 @@ use ring::digest::{SHA256, digest};
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::{error::Error, time::Duration};
+use uuid::Uuid;
 
 const STREAM: &str = "ENSAMBRIA";
 const DURABLE: &str = "platform-tenant-onboarding";
 const SUBJECT: &str = "ensambria.core.tenant.created.v1";
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct EventAggregate {
+    #[serde(rename = "type")]
+    aggregate_type: String,
+    id: Uuid,
+    version: i64,
+}
+
+#[derive(Deserialize)]
 struct TenantCreatedEnvelope {
-    event_id: uuid::Uuid,
+    event_id: Uuid,
     event_type: String,
     schema_version: i32,
-    aggregate_type: String,
-    aggregate_id: uuid::Uuid,
-    aggregate_version: i64,
-    product_id: uuid::Uuid,
-    product_config_version: i32,
-    correlation_id: uuid::Uuid,
+    occurred_at: String,
+    producer: String,
+    tenant_id: Uuid,
+    aggregate: EventAggregate,
+    correlation_id: Uuid,
     payload: serde_json::Value,
 }
 
 impl TenantCreatedEnvelope {
     fn into_event(self, raw: &[u8]) -> Result<TenantCreatedEvent, &'static str> {
-        let tenant_id = self.aggregate_id.to_string();
-        let product_id = self.product_id.to_string();
+        let tenant_id = self.tenant_id.to_string();
         let payload_tenant_id = self.payload.get("tenantId").and_then(|v| v.as_str());
         let payload_product_id = self.payload.get("productId").and_then(|v| v.as_str());
         let payload_config_version = self
             .payload
             .get("productConfigVersion")
             .and_then(|v| v.as_i64());
+        let product_id = payload_product_id
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or("invalid product ID in tenant-created payload")?;
+        let product_id_string = product_id.to_string();
+        let product_config_version = payload_config_version
+            .and_then(|value| i32::try_from(value).ok())
+            .filter(|value| *value > 0)
+            .ok_or("invalid product configuration version in payload")?;
 
-        if self.event_type != "core.tenant.created.v1"
+        if self.event_id.is_nil()
+            || self.event_type != "core.tenant.created.v1"
             || self.schema_version != 1
-            || self.aggregate_type != "tenant"
+            || self.occurred_at.trim().is_empty()
+            || self.producer != "core"
+            || self.tenant_id.is_nil()
+            || self.aggregate.aggregate_type != "tenant"
+            || self.aggregate.id != self.tenant_id
+            || self.aggregate.version <= 0
+            || self.correlation_id.is_nil()
             || payload_tenant_id != Some(tenant_id.as_str())
-            || payload_product_id != Some(product_id.as_str())
-            || payload_config_version != Some(i64::from(self.product_config_version))
+            || payload_product_id != Some(product_id_string.as_str())
         {
-            return Err("invalid tenant-created event contract");
+            return Err("invalid CORE tenant-created event contract");
         }
 
         let hash = digest(&SHA256, raw);
@@ -51,10 +71,10 @@ impl TenantCreatedEnvelope {
         payload_hash.copy_from_slice(hash.as_ref());
         Ok(TenantCreatedEvent {
             event_id: self.event_id,
-            tenant_id: self.aggregate_id,
-            product_id: self.product_id,
-            product_config_version: self.product_config_version,
-            aggregate_version: self.aggregate_version,
+            tenant_id: self.tenant_id,
+            product_id,
+            product_config_version,
+            aggregate_version: self.aggregate.version,
             correlation_id: self.correlation_id,
             payload_hash,
         })

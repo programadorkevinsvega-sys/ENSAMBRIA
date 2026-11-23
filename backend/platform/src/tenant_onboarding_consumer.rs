@@ -1,5 +1,8 @@
 use crate::tenant_onboarding::{TenantCreatedEvent, TenantOnboardingOutcome, apply_tenant_created};
-use ensambria_event_bus::{async_nats::jetstream::consumer::AckPolicy, jetstream::Context};
+use ensambria_event_bus::{
+    async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy},
+    jetstream::Context,
+};
 use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
 use serde::Deserialize;
@@ -8,7 +11,7 @@ use std::{env, error::Error, time::Duration};
 use uuid::Uuid;
 
 const STREAM: &str = "ENSAMBRIA";
-const DURABLE: &str = "platform-tenant-onboarding";
+const DEFAULT_DURABLE: &str = "platform-tenant-onboarding";
 const SUBJECT: &str = "ensambria.core.tenant.created.v1";
 
 #[derive(Deserialize)]
@@ -86,20 +89,32 @@ pub async fn consume_one(
     jetstream: &Context,
 ) -> Result<TenantOnboardingOutcome, Box<dyn Error + Send + Sync>> {
     let stream = jetstream.get_stream(STREAM).await?;
-    let consumer = stream
-        .get_or_create_consumer(
-            DURABLE,
-            ensambria_event_bus::async_nats::jetstream::consumer::pull::Config {
-                durable_name: Some(DURABLE.to_owned()),
-                filter_subject: SUBJECT.to_owned(),
-                ack_policy: AckPolicy::Explicit,
-                ack_wait: configured_ack_wait(),
-                max_deliver: 12,
-                max_ack_pending: 100,
-                ..Default::default()
-            },
-        )
-        .await?;
+    let durable_name = env::var("PLATFORM_TENANT_ONBOARDING_DURABLE")
+        .unwrap_or_else(|_| DEFAULT_DURABLE.to_owned());
+    let start_sequence = env::var("PLATFORM_TENANT_ONBOARDING_START_SEQUENCE")
+        .ok()
+        .map(|value| value.parse::<u64>())
+        .transpose()?;
+    let mut config = ensambria_event_bus::async_nats::jetstream::consumer::pull::Config {
+        durable_name: Some(durable_name.clone()),
+        filter_subject: SUBJECT.to_owned(),
+        ack_policy: AckPolicy::Explicit,
+        ack_wait: configured_ack_wait(),
+        max_deliver: 12,
+        max_ack_pending: 100,
+        ..Default::default()
+    };
+    if let Some(sequence) = start_sequence {
+        if sequence == 0 {
+            return Err(
+                "PLATFORM_TENANT_ONBOARDING_START_SEQUENCE must be greater than zero".into(),
+            );
+        }
+        config.deliver_policy = DeliverPolicy::ByStartSequence {
+            start_sequence: sequence,
+        };
+    }
+    let consumer = stream.get_or_create_consumer(&durable_name, config).await?;
     let mut messages = consumer.messages().await?;
     let message = messages
         .next()

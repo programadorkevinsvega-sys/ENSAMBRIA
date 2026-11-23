@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the shared ENSAMBRIA environment file
+
+[Path]
+PathChanged=/etc/apps/ensambria/core/.env
+Unit=ensambria-env-reload.service
+
+[Install]
+WantedBy=multi-user.target

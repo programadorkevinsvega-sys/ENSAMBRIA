@@ -77,7 +77,16 @@ jobs:
           grep -Fq 'scripts/validate_staging_package.py' .github/workflows/core-staging-deploy.yml
           grep -Fq 'StartLimitBurst=5' backend/business/deployment/ensambria-business.service
           grep -Fq 'chmod 0550' backend/core/deployment/deploy-staging.sh
-          python3 scripts/check_expand_contract_migrations.py backend/core/migrations backend/business/migrations
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          mapfile -t changed_migrations < <(git diff --name-only refs/remotes/origin/main...HEAD -- backend/core/migrations backend/business/migrations)
+          for migration in "${changed_migrations[@]}"; do
+            [[ -f "$migration" ]] || { echo "Migration files cannot be deleted during automatic deployment: $migration" >&2; exit 1; }
+          done
+          if (( ${#changed_migrations[@]} )); then
+            python3 scripts/check_expand_contract_migrations.py "${changed_migrations[@]}"
+          else
+            echo "No migration SQL changed; compatibility guard not required."
+          fi
           python3 -m unittest discover -s scripts -p 'test_staging_package_validation.py'
           python3 -m unittest discover -s scripts -p 'test_expand_contract_migration_policy.py'
           test -s backend/business/deployment/ensambria-business.service

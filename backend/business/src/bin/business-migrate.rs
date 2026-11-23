@@ -57,7 +57,9 @@ async fn apply_migrations(
 
     // The dedicated migrator is a member of both schema-owner roles. The
     // bootstrap switches roles explicitly so CORE grants remain owned by CORE.
-    sqlx::raw_sql(bootstrap).execute(&mut *transaction).await?;
+    sqlx::raw_sql(sqlx::AssertSqlSafe(bootstrap))
+        .execute(&mut *transaction)
+        .await?;
     sqlx::raw_sql(
         "SET LOCAL ROLE business_schema_owner;
          CREATE TABLE IF NOT EXISTS business.schema_migrations (

@@ -9,6 +9,7 @@ readonly email_worker_service_name=ensambria-core-email-worker.service
 readonly business_service_name=ensambria-business.service
 readonly business_migration_service_name=ensambria-business-migrate.service
 readonly env_reload_path_name=ensambria-env-reload.path
+readonly env_reload_service_name=ensambria-env-reload.service
 readonly business_service_user=ensambria-business
 readonly business_service_group=ensambria-business
 readonly service_user=ensambria-core
@@ -331,6 +332,56 @@ ensure_directory "$environment_directory" root 755
 [[ "$(stat -c '%U:%G:%a' "$environment_file")" == "root:root:600" ]] \
     || fail "CORE environment file must be owned by root with mode 0600"
 [[ -s "$environment_file" ]] || fail "CORE environment file must be populated"
+
+# Stop the path watcher before normalizing listener addresses so it cannot
+# restart services halfway through an atomic deployment.
+systemctl stop "$env_reload_path_name" "$env_reload_service_name" >/dev/null 2>&1 || true
+python3 - "$environment_file" <<'PY'
+import os
+import pathlib
+import stat
+import sys
+import tempfile
+
+path = pathlib.Path(sys.argv[1])
+required = {
+    "CORE_HEALTH_LISTEN_ADDRESS": "127.0.0.1:22080",
+    "CORE_METRICS_LISTEN_ADDRESS": "127.0.0.1:22090",
+    "BUSINESS_HTTP_LISTEN_ADDRESS": "127.0.0.1:22100",
+}
+original = path.read_text(encoding="utf-8")
+lines = []
+written = set()
+for line in original.splitlines():
+    key, separator, _ = line.partition("=")
+    if separator and key in required:
+        if key not in written:
+            lines.append(f"{key}={required[key]}")
+            written.add(key)
+    else:
+        lines.append(line)
+for key, value in required.items():
+    if key not in written:
+        lines.append(f"{key}={value}")
+mode = stat.S_IMODE(path.stat().st_mode)
+metadata = path.stat()
+fd, temporary_name = tempfile.mkstemp(prefix=".ensambria-env.", dir=str(path.parent))
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as temporary:
+        temporary.write(chr(10).join(lines) + chr(10))
+        temporary.flush()
+        os.fsync(temporary.fileno())
+    os.chown(temporary_name, metadata.st_uid, metadata.st_gid)
+    os.chmod(temporary_name, mode)
+    os.replace(temporary_name, path)
+except BaseException:
+    try:
+        os.unlink(temporary_name)
+    except FileNotFoundError:
+        pass
+    raise
+PY
+
 for required_variable in \
     DATABASE_URL \
     MIGRATIONS_DATABASE_URL \

@@ -50,6 +50,13 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
         self.assertNotIn('127.0.0.1:8080/health', self.script_source)
         self.assertIn('127.0.0.1:${business_address##*:}', self.script_source)
 
+    def test_deployment_normalizes_all_runtime_listeners(self):
+        self.assertIn('CORE_HEALTH_LISTEN_ADDRESS": "127.0.0.1:22080', self.script_source)
+        self.assertIn('CORE_METRICS_LISTEN_ADDRESS": "127.0.0.1:22090', self.script_source)
+        self.assertIn('BUSINESS_HTTP_LISTEN_ADDRESS": "127.0.0.1:22100', self.script_source)
+        for occupied_port in ("8080", "18080", "19090", "3000", "3001", "3002", "3003", "3005", "3006", "50051", "50052", "50053", "50054", "50055", "50056", "50059"):
+            self.assertNotIn(f'127.0.0.1:{occupied_port}', self.script_source)
+
     def test_embedded_python_syntax(self):
         start_marker = "| python3 -c '\n"
         end_marker = "\n'; then"

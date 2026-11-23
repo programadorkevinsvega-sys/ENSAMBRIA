@@ -21,7 +21,7 @@ impl fmt::Display for PgDatabaseConfigurationError {
             Self::InvalidVariable(name) => {
                 write!(formatter, "environment variable {name} is invalid")
             }
-            Self::InvalidDatabaseUrl => formatter.write_str("DATABASE_URL is invalid"),
+            Self::InvalidDatabaseUrl => formatter.write_str("PostgreSQL database URL is invalid"),
             Self::InvalidPoolConfiguration(error) => {
                 write!(
                     formatter,
@@ -48,24 +48,68 @@ pub struct PgDatabaseConfiguration {
 
 impl PgDatabaseConfiguration {
     pub fn from_env() -> Result<Self, PgDatabaseConfigurationError> {
-        Self::from_values(|name| match env::var(name) {
-            Ok(value) => Ok(Some(value)),
-            Err(env::VarError::NotPresent) => Ok(None),
-            Err(env::VarError::NotUnicode(_)) => {
-                Err(PgDatabaseConfigurationError::InvalidVariable(name))
-            }
-        })
+        Self::from_env_with_variable_names(
+            "DATABASE_URL",
+            "CORE_DATABASE_MAX_CONNECTIONS",
+            "CORE_DATABASE_ACQUIRE_TIMEOUT_MS",
+            "CORE_DATABASE_IDLE_TIMEOUT_MS",
+            "CORE_DATABASE_MAX_LIFETIME_MS",
+        )
+    }
+
+    /// Loads a PostgreSQL pool using explicitly named environment variables.
+    ///
+    /// This lets isolated processes share one systemd EnvironmentFile while
+    /// retaining distinct database credentials and pool budgets.
+    pub fn from_env_with_variable_names(
+        database_url_variable: &'static str,
+        max_connections_variable: &'static str,
+        acquire_timeout_variable: &'static str,
+        idle_timeout_variable: &'static str,
+        max_lifetime_variable: &'static str,
+    ) -> Result<Self, PgDatabaseConfigurationError> {
+        Self::from_values_with_variable_names(
+            |name| match env::var(name) {
+                Ok(value) => Ok(Some(value)),
+                Err(env::VarError::NotPresent) => Ok(None),
+                Err(env::VarError::NotUnicode(_)) => {
+                    Err(PgDatabaseConfigurationError::InvalidVariable(name))
+                }
+            },
+            database_url_variable,
+            max_connections_variable,
+            acquire_timeout_variable,
+            idle_timeout_variable,
+            max_lifetime_variable,
+        )
     }
 
     fn from_values(
-        mut read: impl FnMut(&'static str) -> Result<Option<String>, PgDatabaseConfigurationError>,
+        read: impl FnMut(&'static str) -> Result<Option<String>, PgDatabaseConfigurationError>,
     ) -> Result<Self, PgDatabaseConfigurationError> {
-        let database_url = required_value(&mut read, "DATABASE_URL")?;
-        let max_connections = parse_required::<u32>(&mut read, "CORE_DATABASE_MAX_CONNECTIONS")?;
-        let acquire_timeout_ms =
-            parse_required::<u64>(&mut read, "CORE_DATABASE_ACQUIRE_TIMEOUT_MS")?;
-        let idle_timeout_ms = parse_optional::<u64>(&mut read, "CORE_DATABASE_IDLE_TIMEOUT_MS")?;
-        let max_lifetime_ms = parse_optional::<u64>(&mut read, "CORE_DATABASE_MAX_LIFETIME_MS")?;
+        Self::from_values_with_variable_names(
+            read,
+            "DATABASE_URL",
+            "CORE_DATABASE_MAX_CONNECTIONS",
+            "CORE_DATABASE_ACQUIRE_TIMEOUT_MS",
+            "CORE_DATABASE_IDLE_TIMEOUT_MS",
+            "CORE_DATABASE_MAX_LIFETIME_MS",
+        )
+    }
+
+    fn from_values_with_variable_names(
+        mut read: impl FnMut(&'static str) -> Result<Option<String>, PgDatabaseConfigurationError>,
+        database_url_variable: &'static str,
+        max_connections_variable: &'static str,
+        acquire_timeout_variable: &'static str,
+        idle_timeout_variable: &'static str,
+        max_lifetime_variable: &'static str,
+    ) -> Result<Self, PgDatabaseConfigurationError> {
+        let database_url = required_value(&mut read, database_url_variable)?;
+        let max_connections = parse_required::<u32>(&mut read, max_connections_variable)?;
+        let acquire_timeout_ms = parse_required::<u64>(&mut read, acquire_timeout_variable)?;
+        let idle_timeout_ms = parse_optional::<u64>(&mut read, idle_timeout_variable)?;
+        let max_lifetime_ms = parse_optional::<u64>(&mut read, max_lifetime_variable)?;
 
         let pool = PgPoolConfiguration::new(
             max_connections,
@@ -146,6 +190,53 @@ mod tests {
 
         assert!(configuration.is_ok());
     }
+
+    #[test]
+    fn parses_email_worker_settings_from_its_dedicated_variables() {
+        let result = PgDatabaseConfiguration::from_values_with_variable_names(
+            |name| {
+                let value = match name {
+                    "CORE_EMAIL_WORKER_DATABASE_URL" => "postgres://worker@localhost/core",
+                    "CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS" => "3",
+                    "CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS" => "3000",
+                    _ => return Ok(None),
+                };
+                Ok(Some(value.to_owned()))
+            },
+            "CORE_EMAIL_WORKER_DATABASE_URL",
+            "CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS",
+            "CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS",
+            "CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS",
+            "CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS",
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn email_worker_configuration_does_not_fall_back_to_runtime_database_url() {
+        let result = PgDatabaseConfiguration::from_values_with_variable_names(
+            |name| match name {
+                "DATABASE_URL" => Ok(Some("postgres://runtime@localhost/core".to_owned())),
+                "CORE_DATABASE_MAX_CONNECTIONS" => Ok(Some("5".to_owned())),
+                "CORE_DATABASE_ACQUIRE_TIMEOUT_MS" => Ok(Some("3000".to_owned())),
+                _ => Ok(None),
+            },
+            "CORE_EMAIL_WORKER_DATABASE_URL",
+            "CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS",
+            "CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS",
+            "CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS",
+            "CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS",
+        );
+
+        assert_eq!(
+            result.err(),
+            Some(PgDatabaseConfigurationError::MissingVariable(
+                "CORE_EMAIL_WORKER_DATABASE_URL"
+            ))
+        );
+    }
+
 
     #[test]
     fn rejects_invalid_pool_settings_by_name_without_echoing_values() {

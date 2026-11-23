@@ -1,4 +1,4 @@
-name: CORE staging deploy
+name: ENSAMBRIA staging deploy
 
 on:
   workflow_run:
@@ -51,38 +51,38 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal
           rustup target add x86_64-unknown-linux-musl --toolchain 1.99.1
 
-      - name: Build CORE and its migration runner
+      - name: Build all staging services
         run: >-
           cargo build --locked --release --package ensambria-core
-          --bin core --bin core-migrate --bin core-email-worker --target x86_64-unknown-linux-musl
+          --bin core --bin core-migrate --bin core-email-worker
+          --package ensambria-business --bin business --bin business-migrate
+          --target x86_64-unknown-linux-musl
 
-      - name: Package only binaries and migration SQL
+      - name: Package every runtime binary and migration SQL
         id: package
         shell: bash
         run: |
-          core_package="${RUNNER_TEMP}/core-staging.tar.gz"
-          artifact_directory="$(mktemp -d "${RUNNER_TEMP}/core-artifacts.XXXXXX")"
-          trap 'rm -rf -- "$artifact_directory"' EXIT
-          install -m 0750 \
-            target/x86_64-unknown-linux-musl/release/core \
-            "$artifact_directory/core"
-          install -m 0750 \
-            target/x86_64-unknown-linux-musl/release/core-migrate \
-            "$artifact_directory/core-migrate"
-          install -m 0750 \
-            target/x86_64-unknown-linux-musl/release/core-email-worker \
-            "$artifact_directory/core-email-worker"
-          mkdir "$artifact_directory/migrations"
-          mapfile -d '' -t migration_files < <(
-            find backend/core/migrations -maxdepth 1 -type f -name '*.sql' -print0 | sort -z
-          )
-          test "${#migration_files[@]}" -gt 0
-          for migration_file in "${migration_files[@]}"; do
-            install -m 0640 "$migration_file" "$artifact_directory/migrations/"
+          package="${RUNNER_TEMP}/ensambria-staging.tar.gz"
+          artifacts="$(mktemp -d "${RUNNER_TEMP}/ensambria-artifacts.XXXXXX")"
+          trap 'rm -rf -- "$artifacts"' EXIT
+          for binary in core core-migrate core-email-worker business business-migrate; do
+            install -m 0750 "target/x86_64-unknown-linux-musl/release/$binary" "$artifacts/$binary"
           done
-          tar --create --gzip --file "$core_package" \
-            --directory "$artifact_directory" core core-migrate core-email-worker migrations
-          echo "path=$core_package" >> "$GITHUB_OUTPUT"
+          mkdir -p "$artifacts/migrations" "$artifacts/business-migrations/bootstrap"
+          while IFS= read -r -d '' file; do
+            install -m 0640 "$file" "$artifacts/migrations/"
+          done < <(find backend/core/migrations -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+          while IFS= read -r -d '' file; do
+            relative="${file#backend/business/migrations/}"
+            install -D -m 0640 "$file" "$artifacts/business-migrations/$relative"
+          done < <(find backend/business/migrations -type f -name '*.sql' -print0 | sort -z)
+          test -s "$artifacts/core"
+          test -s "$artifacts/business"
+          test -n "$(find "$artifacts/migrations" -type f -name '*.sql' -print -quit)"
+          test -n "$(find "$artifacts/business-migrations" -type f -name '*.sql' -print -quit)"
+          tar --create --gzip --file "$package" --directory "$artifacts" \
+            core core-migrate core-email-worker business business-migrate migrations business-migrations
+          echo "path=$package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings
         env:
@@ -110,7 +110,7 @@ jobs:
           hostname: github-core-staging
           ping: ${{ vars.CORE_STAGING_HOST }}
 
-      - name: Deploy CORE and create its systemd services
+      - name: Deploy all ENSAMBRIA services and apply both schemas
         env:
           REMOTE_DIRECTORY: /tmp/ensambria-core-${{ github.run_id }}-${{ github.run_attempt }}
           CORE_PACKAGE: ${{ steps.package.outputs.path }}
@@ -145,6 +145,10 @@ jobs:
             backend/core/deployment/ensambria-core.service \
             backend/core/deployment/ensambria-core-migrate.service \
             backend/core/deployment/ensambria-core-email-worker.service \
+            backend/business/deployment/ensambria-business.service \
+            backend/business/deployment/ensambria-business-migrate.service \
+            backend/core/deployment/ensambria-env-reload.service \
+            backend/core/deployment/ensambria-env-reload.path \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}:${REMOTE_DIRECTORY}/"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
@@ -155,7 +159,7 @@ jobs:
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
             "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
 
-      - name: Verify BUSINESS runtime on the staging VM
+      - name: Verify every ENSAMBRIA staging service on the VM
         run: |
           # Reuse the existing staging tailnet access established by the deploy job.
           ssh \
@@ -167,8 +171,17 @@ jobs:
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
             "sudo -n bash -s" <<'REMOTE'
           set -Eeuo pipefail
-          service=ensambria-business.service
           env_file=/etc/apps/ensambria/core/.env
+          services=(ensambria-core.service ensambria-core-email-worker.service ensambria-business.service)
+          for service in "${services[@]}"; do
+            systemctl is-enabled --quiet "$service"
+            systemctl is-active --quiet "$service"
+            printf '%s=active-and-enabled\n' "$service"
+          done
+          systemctl is-enabled --quiet ensambria-env-reload.path
+          systemctl is-active --quiet ensambria-env-reload.path
+          printf 'env_change_watcher=active-and-enabled\n'
+          service=ensambria-business.service
           exec_start="$(systemctl show "$service" --property=ExecStart --value 2>/dev/null || true)"
           binary=""
           if [[ "$exec_start" =~ path=([^[:space:];]+) ]]; then binary="${BASH_REMATCH[1]}"; fi

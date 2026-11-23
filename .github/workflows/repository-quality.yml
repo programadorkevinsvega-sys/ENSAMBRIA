@@ -53,6 +53,35 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
 
+  deployment-contract:
+    name: deployment-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Validate staging deployment scripts and systemd contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n backend/core/deployment/deploy-staging.sh
+          test -s backend/business/deployment/ensambria-business.service
+          test -s backend/business/deployment/ensambria-business-migrate.service
+          test -s backend/business/src/bin/business-migrate.rs
+          test -s backend/core/deployment/ensambria-env-reload.service
+          test -s backend/core/deployment/ensambria-env-reload.path
+          grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' backend/business/deployment/ensambria-business.service
+          grep -Fqx 'ExecStart=/opt/apps/ensambria/current/business' backend/business/deployment/ensambria-business.service
+          grep -Fqx 'PathChanged=/etc/apps/ensambria/core/.env' backend/core/deployment/ensambria-env-reload.path
+          grep -Fqx 'PathModified=/etc/apps/ensambria/core' backend/core/deployment/ensambria-env-reload.path
+          grep -Fq 'ensambria-business.service' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'ensambria-business-migrate.service' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'business-migrate' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'ensambria-core-email-worker.service' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'ensambria-env-reload.path' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'business-migrations' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'backend/business/deployment/ensambria-business.service' .github/workflows/core-staging-deploy.yml
+
   postgres-integration:
     name: postgres-integration
     runs-on: ubuntu-latest
@@ -196,6 +225,9 @@ jobs:
             -c "GRANT business_schema_owner TO core_migrator;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
+            -c "GRANT CREATE ON DATABASE ensambria_core_test TO business_schema_owner;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
@@ -320,16 +352,13 @@ jobs:
           COMMIT;
           SQL
 
-      - name: Apply BUSINESS schema after CORE migrations
+      - name: Apply BUSINESS schema with the dedicated migration identity
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        env:
+          MIGRATIONS_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
         run: |
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -f backend/business/migrations/bootstrap/00000000000000_business_schema.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "SET ROLE business_schema_owner" \
-            -f backend/business/migrations/20261122000001_business_establishments.sql
+          cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
+          cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
 
 
   redis-ha-integration:

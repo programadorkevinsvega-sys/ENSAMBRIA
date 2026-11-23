@@ -23,6 +23,11 @@ readonly current_link=/opt/apps/ensambria/current
 readonly environment_directory=/etc/apps/ensambria/core
 readonly environment_file=/etc/apps/ensambria/core/.env
 
+temporary_directory=""
+previous_release=""
+temporary_link="${install_root}/.current-$"
+release_activated=false
+
 fail() {
     printf 'CORE staging deployment failed: %s\n' "$1" >&2
     exit 1
@@ -285,6 +290,9 @@ cleanup() {
             status=1
         fi
     fi
+    if systemctl list-unit-files "$env_reload_path_name" >/dev/null 2>&1; then
+        systemctl enable --now "$env_reload_path_name" || status=1
+    fi
     [[ -z "$temporary_directory" ]] || rm -rf -- "$temporary_directory"
     exit "$status"
 }
@@ -350,6 +358,10 @@ grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
 grep -Fqx 'UnsetEnvironment=DATABASE_URL BUSINESS_DATABASE_URL BUSINESS_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
     "${staging_directory}/ensambria-business-migrate.service" \
     || fail "BUSINESS migrator must exclude runtime and worker credentials"
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ensure_group "$service_group"
 ensure_group "$migrator_group"
@@ -454,31 +466,6 @@ business_address="$(sed -n 's/^BUSINESS_HTTP_LISTEN_ADDRESS=//p' "$environment_f
 [[ "$business_address" != "$health_address" ]] || fail "CORE and BUSINESS listeners must use different ports"
 business_health_url="http://127.0.0.1:${business_address##*:}/health"
 
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-core.service" \
-    /etc/systemd/system/ensambria-core.service
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-core-migrate.service" \
-    /etc/systemd/system/ensambria-core-migrate.service
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-core-email-worker.service" \
-    /etc/systemd/system/ensambria-core-email-worker.service
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-business.service" \
-    /etc/systemd/system/ensambria-business.service
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-business-migrate.service" \
-    /etc/systemd/system/ensambria-business-migrate.service
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-env-reload.service" \
-    /etc/systemd/system/ensambria-env-reload.service
-install -o root -g root -m 0644 \
-    "${staging_directory}/ensambria-env-reload.path" \
-    /etc/systemd/system/ensambria-env-reload.path
-systemctl daemon-reload
-systemctl enable "$service_name" "$email_worker_service_name" "$business_service_name" "$env_reload_path_name"
-systemctl enable --now "$env_reload_path_name"
-
 temporary_directory="$(mktemp -d "${release_root}/.incoming.XXXXXX")"
 archive="${staging_directory}/core-staging.tar.gz"
 payload="${temporary_directory}/payload"
@@ -507,6 +494,31 @@ chmod 0550 "$release_directory" "$release_directory/core" "$release_directory/co
 find "$release_directory/migrations" "$release_directory/business-migrations" -type d -exec chmod 0550 {} +
 find "$release_directory/migrations" "$release_directory/business-migrations" -type f -name '*.sql' -exec chmod 0440 {} +
 
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-core.service" \
+    /etc/systemd/system/ensambria-core.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-core-migrate.service" \
+    /etc/systemd/system/ensambria-core-migrate.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-core-email-worker.service" \
+    /etc/systemd/system/ensambria-core-email-worker.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-business.service" \
+    /etc/systemd/system/ensambria-business.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-business-migrate.service" \
+    /etc/systemd/system/ensambria-business-migrate.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-env-reload.service" \
+    /etc/systemd/system/ensambria-env-reload.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-env-reload.path" \
+    /etc/systemd/system/ensambria-env-reload.path
+systemctl daemon-reload
+systemctl enable "$service_name" "$email_worker_service_name" "$business_service_name" "$env_reload_path_name"
+
+
 previous_release=""
 if [[ -L "$current_link" ]]; then
     previous_release="$(readlink -f "$current_link")"
@@ -515,11 +527,6 @@ elif [[ -e "$current_link" ]]; then
     fail "current release path is not a symbolic link"
 fi
 
-temporary_link="${install_root}/.current-$$"
-release_activated=false
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 ln -s "$release_directory" "$temporary_link"
 mv -Tf "$temporary_link" "$current_link"
 release_activated=true
@@ -547,5 +554,6 @@ for attempt in $(seq 1 30); do
     sleep 2
 done
 
+systemctl enable --now "$env_reload_path_name"
 release_activated=false
 printf 'CORE deployed, migrations applied, and readiness verified.\n'

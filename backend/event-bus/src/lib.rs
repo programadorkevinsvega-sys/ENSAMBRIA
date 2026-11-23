@@ -18,7 +18,7 @@ pub async fn publish_confirmed(
     payload: Vec<u8>,
 ) -> Result<(), EventBusError> {
     let mut headers = async_nats::HeaderMap::new();
-    headers.insert("Nats-Msg-Id", message_id.to_owned());
+    headers.append("Nats-Msg-Id", message_id.to_owned());
     context
         .publish_with_headers(subject.to_owned(), headers, payload.into())
         .await?

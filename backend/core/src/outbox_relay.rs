@@ -126,7 +126,12 @@ pub async fn publish_pending_once(
             }
             Err(error) => {
                 let terminal = event.attempt_count >= MAX_ATTEMPTS;
-                let delay = (1_i64 << event.attempt_count.min(8)).min(300) as i32;
+                // Stable per-event jitter spreads retry load without adding a
+                // random-number dependency to the relay worker.
+                let base_delay = (1_i64 << event.attempt_count.min(8)).min(299) as f64;
+                let jitter_millis =
+                    f64::from(event.event_id.as_bytes()[0]) * 1000.0 / 255.0;
+                let delay_seconds = base_delay + jitter_millis / 1000.0;
                 sqlx::query(
                     "UPDATE core.outbox_events
                         SET status=CASE WHEN $3 THEN 'quarantined' ELSE 'retry_wait' END,
@@ -138,7 +143,7 @@ pub async fn publish_pending_once(
                 .bind(event.event_id)
                 .bind(relay_id)
                 .bind(terminal)
-                .bind(delay)
+                .bind(delay_seconds)
                 .execute(pool)
                 .await?;
                 tracing::warn!(

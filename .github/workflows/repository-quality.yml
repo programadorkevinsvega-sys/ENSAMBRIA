@@ -199,7 +199,7 @@ jobs:
         run: |
           set -euo pipefail
           psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
+          DO $body$
           BEGIN
               IF NOT has_table_privilege('core_runtime', 'core.outbox_events', 'INSERT') THEN
                   RAISE EXCEPTION 'core_runtime must append Outbox rows in the tenant transaction';
@@ -220,7 +220,7 @@ jobs:
                   RAISE EXCEPTION 'platform_event_consumer must not delete onboarding history';
               END IF;
           END
-          $;
+          $body$;
           SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE platform_event_consumer;

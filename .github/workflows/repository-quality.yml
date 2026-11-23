@@ -393,6 +393,30 @@ jobs:
         if: always()
         run: docker compose -f infra/redis-ha/compose.ci.yml down --volumes --remove-orphans
 
+  nats-jetstream-ha-integration:
+    name: nats-jetstream-ha-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Start three-node NATS JetStream cluster
+        run: docker compose -f infra/nats/compose.ci.yml up -d --wait
+
+      - name: Verify replicated JetStream stream and single-node recovery
+        run: bash scripts/ci/check-nats-jetstream-ha.sh
+
+      - name: Collect NATS cluster diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -f infra/nats/compose.ci.yml ps
+          docker compose -f infra/nats/compose.ci.yml logs --no-color --tail=200
+
+      - name: Tear down NATS JetStream cluster
+        if: always()
+        run: docker compose -f infra/nats/compose.ci.yml down --volumes --remove-orphans
+
   security-dependencies:
     name: security-dependencies
     runs-on: ubuntu-latest

@@ -111,7 +111,10 @@ jobs:
             -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker;"
+            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker, core_outbox_relay;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
@@ -123,7 +126,10 @@ jobs:
             -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime;"
+            -c "CREATE ROLE platform_event_consumer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime, platform_event_consumer;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT platform_schema_owner TO core_migrator;"
@@ -134,6 +140,10 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_schema_owner" \
             -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_schema_owner" \
+            -f backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE platform_schema_owner;
           BEGIN;
@@ -182,6 +192,116 @@ jobs:
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
+
+      - name: Verify tenant Outbox and PLATFORM Inbox schema permissions and idempotency
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE core_runtime;
+          BEGIN;
+          SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+          INSERT INTO core.outbox_events (
+              event_id, event_type, schema_version, aggregate_type, aggregate_id,
+              aggregate_version, product_id, product_config_version, correlation_id,
+              payload, occurred_at
+          ) VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789b0',
+              'core.tenant.created.v1', 1, 'tenant',
+              '018f0f2a-7b3c-7abc-8def-0123456789ae', 1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ab', 1,
+              '018f0f2a-7b3c-7abc-8def-0123456789af',
+              '{"tenantId":"018f0f2a-7b3c-7abc-8def-0123456789ae","productId":"018f0f2a-7b3c-7abc-8def-0123456789ab","productConfigVersion":1}'::jsonb,
+              clock_timestamp()
+          );
+          COMMIT;
+          RESET ROLE;
+          SET ROLE core_outbox_relay;
+          DO $body$
+          BEGIN
+              IF NOT EXISTS (
+                  SELECT 1 FROM core.outbox_events
+                   WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789b0'
+              ) THEN
+                  RAISE EXCEPTION 'CORE outbox relay cannot read the committed event';
+              END IF;
+          END
+          $body$;
+          RESET ROLE;
+          SQL
+          psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $body$
+          BEGIN
+              IF NOT has_table_privilege('core_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
+                  RAISE EXCEPTION 'core_runtime must append Outbox rows in the tenant transaction';
+              END IF;
+              IF NOT has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'SELECT,UPDATE') THEN
+                  RAISE EXCEPTION 'core_outbox_relay must claim and publish Outbox rows';
+              END IF;
+              IF has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
+                  RAISE EXCEPTION 'core_outbox_relay must not create business events';
+              END IF;
+              IF NOT has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'inbox_messages'), 'INSERT,UPDATE,SELECT') THEN
+                  RAISE EXCEPTION 'platform_event_consumer must maintain Inbox records';
+              END IF;
+              IF NOT has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'tenant_onboardings'), 'INSERT,SELECT') THEN
+                  RAISE EXCEPTION 'platform_event_consumer must create and inspect onboarding records';
+              END IF;
+              IF has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'tenant_onboardings'), 'DELETE') THEN
+                  RAISE EXCEPTION 'platform_event_consumer must not delete onboarding history';
+              END IF;
+          END
+          $body$;
+          SQL
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE platform_event_consumer;
+          BEGIN;
+          SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+          INSERT INTO platform.inbox_messages (
+              event_id, consumer_name, event_type, schema_version, aggregate_id,
+              aggregate_version, product_id, product_config_version, correlation_id, payload_hash
+          ) VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789ad',
+              'platform.tenant-onboarding',
+              'core.tenant.created.v1',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ae',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789af',
+              decode(repeat('a', 64), 'hex')
+          ) ON CONFLICT (event_id) DO NOTHING;
+          INSERT INTO platform.tenant_onboardings (
+              tenant_id, product_id, product_config_version, source_event_id
+          ) VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789ae',
+              '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              1,
+              '018f0f2a-7b3c-7abc-8def-0123456789ad'
+          ) ON CONFLICT (tenant_id, product_id) DO NOTHING;
+          UPDATE platform.inbox_messages
+             SET status = 'applied', applied_at = clock_timestamp()
+           WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789ad'
+             AND status = 'received';
+          COMMIT;
+          SQL
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE platform_event_consumer;
+          BEGIN;
+          SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+          DO $body$
+          BEGIN
+              IF (SELECT count(*) FROM platform.tenant_onboardings
+                   WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789ae'
+                     AND product_id = '018f0f2a-7b3c-7abc-8def-0123456789ab') <> 1 THEN
+                  RAISE EXCEPTION 'tenant onboarding was not applied exactly once';
+              END IF;
+          END
+          $body$;
+          COMMIT;
+          SQL
 
       - name: Apply BUSINESS schema after CORE migrations
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''

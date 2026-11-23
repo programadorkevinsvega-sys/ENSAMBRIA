@@ -38,7 +38,6 @@ impl TenantCreatedEvent {
             || self.correlation_id.is_nil()
             || self.product_config_version <= 0
             || self.aggregate_version <= 0
-            || self.payload_hash.iter().all(|byte| *byte == 0)
         {
             return Err(TenantOnboardingError::InvalidEvent);
         }
@@ -95,7 +94,7 @@ pub async fn apply_tenant_created(
             || existing.2 != event.product_id
             || existing.3 != event.product_config_version
             || existing.4 != event.correlation_id
-            || existing.5.as_slice() != event.payload_hash
+            || existing.5.as_slice() != event.payload_hash.as_slice()
         {
             return Err(TenantOnboardingError::EventIdCollision);
         }

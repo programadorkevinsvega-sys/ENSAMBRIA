@@ -1,6 +1,6 @@
 # ADR-0002: Hecho durable de alta de tenant de CORE a PLATFORM
 
-- **Estado:** flujo base de onboarding ratificado; contexto de producto documentado según ADR-0004; implementación pendiente
+- **Estado:** flujo base ratificado; implementación CORE→PLATFORM presente en el repositorio; pruebas de redelivery y recuperación integral incorporadas en esta entrega y pendientes de CI/aceptación
 - **Fecha:** 2026-11-10
 - **Ámbito:** creación de tenant en CORE y recepción de la solicitud de onboarding por PLATFORM
 - **Requisito:** flujo durable CORE→PLATFORM para cada alta operativa de tenant, implementado en la subfase 1.3 conforme a la secuencia ratificada
@@ -71,7 +71,7 @@ Antes de aceptar la implementación del flujo:
 8. Prueba contractual del payload, compatibilidad de versión y redacción de identificadores/datos no necesarios en logs.
 9. Cada alta operativa confirmada genera un único efecto idempotente en PLATFORM: una referencia al tenant y al producto asociado con estado inicial `onboarding_pending`.
 
-Estas pruebas no se ejecutaron: aún no hay flujo, runtime, schemas, JetStream ni tests de aceptación.
+El repositorio contiene el flujo ejecutable CORE Outbox → JetStream → PLATFORM Inbox/onboarding y un gate de integración con PostgreSQL y JetStream reales. La existencia del código o del script no equivale a validación: el CI del commit exacto debe demostrar cada escenario antes de marcarlo VALIDADO. Esta entrega amplía ese gate con fallos inducidos y redelivery real.
 
 ## Alternativas consideradas
 
@@ -103,3 +103,18 @@ Estos detalles no reabren la decisión de que el flujo durable CORE→PLATFORM e
 - [Contrato de arquitectura](../../ARCHITECTURE_RULES.md)
 - [Guía de Outbox/Inbox](../rules/ENSAMBRIA_Transactional_Outbox_Inbox.md)
 - [Registro de Fase 0](../registro-fase-0-descubrimiento-arquitectura.md)
+
+## Registro de resiliencia y redelivery — entrega 1.3
+
+La aceptación de entrega durable se comprueba con el mismo `event_id` y servicios reales, sin sustituir PostgreSQL ni JetStream por mocks:
+
+1. **Outbox pendiente:** CORE confirma tenant + asociación + Outbox en una transacción; el test comprueba que el evento permanece `pending` mientras el relay no se ejecuta.
+2. **Relay cae después del PubAck:** el proceso se detiene después de recibir confirmación durable de JetStream y antes de actualizar el Outbox. Tras expirar el lease, el relay reiniciado publica el mismo `event_id`; `Nats-Msg-Id` evita almacenar una segunda copia y PostgreSQL termina en `published`.
+3. **Reinicio de JetStream:** el clúster de tres nodos se detiene y vuelve a iniciar con sus volúmenes persistentes; el mensaje durable debe seguir disponible.
+4. **Consumer cae antes de la transacción Inbox:** se detiene después de recibir el mensaje y antes de aplicar el evento. No debe existir Inbox ni onboarding en ese punto; la entrega queda pendiente y JetStream la vuelve a entregar.
+5. **Consumer cae después del commit y antes del ACK:** Inbox y onboarding ya están confirmados en PostgreSQL, pero el proceso se detiene antes de ACK. JetStream vuelve a entregar el mismo mensaje; PLATFORM debe tomar la ruta `Duplicate`, no crear un segundo onboarding y confirmar la entrega.
+6. **Estado final:** Outbox `published`, Inbox `applied`, un único onboarding `onboarding_pending` con el `source_event_id` original y evidencia de ACK tras la redelivery.
+
+Los puntos de pausa solo existen en builds de depuración y se habilitan mediante `ENSAMBRIA_ENABLE_FAULT_INJECTION=1` y variables de evento explícitas; los binarios de release no ejecutan estos hooks. En CI el script `scripts/ci/check-core-platform-tenant-onboarding.sh` controla los procesos, provoca los cortes y verifica las invariantes SQL. La configuración de fault injection no se activa en el arranque normal.
+
+**Estado de esta entrega:** implementado en la rama de trabajo; **VALIDADO** queda pendiente hasta que el workflow `repository-quality` termine correctamente para el HEAD del PR. No declarar cierre formal de 1.3 sin CI verde, revisión de evidencia y aceptación explícita del propietario.

@@ -4,7 +4,7 @@ use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
 use serde::Deserialize;
 use sqlx::PgPool;
-use std::{error::Error, time::Duration};
+use std::{env, error::Error, time::Duration};
 use uuid::Uuid;
 
 const STREAM: &str = "ENSAMBRIA";
@@ -93,7 +93,7 @@ pub async fn consume_one(
                 durable_name: Some(DURABLE.to_owned()),
                 filter_subject: SUBJECT.to_owned(),
                 ack_policy: AckPolicy::Explicit,
-                ack_wait: Duration::from_secs(45),
+                ack_wait: configured_ack_wait(),
                 max_deliver: 12,
                 max_ack_pending: 100,
                 ..Default::default()
@@ -109,7 +109,21 @@ pub async fn consume_one(
     let event = envelope
         .into_event(&message.payload)
         .map_err(std::io::Error::other)?;
+    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event.event_id) {
+        tracing::error!(
+            event_id = %event.event_id,
+            "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction"
+        );
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
     let outcome = apply_tenant_created(pool, &event).await?;
+    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event.event_id) {
+        tracing::error!(
+            event_id = %event.event_id,
+            "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK"
+        );
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
     // ACK only after Inbox + onboarding have committed in PostgreSQL.
     message.ack().await?;
     Ok(outcome)
@@ -127,4 +141,22 @@ pub async fn run(pool: PgPool, jetstream: Context) -> Result<(), Box<dyn Error +
             }
         }
     }
+}
+
+fn configured_ack_wait() -> Duration {
+    let seconds = env::var("PLATFORM_JETSTREAM_ACK_WAIT_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| (1..=3600).contains(value))
+        .unwrap_or(45);
+    Duration::from_secs(seconds)
+}
+
+fn fault_injection_matches(variable: &str, event_id: Uuid) -> bool {
+    if !cfg!(debug_assertions)
+        || env::var("ENSAMBRIA_ENABLE_FAULT_INJECTION").ok().as_deref() != Some("1")
+    {
+        return false;
+    }
+    env::var(variable).is_ok_and(|configured_event_id| configured_event_id == event_id.to_string())
 }

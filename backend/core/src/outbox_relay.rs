@@ -2,7 +2,7 @@ use ensambria_event_bus::{jetstream::Context, publish_confirmed};
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::{PgPool, types::Json};
-use std::{error::Error, time::Duration};
+use std::{env, error::Error, time::Duration};
 use uuid::Uuid;
 
 const SUBJECT: &str = "ensambria.core.tenant.created.v1";
@@ -69,7 +69,7 @@ pub async fn publish_pending_once(
     )
     .bind(relay_id)
     .bind(batch_size.clamp(1, 100))
-    .bind(LEASE_SECONDS)
+    .bind(configured_lease_seconds())
     .fetch_all(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -106,6 +106,16 @@ pub async fn publish_pending_once(
         let message_id = event.event_id.to_string();
         match publish_confirmed(jetstream, SUBJECT, &message_id, bytes).await {
             Ok(()) => {
+                if fault_injection_matches(
+                    "ENSAMBRIA_TEST_PAUSE_AFTER_PUBACK_EVENT_ID",
+                    event.event_id,
+                ) {
+                    tracing::error!(
+                        event_id = %event.event_id,
+                        "FAULT_INJECTION: paused after JetStream PubAck and before Outbox published update"
+                    );
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                }
                 let changed = sqlx::query(
                     "UPDATE core.outbox_events SET status='published',
                         published_at=clock_timestamp(), lease_owner=NULL, lease_until=NULL,
@@ -167,4 +177,21 @@ pub async fn run(
             tracing::error!(error = %error, "CORE Outbox relay iteration failed");
         }
     }
+}
+
+fn configured_lease_seconds() -> i32 {
+    env::var("CORE_OUTBOX_LEASE_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<i32>().ok())
+        .filter(|value| (1..=600).contains(value))
+        .unwrap_or(LEASE_SECONDS)
+}
+
+fn fault_injection_matches(variable: &str, event_id: Uuid) -> bool {
+    if !cfg!(debug_assertions)
+        || env::var("ENSAMBRIA_ENABLE_FAULT_INJECTION").ok().as_deref() != Some("1")
+    {
+        return false;
+    }
+    env::var(variable).is_ok_and(|configured_event_id| configured_event_id == event_id.to_string())
 }

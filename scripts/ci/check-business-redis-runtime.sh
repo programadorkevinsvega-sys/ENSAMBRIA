@@ -3,7 +3,7 @@ set -euo pipefail
 
 mode="${PLATFORM_REDIS_MODE:?PLATFORM_REDIS_MODE is required}"
 profile="${BUSINESS_HTTP_TEST_PROFILE:-$mode}"
-port="${BUSINESS_HTTP_TEST_PORT:-18080}"
+port="${BUSINESS_HTTP_TEST_PORT:-22100}"
 log_file="${BUSINESS_HTTP_TEST_LOG:-/tmp/ensambria-business-${profile}.log}"
 health_url="http://127.0.0.1:${port}/health"
 business_url="http://127.0.0.1:${port}/v1/business/establishments"

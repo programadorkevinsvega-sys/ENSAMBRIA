@@ -68,6 +68,11 @@ jobs:
           test -s backend/business/deployment/ensambria-business.service
           test -s backend/business/deployment/ensambria-business-migrate.service
           test -s backend/business/src/bin/business-migrate.rs
+          test -s backend/business/deployment/provision-business-roles.sql
+          grep -Fq 'CORE_HEALTH_LISTEN_ADDRESS=127.0.0.1:22080' .env.example
+          grep -Fq 'CORE_METRICS_LISTEN_ADDRESS=127.0.0.1:22090' .env.example
+          grep -Fq 'BUSINESS_HTTP_LISTEN_ADDRESS=127.0.0.1:22100' .env.example
+          ! grep -Fq '127.0.0.1:8080/health' backend/core/deployment/deploy-staging.sh
           test -s backend/core/deployment/ensambria-env-reload.service
           test -s backend/core/deployment/ensambria-env-reload.path
           grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' backend/business/deployment/ensambria-business.service

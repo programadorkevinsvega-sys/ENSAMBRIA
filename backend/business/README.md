@@ -13,7 +13,7 @@ Required:
 - `CORE_DATABASE_MAX_CONNECTIONS` and `CORE_DATABASE_ACQUIRE_TIMEOUT_MS` (required by CORE's PostgreSQL pool configuration).
 
 Optional:
-- `BUSINESS_HTTP_LISTEN_ADDRESS` (default `0.0.0.0:8080`).
+- `BUSINESS_HTTP_LISTEN_ADDRESS` (default `127.0.0.1:22100`; loopback-only behind the BFF reverse proxy).
 - `BUSINESS_DATABASE_MAX_CONNECTIONS` (default 32).
 - `ENSAMBRIA_REDIS_REQUIRED` (default `false`): when `true`, BUSINESS refuses to start if either the CORE-auth or BUSINESS Redis cache cannot connect; use this in deployments where Redis is a required dependency.
 - Redis configuration documented in `docs/architecture/core-email-outbox-and-platform-contract.md`.
@@ -23,7 +23,7 @@ Build and run:
 cargo run -p ensambria-business --bin business
 ```
 
-Apply CORE migrations first. Provision `business_schema_owner` as NOLOGIN and `business_runtime` as a least-privilege LOGIN role; grant `business_schema_owner` to the dedicated `core_migrator` role and grant `CONNECT` to `business_runtime`. Run `migrations/bootstrap/00000000000000_business_schema.sql` as the CORE schema administrator (it grants `USAGE`/`SELECT` on CORE tables to `business_runtime`), then run `migrations/20261122000001_business_establishments.sql` after `SET ROLE business_schema_owner` using the migration role. Do not run the bootstrap as `business_schema_owner`, because it does not own the CORE schema. Runtime roles must not own tables or have BYPASSRLS.
+Apply CORE migrations first. As a PostgreSQL database administrator, run `psql "$BUSINESS_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/business/deployment/provision-business-roles.sql` after setting `BUSINESS_ADMIN_DATABASE_URL` to the target database. This idempotently provisions `business_schema_owner` and `business_runtime`, grants the required owner membership and database privileges, and does not create or rotate LOGIN passwords. Then run the BUSINESS migrator with `MIGRATIONS_DATABASE_URL` authenticated as `core_migrator`; it preflights owner roles and permissions before applying `migrations/bootstrap/00000000000000_business_schema.sql` and the ordered migrations. The bootstrap explicitly switches to `core_schema_owner` to grant `USAGE`/`SELECT` on CORE tables. Runtime roles must not own tables or have BYPASSRLS.
 
 ## HTTP contract
 

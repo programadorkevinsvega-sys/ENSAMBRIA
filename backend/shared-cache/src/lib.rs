@@ -84,12 +84,12 @@ impl TtlCache {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let client = Client::open(redis_url).map_err(|_| CacheError::InvalidConfiguration)?;
         let configuration = ConnectionManagerConfig::new()
-            .set_exponent_base(2)
-            .set_factor(100)
-            .set_max_delay(2_000)
+            .set_exponent_base(2.0)
+            .set_min_delay(Duration::from_millis(100))
+            .set_max_delay(Duration::from_millis(2_000))
             .set_number_of_retries(RECONNECT_ATTEMPTS)
-            .set_connection_timeout(CONNECTION_TIMEOUT)
-            .set_response_timeout(RESPONSE_TIMEOUT);
+            .set_connection_timeout(Some(CONNECTION_TIMEOUT))
+            .set_response_timeout(Some(RESPONSE_TIMEOUT));
         let mut connections = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
             let connection =
@@ -171,16 +171,15 @@ impl TtlCache {
                 .is_ok_and(|value| value.eq_ignore_ascii_case("true"));
         let mut clients = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
-            let redis_info = RedisConnectionInfo {
-                db: 0,
-                username: Some(username.clone()),
-                password: Some(password.clone()),
-                ..RedisConnectionInfo::default()
-            };
-            let node_info = SentinelNodeConnectionInfo {
-                tls_mode: redis_tls.then_some(TlsMode::Secure),
-                redis_connection_info: Some(redis_info),
-            };
+            let redis_info = RedisConnectionInfo::default()
+                .set_db(0)
+                .set_username(username.clone())
+                .set_password(password.clone());
+            let mut node_info = SentinelNodeConnectionInfo::default();
+            if redis_tls {
+                node_info = node_info.set_tls_mode(TlsMode::Secure);
+            }
+            let node_info = node_info.set_redis_connection_info(redis_info);
             let mut client = SentinelClient::build(
                 nodes.clone(),
                 master.clone(),

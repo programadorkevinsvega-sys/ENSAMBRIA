@@ -10,7 +10,7 @@
 
 **Vault/KMS/PKI:** integración nativa, adapter `crates/secrets`, AppRole/Agent, rotación centralizada y PKI quedan asignados a Fase 11.4. No son entregables de 1.2. Siguen obligatorios los controles provisionales: secretos fuera de repositorio/imágenes/artefactos/logs/trazas, custodia protegida por entorno/workload, mínimo privilegio, claves AES-256-GCM inyectadas y nunca hardcodeadas ni almacenadas en claro en PostgreSQL, redacción y procedimiento de sustitución/rotación. La aceptación técnica de 1.2 no autoriza producción sin custodia aprobada y probada.
 
-La Fase 1 continúa abierta: 1.3–1.5 siguen pendientes. El cierre de 1.2 requiere revisión de trazabilidad y decisión explícita del propietario; el PR #12 no se fusiona sin autorización expresa.
+La Fase 1 continúa abierta. La subfase 1.3 tiene implementación CORE→PLATFORM presente en el repositorio y una entrega de resiliencia/redelivery en validación; 1.4–1.5 siguen pendientes. La aceptación de cada subfase requiere evidencia del CI sobre el SHA exacto y decisión explícita del propietario.
 
 **Subfase 1.1: DESPLEGADA EN STAGING Y ACEPTADA POR EL PROPIETARIO.** El propietario autorizó iniciar su trabajo el 2026-11-18 mientras Fase 0 continúa abierta. El alcance de producto sigue limitado al fundamento técnico, sin rutas ni operaciones de negocio. CORE implementa el protocolo gRPC Health Checking `grpc.health.v1`: liveness no depende de PostgreSQL y readiness comprueba PostgreSQL; ambos listeners son loopback, no APIs de producto. El propietario autorizó el 2026-11-19 configurar CD para desplegar CORE automáticamente en staging tras un CI exitoso en `main` y aplicar allí las migraciones automáticamente. GitHub construye y envía únicamente los binarios y archivos SQL de migración, nunca el código fuente ni `.env`; la credencial restringida del migrator permanece provisionada en la VM y separada de la credencial de runtime. La VM reportada es Ubuntu x86_64 y el run exitoso comprobó la conexión de despliegue por Tailscale/OpenSSH. El propietario verificó en la VM que `ensambria-core.service` está `active`, que `ensambria-core-migrate.service` tiene `Result=success` y `ExecMainStatus=0`, que `--healthcheck 127.0.0.1:18080` devuelve éxito y que `current` apunta al release `20261119T092738Z-2157836`. No se exportará telemetría de runtime; los diagnósticos de fallos de CD se limitan al log del job de Actions.
 
@@ -159,3 +159,20 @@ La prueba autorizada se ejecutó el 2026-11-19 con un archivo temporal root-only
 - **PENDIENTE PARA PRODUCCIÓN:** provisionamiento TLS/ACL por gestor de secretos, topología y dimensionamiento de producción, observabilidad/alertas, invalidación desde mutaciones de catálogo y pruebas de carga con k6 contra el target real cuando exista autorización y perfil aprobado. El CI HA no demuestra capacidad de producción.
 
 La evidencia y los criterios completos se mantienen en [contrato Redis](architecture/redis-cache-contract.md).
+## Subfase 1.3 — Alta operativa durable CORE → PLATFORM
+
+**Estado:** implementación presente; resiliencia integral y redelivery real añadidos en la rama `feat/core-platform-redelivery-recovery-1-3`; validación CI del HEAD de esa entrega y aceptación formal pendientes.
+
+### Matriz de integración y evidencia requerida
+
+| Frontera | Implementación/contrato | Verificación de esta entrega |
+|---|---|---|
+| CORE → PostgreSQL | Alta de tenant, asociación técnica del producto y Outbox en una transacción local. | El E2E crea el tenant real y comprueba Outbox `pending` antes de arrancar el relay. |
+| CORE Outbox → JetStream | Relay con lease recuperable, PubAck durable y `Nats-Msg-Id=event_id`. | El relay se detiene tras PubAck y antes de marcar `published`; al reiniciar tras expirar el lease, publica el mismo ID y JetStream conserva una sola copia. |
+| JetStream → PLATFORM Inbox | Consumer durable con ACK explícito después del commit PostgreSQL. | Reinicio del clúster JetStream de tres nodos; caída del consumer antes de aplicar y después del commit pero antes del ACK; redelivery del mismo mensaje. |
+| PLATFORM Inbox → onboarding | Inbox, onboarding y estado `applied` en una transacción; colisión de ID diferenciada de duplicado idéntico. | Tras redelivery, outcome `Duplicate`, un Inbox `applied` y exactamente un onboarding `onboarding_pending` ligado al event ID original. |
+| Recuperación/operación | Fault injection opt-in, limitada a procesos de CI mediante variable explícita. | Script `scripts/ci/check-core-platform-tenant-onboarding.sh`, ejecutado dentro del job PostgreSQL con PostgreSQL y JetStream reales. |
+
+La aceptación no declara entrega exactamente-una-vez en el transporte: el transporte puede redeliverar y el relay puede volver a publicar; el efecto de negocio se hace idempotente mediante Inbox/constraints en PLATFORM. No se crean planes, suscripciones, trial, facturas, cobros ni entitlements automáticos.
+
+**Cierre:** marcar VALIDADO solo cuando el job `postgres-integration` pase en el SHA del PR y el log confirme cada punto de corte, redelivery, ACK y conteos finales. La fase/subfase permanece abierta hasta la aceptación explícita del propietario.

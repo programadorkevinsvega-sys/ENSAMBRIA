@@ -21,8 +21,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repository-quality:
-    name: repository-quality
+  # The full suite runs before integration (PR / merge queue / manual runs).
+  # A push to main only gets a cheap SHA gate; the protected PR already ran
+  # the full suite, so do not execute the same expensive matrix a second time.
+  rust-workspace-quality:
+    name: rust-workspace-quality
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -54,6 +58,7 @@ jobs:
 
 
   deployment-contract:
+    if: github.event_name != 'push'
     name: deployment-contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -90,6 +95,7 @@ jobs:
           grep -Fq 'core-staging.tar.gz' backend/core/deployment/deploy-staging.sh
 
   postgres-integration:
+    if: github.event_name != 'push'
     name: postgres-integration
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -369,6 +375,7 @@ jobs:
 
 
   redis-ha-integration:
+    if: github.event_name != 'push'
     name: redis-ha-integration
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -568,6 +575,7 @@ jobs:
         run: docker compose -f infra/redis-ha/compose.ci.yml down --volumes --remove-orphans
 
   nats-jetstream-ha-integration:
+    if: github.event_name != 'push'
     name: nats-jetstream-ha-integration
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -591,7 +599,63 @@ jobs:
         if: always()
         run: docker compose -f infra/nats/compose.ci.yml down --volumes --remove-orphans
 
+  # This is the required aggregate check configured by the main ruleset.
+  # It keeps every integration/security job mandatory while allowing them
+  # to execute concurrently.
+  repository-quality:
+    name: repository-quality
+    if: always() && github.event_name != 'push'
+    needs:
+      - rust-workspace-quality
+      - deployment-contract
+      - postgres-integration
+      - redis-ha-integration
+      - nats-jetstream-ha-integration
+      - security-dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every CI suite to pass
+        env:
+          RUST_WORKSPACE_RESULT: ${{ needs.rust-workspace-quality.result }}
+          DEPLOYMENT_CONTRACT_RESULT: ${{ needs.deployment-contract.result }}
+          POSTGRES_RESULT: ${{ needs.postgres-integration.result }}
+          REDIS_HA_RESULT: ${{ needs.redis-ha-integration.result }}
+          NATS_HA_RESULT: ${{ needs.nats-jetstream-ha-integration.result }}
+          SECURITY_RESULT: ${{ needs.security-dependencies.result }}
+        run: |
+          set -euo pipefail
+          for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
+            if [[ "$result" != success ]]; then
+              echo "Required CI suite did not pass (result: $result)" >&2
+              exit 1
+            fi
+          done
+
+  # workflow_run uses this successful, lightweight push workflow to start
+  # staging deployment. The deploy workflow checks out this exact SHA.
+  main-push-gate:
+    name: main-push-gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out the exact pushed main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify pushed branch and commit identity
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git cat-file -t "$EXPECTED_SHA")" = "commit"
+
   security-dependencies:
+    if: github.event_name != 'push'
     name: security-dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 5

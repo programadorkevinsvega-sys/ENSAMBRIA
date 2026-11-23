@@ -221,6 +221,9 @@ jobs:
             -c "GRANT business_schema_owner TO core_migrator;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
+            -c "GRANT CREATE ON DATABASE ensambria_core_test TO business_schema_owner;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
@@ -345,16 +348,11 @@ jobs:
           COMMIT;
           SQL
 
-      - name: Apply BUSINESS schema after CORE migrations
+      - name: Apply BUSINESS schema with the dedicated migration identity
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: |
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -f backend/business/migrations/bootstrap/00000000000000_business_schema.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "SET ROLE business_schema_owner" \
-            -f backend/business/migrations/20261122000001_business_establishments.sql
+        env:
+          MIGRATIONS_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+        run: cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
 
 
   redis-ha-integration:

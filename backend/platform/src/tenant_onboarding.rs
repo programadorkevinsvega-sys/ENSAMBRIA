@@ -52,7 +52,10 @@ pub async fn apply_tenant_created(
     event: &TenantCreatedEvent,
 ) -> Result<TenantOnboardingOutcome, TenantOnboardingError> {
     event.validate()?;
-    let mut transaction = pool.begin().await.map_err(|_| TenantOnboardingError::Storage)?;
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|_| TenantOnboardingError::Storage)?;
 
     let inserted = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO platform.inbox_messages (
@@ -101,11 +104,17 @@ pub async fn apply_tenant_created(
 
         match existing.6.as_str() {
             "applied" => {
-                transaction.commit().await.map_err(|_| TenantOnboardingError::Storage)?;
+                transaction
+                    .commit()
+                    .await
+                    .map_err(|_| TenantOnboardingError::Storage)?;
                 return Ok(TenantOnboardingOutcome::Duplicate);
             }
             "quarantined" => {
-                transaction.commit().await.map_err(|_| TenantOnboardingError::Storage)?;
+                transaction
+        .commit()
+        .await
+        .map_err(|_| TenantOnboardingError::Storage)?;
                 return Ok(TenantOnboardingOutcome::Quarantined);
             }
             "received" => {}
@@ -128,8 +137,16 @@ pub async fn apply_tenant_created(
     .map_err(|_| TenantOnboardingError::Storage)?;
 
     if !product_configuration_is_active {
-        quarantine(&mut transaction, event.event_id, "PRODUCT_CONFIGURATION_UNAVAILABLE").await?;
-        transaction.commit().await.map_err(|_| TenantOnboardingError::Storage)?;
+        quarantine(
+            &mut transaction,
+            event.event_id,
+            "PRODUCT_CONFIGURATION_UNAVAILABLE",
+        )
+        .await?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| TenantOnboardingError::Storage)?;
         return Ok(TenantOnboardingOutcome::Quarantined);
     }
 
@@ -162,9 +179,16 @@ pub async fn apply_tenant_created(
         .map_err(|_| TenantOnboardingError::Storage)?;
 
         if existing_event_id != event.event_id {
-            quarantine(&mut transaction, event.event_id, "TENANT_PRODUCT_ALREADY_ONBOARDED")
-                .await?;
-            transaction.commit().await.map_err(|_| TenantOnboardingError::Storage)?;
+            quarantine(
+                &mut transaction,
+                event.event_id,
+                "TENANT_PRODUCT_ALREADY_ONBOARDED",
+            )
+            .await?;
+            transaction
+                .commit()
+                .await
+                .map_err(|_| TenantOnboardingError::Storage)?;
             return Ok(TenantOnboardingOutcome::Quarantined);
         }
     }

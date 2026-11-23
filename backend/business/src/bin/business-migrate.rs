@@ -44,7 +44,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(pool) => pool,
         Err(error) => {
             let sqlstate = match &error {
-                sqlx::Error::Database(database_error) => database_error.code().unwrap_or_default().into_owned(),
+                sqlx::Error::Database(database_error) => database_error
+                    .code()
+                    .unwrap_or_default()
+                    .into_owned(),
                 _ => String::new(),
             };
             tracing::error!(
@@ -55,7 +58,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 sqlstate = %sqlstate,
                 result = "failure"
             );
-            return Err(io::Error::other("BUSINESS migration database connection failed").into());
+            return Err(
+                io::Error::other("BUSINESS migration database connection failed").into(),
+            );
         }
     };
     let result = apply_migrations(&pool, &bootstrap, &migration_files).await;
@@ -64,7 +69,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let sqlstate = error
             .downcast_ref::<sqlx::Error>()
             .and_then(|database_error| match database_error {
-                sqlx::Error::Database(database_error) => database_error.code().map(|code| code.into_owned()),
+                sqlx::Error::Database(database_error) => {
+                    database_error.code().map(|code| code.into_owned())
+                }
                 _ => None,
             })
             .unwrap_or_default();
@@ -149,7 +156,6 @@ async fn apply_migrations(
     Ok(())
 }
 
-
 async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     let missing_roles: Vec<String> = sqlx::query_scalar(
         "SELECT required.role_name
@@ -170,7 +176,10 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             missing_roles = %missing_roles.join(","),
             result = "failure"
         );
-        return Err(io::Error::other("required BUSINESS schema owner roles are missing or not granted").into());
+        return Err(
+            io::Error::other("required BUSINESS schema owner roles are missing or not granted")
+                .into(),
+        );
     }
 
     let unsafe_owner_roles: Vec<String> = sqlx::query_scalar(
@@ -192,7 +201,9 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             missing_roles = %unsafe_owner_roles.join(","),
             result = "failure"
         );
-        return Err(io::Error::other("schema owner roles must be NOLOGIN and non-privileged").into());
+        return Err(
+            io::Error::other("schema owner roles must be NOLOGIN and non-privileged").into(),
+        );
     }
 
     let has_database_create: bool = sqlx::query_scalar(
@@ -208,7 +219,9 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             failure_class = "business_schema_owner_missing_database_create",
             result = "failure"
         );
-        return Err(io::Error::other("business_schema_owner requires CREATE on the database").into());
+        return Err(
+            io::Error::other("business_schema_owner requires CREATE on the database").into(),
+        );
     }
 
     Ok(())

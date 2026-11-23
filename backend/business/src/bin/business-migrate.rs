@@ -44,10 +44,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(pool) => pool,
         Err(error) => {
             let sqlstate = match &error {
-                sqlx::Error::Database(database_error) => database_error
-                    .code()
-                    .unwrap_or_default()
-                    .into_owned(),
+                sqlx::Error::Database(database_error) => {
+                    database_error.code().unwrap_or_default().into_owned()
+                },
                 _ => String::new(),
             };
             tracing::error!(
@@ -58,9 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 sqlstate = %sqlstate,
                 result = "failure"
             );
-            return Err(
-                io::Error::other("BUSINESS migration database connection failed").into(),
-            );
+            return Err(io::Error::other("BUSINESS migration database connection failed").into());
         }
     };
     let result = apply_migrations(&pool, &bootstrap, &migration_files).await;
@@ -176,10 +173,10 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             missing_roles = %missing_roles.join(","),
             result = "failure"
         );
-        return Err(
-            io::Error::other("required BUSINESS schema owner roles are missing or not granted")
-                .into(),
-        );
+        return Err(io::Error::other(
+            "required BUSINESS schema owner roles are missing or not granted",
+        )
+        .into());
     }
 
     let unsafe_owner_roles: Vec<String> = sqlx::query_scalar(

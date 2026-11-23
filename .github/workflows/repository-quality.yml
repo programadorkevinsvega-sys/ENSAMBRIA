@@ -227,7 +227,7 @@ jobs:
           BEGIN;
           INSERT INTO platform.inbox_messages (
               event_id, consumer_name, event_type, schema_version, aggregate_id,
-              aggregate_version, product_id, correlation_id, payload_hash
+              aggregate_version, product_id, product_config_version, correlation_id, payload_hash
           ) VALUES (
               '018f0f2a-7b3c-7abc-8def-0123456789ad',
               'platform.tenant-onboarding',
@@ -236,6 +236,7 @@ jobs:
               '018f0f2a-7b3c-7abc-8def-0123456789ae',
               1,
               '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              1,
               '018f0f2a-7b3c-7abc-8def-0123456789af',
               decode(repeat('a', 64), 'hex')
           ) ON CONFLICT (event_id) DO NOTHING;

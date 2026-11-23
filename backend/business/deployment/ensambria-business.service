@@ -1,4 +1,6 @@
 [Unit]
+StartLimitIntervalSec=300
+StartLimitBurst=5
 Description=ENSAMBRIA BUSINESS HTTP API
 After=network-online.target ensambria-core.service
 Requires=ensambria-core.service
@@ -14,7 +16,7 @@ EnvironmentFile=/etc/apps/ensambria/core/.env
 UnsetEnvironment=MIGRATIONS_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM
 ExecStart=/opt/apps/ensambria/current/business
 Restart=on-failure
-RestartSec=3
+RestartSec=10s
 TimeoutStopSec=30
 KillSignal=SIGTERM
 NoNewPrivileges=true

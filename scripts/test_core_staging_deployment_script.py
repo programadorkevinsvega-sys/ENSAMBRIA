@@ -57,6 +57,16 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
         for occupied_port in ("8080", "18080", "19090", "3000", "3001", "3002", "3003", "3005", "3006", "50051", "50052", "50053", "50054", "50055", "50056", "50059"):
             self.assertNotIn(f'127.0.0.1:{occupied_port}', self.script_source)
 
+    def test_release_validation_lock_immutability_and_rollback_guards(self):
+        self.assertIn("flock -n 9", self.script_source)
+        self.assertIn("validate_staging_package.py", self.script_source)
+        self.assertIn("deployment artifact validation failed before host changes", self.script_source)
+        self.assertIn("sha256sum --check --strict SHA256SUMS", self.script_source)
+        self.assertIn('[[ -s "$payload/$binary" && -x "$payload/$binary" ]]', self.script_source)
+        self.assertIn('chmod 0550 "$release_directory"', self.script_source)
+        self.assertIn('systemctl is-active --quiet "$business_service_name" || return 1', self.script_source)
+        self.assertIn('ExecStart=/opt/apps/ensambria/current/business', self.script_source)
+
     def test_embedded_python_syntax(self):
         start_marker = "| python3 -c '\n"
         end_marker = "\n'; then"

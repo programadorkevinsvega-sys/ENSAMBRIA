@@ -40,6 +40,7 @@ pub struct CoreMigrationError {
     failure_kind: CoreMigrationFailureKind,
     message: &'static str,
     source: Option<Box<dyn Error + Send + Sync>>,
+    missing_roles: Option<String>,
 }
 
 impl CoreMigrationError {
@@ -52,11 +53,21 @@ impl CoreMigrationError {
             failure_kind,
             message,
             source,
+            missing_roles: None,
         }
     }
 
     pub fn failure_kind(&self) -> CoreMigrationFailureKind {
         self.failure_kind
+    }
+
+    fn missing_roles(missing_roles: Vec<String>) -> Self {
+        Self {
+            failure_kind: CoreMigrationFailureKind::OwnerRole,
+            message: "CORE required database roles are missing",
+            source: None,
+            missing_roles: Some(missing_roles.join(":")),
+        }
     }
 
     fn sqlstate(&self) -> Option<String> {
@@ -253,6 +264,30 @@ pub async fn run_core_migrations_from_path(
             ));
         }
 
+        // These least-privilege login roles are provisioned by the database
+        // operator, never by the restricted migration identity. Every role is
+        // referenced by a GRANT or RLS policy in the migration set.
+        let missing_roles: Vec<String> = sqlx::query_scalar(
+            "SELECT required.role_name \
+             FROM unnest(ARRAY['core_runtime', 'core_email_worker', 'core_outbox_relay']::text[]) \
+                  AS required(role_name) \
+             LEFT JOIN pg_catalog.pg_roles existing ON existing.rolname = required.role_name \
+             WHERE existing.rolname IS NULL \
+             ORDER BY required.role_name",
+        )
+        .fetch_all(&mut connection)
+        .await
+        .map_err(|source| {
+            CoreMigrationError::new(
+                CoreMigrationFailureKind::OwnerRole,
+                "CORE required database roles could not be verified",
+                Some(Box::new(source)),
+            )
+        })?;
+        if !missing_roles.is_empty() {
+            return Err(CoreMigrationError::missing_roles(missing_roles));
+        }
+
         let mut migrator = sqlx::migrate::Migrator::new(migrations_path)
             .await
             .map_err(|source| {
@@ -331,6 +366,7 @@ pub async fn run_core_migrations_from_path(
                 failure_class = error.failure_kind().as_str(),
                 error_code = "CORE_MIGRATION_FAILED",
                 sqlstate = error.sqlstate().as_deref().unwrap_or(""),
+                missing_roles = error.missing_roles.as_deref().unwrap_or(""),
                 duration_ms
             ),
         }

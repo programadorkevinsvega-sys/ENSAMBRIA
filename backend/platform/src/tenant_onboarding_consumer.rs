@@ -109,7 +109,10 @@ pub async fn consume_one(
     let event = envelope
         .into_event(&message.payload)
         .map_err(std::io::Error::other)?;
-    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event.event_id) {
+    if fault_injection_matches(
+        "ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID",
+        event.event_id,
+    ) {
         tracing::error!(
             event_id = %event.event_id,
             "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction"
@@ -117,7 +120,10 @@ pub async fn consume_one(
         tokio::time::sleep(Duration::from_secs(60)).await;
     }
     let outcome = apply_tenant_created(pool, &event).await?;
-    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event.event_id) {
+    if fault_injection_matches(
+        "ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID",
+        event.event_id,
+    ) {
         tracing::error!(
             event_id = %event.event_id,
             "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK"

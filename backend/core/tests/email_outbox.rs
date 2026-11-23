@@ -17,6 +17,10 @@ use ensambria_core::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
+// Both tests share the durable email_outbox queue; serialize them so the worker
+// cannot claim the other test's intentionally pending message.
+static EMAIL_OUTBOX_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn test_pools() -> (PgPool, PgPool) {
     let migration_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("CORE_TEST_MIGRATOR_DATABASE_URL must be configured");
@@ -65,6 +69,7 @@ impl EmailDelivery for CountingDelivery {
 
 #[tokio::test]
 async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_retry() {
+    let _guard = EMAIL_OUTBOX_TEST_LOCK.lock().await;
     let (runtime_pool, worker_pool) = test_pools().await;
     let outbox = OutboxEmailDelivery::new(runtime_pool.clone());
     let worker = EmailOutboxWorker;
@@ -146,6 +151,7 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
 
 #[tokio::test]
 async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
+    let _guard = EMAIL_OUTBOX_TEST_LOCK.lock().await;
     let (runtime_pool, worker_pool) = test_pools().await;
     let outbox = OutboxEmailDelivery::new(runtime_pool.clone());
     let recipient = format!("{}@example.test", Uuid::now_v7());

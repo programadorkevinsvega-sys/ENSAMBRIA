@@ -25,7 +25,7 @@ readonly environment_file=/etc/apps/ensambria/core/.env
 
 temporary_directory=""
 previous_release=""
-temporary_link="${install_root}/.current-$"
+temporary_link="${install_root}/.current-$$"
 release_activated=false
 
 fail() {
@@ -290,7 +290,7 @@ cleanup() {
             status=1
         fi
     fi
-    if systemctl list-unit-files "$env_reload_path_name" >/dev/null 2>&1; then
+    if [[ -f "/etc/systemd/system/$env_reload_path_name" ]]; then
         systemctl enable --now "$env_reload_path_name" || status=1
     fi
     [[ -z "$temporary_directory" ]] || rm -rf -- "$temporary_directory"
@@ -494,6 +494,14 @@ chmod 0550 "$release_directory" "$release_directory/core" "$release_directory/co
 find "$release_directory/migrations" "$release_directory/business-migrations" -type d -exec chmod 0550 {} +
 find "$release_directory/migrations" "$release_directory/business-migrations" -type f -name '*.sql' -exec chmod 0440 {} +
 
+previous_release=""
+if [[ -L "$current_link" ]]; then
+    previous_release="$(readlink -f "$current_link")"
+    [[ "$previous_release" == "$release_root/"* ]] || fail "current release link is invalid"
+elif [[ -e "$current_link" ]]; then
+    fail "current release path is not a symbolic link"
+fi
+
 install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-core.service" \
     /etc/systemd/system/ensambria-core.service
@@ -519,13 +527,6 @@ systemctl daemon-reload
 systemctl enable "$service_name" "$email_worker_service_name" "$business_service_name" "$env_reload_path_name"
 
 
-previous_release=""
-if [[ -L "$current_link" ]]; then
-    previous_release="$(readlink -f "$current_link")"
-    [[ "$previous_release" == "$release_root/"* ]] || fail "current release link is invalid"
-elif [[ -e "$current_link" ]]; then
-    fail "current release path is not a symbolic link"
-fi
 
 ln -s "$release_directory" "$temporary_link"
 mv -Tf "$temporary_link" "$current_link"

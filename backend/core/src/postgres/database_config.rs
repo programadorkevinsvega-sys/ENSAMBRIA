@@ -84,6 +84,7 @@ impl PgDatabaseConfiguration {
         )
     }
 
+    #[cfg(test)]
     fn from_values(
         read: impl FnMut(&'static str) -> Result<Option<String>, PgDatabaseConfigurationError>,
     ) -> Result<Self, PgDatabaseConfigurationError> {

@@ -26,7 +26,7 @@ La arquitectura y responsabilidades completas están en [ARCHITECTURE_RULES.md](
 
 ## Estado de las fases
 
-**Las fases se aceptan por separado y ninguna se considera cerrada por la mera existencia de código o CI configurado.** La Fase 1 tiene trabajo implementado en el repositorio; la subfase 1.3 está en implementación/validación de resiliencia CORE→PLATFORM. Consulta el [estado del roadmap](ROADMAP.md#estado-vigente-de-fases) y exige CI del commit exacto más aceptación explícita.
+**Las fases se aceptan por separado y ninguna se considera cerrada por la mera existencia de código o CI configurado.** La Fase 1 tiene trabajo implementado en el repositorio; la subfase 1.3 tiene implementación y resiliencia CORE→PLATFORM validadas por CI #400; su aceptación formal sigue pendiente. Consulta el [estado del roadmap](ROADMAP.md#estado-vigente-de-fases) y exige CI del commit exacto más aceptación explícita.
 
 No hay instrucciones verificadas para instalar, ejecutar, compilar o desplegar el producto. No se deben inferir a partir de la arquitectura objetivo ni de registros históricos.
 

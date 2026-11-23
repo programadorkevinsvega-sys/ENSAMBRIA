@@ -28,7 +28,7 @@ Do not grant these roles superuser, database-creation, role-creation, or schema-
 
 ## SMTP worker process
 
-Build and run the separate `core-email-worker` binary. It connects using its own PostgreSQL login, polls every five seconds, and processes batches of 25. The systemd unit is installed by staging deployment but intentionally is not enabled automatically: enable it only after the dedicated worker environment file has been provisioned.
+Build and run the separate `core-email-worker` binary. It connects using its own PostgreSQL login, polls every five seconds, and processes batches of 25. The systemd unit is installed by staging deployment but intentionally is not enabled automatically: enable it only after the Resend domain is verified and the single shared CORE environment file contains the worker database credential and Resend SMTP secrets.
 
 Before enabling the worker, the database operator must provision its dedicated login (the restricted migrator cannot create roles), grant database connection, and apply the outbox grants. For example, using the approved database administration channel and a secret-managed password:
 
@@ -39,18 +39,20 @@ GRANT USAGE ON SCHEMA core TO core_email_worker;
 GRANT SELECT, UPDATE ON core.email_outbox TO core_email_worker;
 ```
 
-The migration applies the grants automatically when the role already exists; it deliberately does not create privileged database logins. The worker environment file must use this dedicated login.
+The migration applies the grants automatically when the role already exists; it deliberately does not create privileged database logins. All CORE workloads use one shared file: `/etc/apps/ensambria/core/.env`, owned by root with mode 0600. The worker uses these dedicated entries in that file:
 
-Worker environment file: `/etc/apps/ensambria/core/email-worker.env`, owned by root with mode 0600. It contains:
-
-- `DATABASE_URL`: the dedicated `core_email_worker` PostgreSQL role (not `core_runtime`)
-- `CORE_DATABASE_MAX_CONNECTIONS`
-- `CORE_DATABASE_ACQUIRE_TIMEOUT_MS`
+- `CORE_EMAIL_WORKER_DATABASE_URL`: the dedicated `core_email_worker` PostgreSQL role (not `DATABASE_URL`)
+- `CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS`
+- `CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS`
+- `CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS` (optional)
+- `CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS` (optional)
 - `CORE_SMTP_HOST`
-- `CORE_SMTP_PORT` (STARTTLS; normally 587)
+- `CORE_SMTP_PORT` (STARTTLS; Resend uses 587)
 - `CORE_SMTP_USERNAME`
 - `CORE_SMTP_PASSWORD`
 - `CORE_SMTP_FROM`
+
+The runtime, migrator, and email-worker systemd units all load the same `.env`. Their `UnsetEnvironment` directives remove credentials and secrets not needed by each process: the API cannot see migration, worker-database, or SMTP credentials; the migrator cannot see runtime, worker-database, or SMTP credentials; and the worker cannot see runtime or migration credentials. The worker's Rust configuration reads only the `CORE_EMAIL_WORKER_DATABASE_*` variables and cannot fall back to `DATABASE_URL`.
 
 The staging provider is Resend over SMTP; no provider-specific Rust SDK is required because the worker already uses the generic Lettre STARTTLS transport. Configure `smtp.resend.com`, port `587`, username `resend`, and a Resend API key as the SMTP password. Port 587 is intentional: the worker uses STARTTLS, while Resend's port 465 is implicit TLS and is not compatible with this STARTTLS transport. Create a Resend API key with sending permission limited to the verified sender domain, and set `CORE_SMTP_FROM` to an address on that verified domain.
 

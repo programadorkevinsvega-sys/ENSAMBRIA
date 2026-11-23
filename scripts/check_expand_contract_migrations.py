@@ -9,7 +9,7 @@ import sys
 FORBIDDEN = (
     (re.compile(r"\bDROP\s+(?:TABLE|COLUMN|TYPE|SCHEMA|INDEX|CONSTRAINT)\b", re.I), "DROP requires a later contract migration"),
     (re.compile(r"\bRENAME\s+(?:COLUMN|TO)\b", re.I), "RENAME is not backward-compatible with the previous release"),
-    (re.compile(r"\bALTER\s+(?:TABLE\s+)?[\w."]+\s+ALTER\s+COLUMN\s+[\w"]+\s+(?:TYPE|SET\s+NOT\s+NULL)\b", re.I), "column type/nullability changes require an expand/contract rollout"),
+    (re.compile(r'\bALTER\s+(?:TABLE\s+)?[\w."]+\s+ALTER\s+COLUMN\s+[\w"]+\s+(?:TYPE|SET\s+NOT\s+NULL)\b', re.I), "column type/nullability changes require an expand/contract rollout"),
     (re.compile(r"\bTRUNCATE\b", re.I), "TRUNCATE is destructive and is not allowed in an automatic deployment"),
 )
 

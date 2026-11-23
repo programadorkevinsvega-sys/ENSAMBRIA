@@ -169,7 +169,8 @@ jobs:
           set -Eeuo pipefail
           service=ensambria-business.service
           env_file=/etc/apps/ensambria/core/.env
-          binary=/opt/apps/ensambria/current/business
+          exec_start="$(systemctl show "$service" --property=ExecStart --value 2>/dev/null || true)"
+          binary="$(printf '%s\\n' "$exec_start" | sed -n 's/.*path=\\([^ ;]*\\).*/\\1/p')"
           active="$(systemctl is-active "$service" 2>/dev/null || true)"
           enabled="$(systemctl is-enabled "$service" 2>/dev/null || true)"
           printf 'business_service_active=%s\n' "${active:-missing}"
@@ -195,7 +196,7 @@ jobs:
           fi
           [[ "$active" == active ]]
           [[ "$enabled" == enabled ]]
-          [[ -x "$binary" ]]
+          [[ -n "$binary" && -x "$binary" ]]
           [[ -s "$env_file" ]]
           grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' "$fragment"
           for name in DATABASE_URL BUSINESS_DATABASE_URL CORE_DATABASE_MAX_CONNECTIONS CORE_DATABASE_ACQUIRE_TIMEOUT_MS CORE_PUBLIC_BASE_URL CORE_MFA_ENCRYPTION_KEY_VERSION CORE_MFA_ENCRYPTION_KEY_HEX CORE_AUTH_RATE_LIMIT_SECRET_HEX; do

@@ -153,7 +153,7 @@ fn configured_ack_wait() -> Duration {
 }
 
 fn fault_injection_matches(variable: &str, event_id: Uuid) -> bool {
-    if env::var("ENSAMBRIA_ENABLE_FAULT_INJECTION").as_deref() != Ok("1") {
+    if env::var("ENSAMBRIA_ENABLE_FAULT_INJECTION").ok().as_deref() != Some("1") {
         return false;
     }
     env::var(variable)

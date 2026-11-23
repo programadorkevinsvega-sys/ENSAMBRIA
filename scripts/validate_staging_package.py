@@ -9,10 +9,10 @@ import tarfile
 from pathlib import PurePosixPath
 
 BINARIES = {"core", "core-migrate", "core-email-worker", "business", "business-migrate"}
-CORE_SQL = re.compile(r"migrations/[0-9]{14}_[a-z0-9_]+\\.sql\\Z")
-BUSINESS_SQL = re.compile(r"business-migrations/(?:[a-z0-9_-]+/)?[0-9]{14}_[a-z0-9_]+\\.sql\\Z")
+CORE_SQL = re.compile(r"migrations/[0-9]{14}_[a-z0-9_]+\.sql\Z")
+BUSINESS_SQL = re.compile(r"business-migrations/(?:[a-z0-9_-]+/)?[0-9]{14}_[a-z0-9_]+\.sql\Z")
 ALLOWED_DIRS = {"migrations", "business-migrations", "business-migrations/bootstrap"}
-CHECKSUM_LINE = re.compile(r"([0-9a-f]{64})  ([A-Za-z0-9_./-]+)\\Z")
+CHECKSUM_LINE = re.compile(r"([0-9a-f]{64})  ([A-Za-z0-9_./-]+)\Z")
 
 
 class PackageValidationError(ValueError):
@@ -27,7 +27,6 @@ def validate(path: str) -> int:
 
     with archive:
         files: dict[str, tarfile.TarInfo] = {}
-        directories: set[str] = set()
         for member in archive.getmembers():
             name = member.name.rstrip("/")
             pure = PurePosixPath(name)
@@ -38,7 +37,6 @@ def validate(path: str) -> int:
             if member.isdir():
                 if name not in ALLOWED_DIRS:
                     raise PackageValidationError(f"unexpected directory: {name}")
-                directories.add(name)
                 continue
             if name in files:
                 raise PackageValidationError(f"duplicate archive entry: {name}")

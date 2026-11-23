@@ -1,4 +1,4 @@
-name: CORE staging deploy
+name: ENSAMBRIA staging deploy
 
 on:
   workflow_run:
@@ -51,16 +51,18 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal
           rustup target add x86_64-unknown-linux-musl --toolchain 1.99.1
 
-      - name: Build CORE and its migration runner
+      - name: Build all staging services
         run: >-
           cargo build --locked --release --package ensambria-core
-          --bin core --bin core-migrate --bin core-email-worker --target x86_64-unknown-linux-musl
+          --bin core --bin core-migrate --bin core-email-worker
+          --package ensambria-business --bin business
+          --target x86_64-unknown-linux-musl
 
       - name: Package only binaries and migration SQL
         id: package
         shell: bash
         run: |
-          core_package="${RUNNER_TEMP}/core-staging.tar.gz"
+          core_package="${RUNNER_TEMP}/ensambria-staging.tar.gz"
           artifact_directory="$(mktemp -d "${RUNNER_TEMP}/core-artifacts.XXXXXX")"
           trap 'rm -rf -- "$artifact_directory"' EXIT
           install -m 0750 \
@@ -81,7 +83,7 @@ jobs:
             install -m 0640 "$migration_file" "$artifact_directory/migrations/"
           done
           tar --create --gzip --file "$core_package" \
-            --directory "$artifact_directory" core core-migrate core-email-worker migrations
+            --directory "$artifact_directory" core core-migrate core-email-worker business migrations business-migrations
           echo "path=$core_package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings
@@ -155,7 +157,7 @@ jobs:
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
             "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
 
-      - name: Verify BUSINESS runtime on the staging VM
+      - name: Verify every ENSAMBRIA staging service on the VM
         run: |
           # Reuse the existing staging tailnet access established by the deploy job.
           ssh \
@@ -167,8 +169,17 @@ jobs:
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
             "sudo -n bash -s" <<'REMOTE'
           set -Eeuo pipefail
-          service=ensambria-business.service
           env_file=/etc/apps/ensambria/core/.env
+          services=(ensambria-core.service ensambria-core-email-worker.service ensambria-business.service)
+          for service in "${services[@]}"; do
+            systemctl is-enabled --quiet "$service"
+            systemctl is-active --quiet "$service"
+            printf '%s=active-and-enabled\\n' "$service"
+          done
+          systemctl is-enabled --quiet ensambria-env-reload.path
+          systemctl is-active --quiet ensambria-env-reload.path
+          printf 'env_change_watcher=active-and-enabled\\n'
+          service=ensambria-business.service
           exec_start="$(systemctl show "$service" --property=ExecStart --value 2>/dev/null || true)"
           binary=""
           if [[ "$exec_start" =~ path=([^[:space:];]+) ]]; then binary="${BASH_REMATCH[1]}"; fi

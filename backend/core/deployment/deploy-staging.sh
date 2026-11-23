@@ -205,16 +205,30 @@ if not matched:
 
 report_business_migration_failure() {
     local invocation_id
-    printf 'BUSINESS migration service status:\\n' >&2
-    systemctl show "$business_migration_service_name" --no-pager \\
-        --property=Result --property=LoadState --property=ActiveState \\
-        --property=SubState --property=ExecMainCode --property=ExecMainStatus >&2 || true
-    invocation_id="$(systemctl show "$business_migration_service_name" --property=InvocationID --value 2>/dev/null || true)"
-    if [[ ! "$invocation_id" =~ ^[[:xdigit:]]{32}$ ]]; then
-        printf 'BUSINESS migration invocation unavailable; raw journal withheld.\\n' >&2
+
+    printf 'BUSINESS migration service status:\n' >&2
+    if ! systemctl show "$business_migration_service_name" --no-pager \
+        --property=Result \
+        --property=LoadState \
+        --property=ActiveState \
+        --property=SubState \
+        --property=ExecMainCode \
+        --property=ExecMainStatus >&2
+    then
+        printf 'Could not retrieve BUSINESS migration service status.\n' >&2
+    fi
+
+    if ! invocation_id="$(systemctl show "$business_migration_service_name" --property=InvocationID --value)" \
+        || [[ ! "$invocation_id" =~ ^[[:xdigit:]]{32}$ ]]
+    then
+        printf 'Could not identify the failed BUSINESS migration service invocation; journal entries were not forwarded.\n' >&2
         return 0
     fi
-    journalctl "_SYSTEMD_INVOCATION_ID=$invocation_id" --lines 100 --output json --no-pager 2>/dev/null |
+
+    printf 'Sanitized BUSINESS migration diagnostics:\n' >&2
+    if ! journalctl \
+        "_SYSTEMD_INVOCATION_ID=${invocation_id}" \
+        --lines 100 --output json --no-pager 2>/dev/null |
         python3 -c '
 import json, re, sys
 allowed = ("event", "component", "operation", "failure_class", "error_code", "sqlstate", "missing_roles")
@@ -240,6 +254,9 @@ for line in sys.stdin:
 if not found:
     print("No structured BUSINESS migration failure event; raw journal withheld.", file=sys.stderr)
 '
+    then
+        printf 'Could not retrieve or parse sanitized BUSINESS migration diagnostics.\n' >&2
+    fi
 }
 
 rollback() {

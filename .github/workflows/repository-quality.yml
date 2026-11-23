@@ -20,6 +20,8 @@ concurrency:
 jobs:
   repository-quality:
     name: repository-quality
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -53,6 +55,18 @@ jobs:
           path: Cargo.lock
           if-no-files-found: error
           retention-days: 3
+      - name: Commit the generated dependency lockfile
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if ! git diff --quiet -- Cargo.lock; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Cargo.lock
+            git commit -m "chore(deps): lock CORE PLATFORM JetStream dependencies"
+            git push origin "HEAD:refs/heads/$PR_BRANCH"
+          fi
 
       - name: Lint Rust workspace (cargo clippy)
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''

@@ -225,6 +225,7 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE platform_event_consumer;
           BEGIN;
+          SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
           INSERT INTO platform.inbox_messages (
               event_id, consumer_name, event_type, schema_version, aggregate_id,
               aggregate_version, product_id, product_config_version, correlation_id, payload_hash
@@ -254,9 +255,21 @@ jobs:
              AND status = 'received';
           COMMIT;
           SQL
-          count="$(psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -At -v ON_ERROR_STOP=1 -c \
-            "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789ae' AND product_id = '018f0f2a-7b3c-7abc-8def-0123456789ab'")"
-          test "$count" = "1"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE platform_event_consumer;
+          BEGIN;
+          SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+          DO $body$
+          BEGIN
+              IF (SELECT count(*) FROM platform.tenant_onboardings
+                   WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789ae'
+                     AND product_id = '018f0f2a-7b3c-7abc-8def-0123456789ab') <> 1 THEN
+                  RAISE EXCEPTION 'tenant onboarding was not applied exactly once';
+              END IF;
+          END
+          $body$;
+          COMMIT;
+          SQL
 
       - name: Apply BUSINESS schema after CORE migrations
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''

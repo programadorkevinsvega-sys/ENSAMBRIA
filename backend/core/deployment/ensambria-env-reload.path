@@ -3,6 +3,7 @@ Description=Watch the shared ENSAMBRIA environment file
 
 [Path]
 PathChanged=/etc/apps/ensambria/core/.env
+PathModified=/etc/apps/ensambria/core
 Unit=ensambria-env-reload.service
 
 [Install]

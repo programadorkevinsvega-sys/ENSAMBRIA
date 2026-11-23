@@ -28,6 +28,7 @@ release_directory=""
 previous_release=""
 temporary_link="${install_root}/.current-$"
 release_activated=false
+rollback_available=false
 
 fail() {
     printf 'CORE staging deployment failed: %s\n' "$1" >&2
@@ -266,18 +267,17 @@ if not found:
 }
 
 rollback() {
-    if [[ -n "$previous_release" ]]; then
-        ln -s "$previous_release" "$temporary_link"
-        mv -Tf "$temporary_link" "$current_link"
-        systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
-        wait_until_healthy "$health_address" || return 1
-        systemctl is-active --quiet "$email_worker_service_name" || return 1
-        systemctl is-active --quiet "$business_service_name" || return 1
-        curl --fail --silent --show-error --max-time 5 "$business_health_url" >/dev/null || return 1
-    else
-        rm -f -- "$current_link"
-        systemctl stop "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
+    if [[ "$rollback_available" != true ]]; then
+        printf 'No rollback-compatible previous release exists; keeping the validated new release selected for manual recovery.\\n' >&2
+        return 1
     fi
+    ln -s "$previous_release" "$temporary_link"
+    mv -Tf "$temporary_link" "$current_link"
+    systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
+    wait_until_healthy "$health_address" || return 1
+    systemctl is-active --quiet "$email_worker_service_name" || return 1
+    systemctl is-active --quiet "$business_service_name" || return 1
+    curl --fail --silent --show-error --max-time 5 "$business_health_url" >/dev/null || return 1
 }
 
 cleanup() {
@@ -505,6 +505,12 @@ previous_release=""
 if [[ -L "$current_link" ]]; then
     previous_release="$(readlink -f "$current_link")"
     [[ "$previous_release" == "$release_root/"* ]] || fail "current release link is invalid"
+    if [[ -x "$previous_release/core" && -x "$previous_release/core-email-worker" && -x "$previous_release/business" ]]; then
+        rollback_available=true
+    else
+        printf 'Previous release is not rollback-compatible; failed deployment will retain the new release for manual recovery.\\n' >&2
+        previous_release=""
+    fi
 elif [[ -e "$current_link" ]]; then
     fail "current release path is not a symbolic link"
 fi

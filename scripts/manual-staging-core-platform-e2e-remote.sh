@@ -32,6 +32,9 @@ export ENSAMBRIA_ENABLE_FAULT_INJECTION=1
 command -v cargo >/dev/null || fail "cargo is required on the staging VM to build the debug-only fault-injection binaries"
 command -v psql >/dev/null || fail "psql is required on the staging VM"
 command -v timeout >/dev/null || fail "timeout is required on the staging VM"
+command -v nats >/dev/null || fail "NATS CLI is required to isolate this run from historical JetStream messages"
+command -v jq >/dev/null || fail "jq is required to inspect JetStream stream metadata"
+: "${ENSAMBRIA_E2E_PRODUCT_ID:?Set ENSAMBRIA_E2E_PRODUCT_ID to an active staging product UUID}"
 
 run_dir="$source_dir/.manual-staging-e2e"
 mkdir -m 700 -p "$run_dir"
@@ -110,6 +113,25 @@ stop_pid() {
   wait "$pid" 2>/dev/null || true
 }
 
+# Do not let this temporary relay drain unrelated production-like staging backlog.
+if pgrep -af '[c]ore-outbox-relay' >/dev/null; then
+  fail "a CORE Outbox relay process is already running; refusing to compete with it"
+fi
+pending_before="$(sql_scalar "$CORE_OUTBOX_DATABASE_URL" "SELECT count(*) FROM core.outbox_events WHERE status IN ('pending','retry_wait') OR (status='leased' AND lease_until < clock_timestamp())")"
+[[ "$pending_before" == 0 ]] || fail "CORE Outbox has $pending_before pre-existing pending/expired events; drain and inspect them before the manual run"
+product_active="$(sql_scalar "$PLATFORM_VERIFY_DATABASE_URL" "SELECT EXISTS (SELECT 1 FROM platform.active_product_catalog WHERE product_id='$ENSAMBRIA_E2E_PRODUCT_ID' AND configuration_version=1)")"
+[[ "$product_active" == t ]] || fail "ENSAMBRIA_E2E_PRODUCT_ID is not active at configuration version 1 in staging PLATFORM"
+
+# Create a dedicated durable consumer starting after all existing stream messages.
+stream_info="$(nats --server "$ENSAMBRIA_NATS_URL" stream info ENSAMBRIA --json)"
+last_sequence="$(jq -er '.state.last_seq' <<<"$stream_info")"
+[[ "$last_sequence" =~ ^[0-9]+$ ]] || fail "could not read JetStream last sequence"
+start_sequence=$((last_sequence + 1))
+durable="manual-staging-e2e-${$}-${RANDOM}"
+export PLATFORM_TENANT_ONBOARDING_DURABLE="$durable"
+export PLATFORM_TENANT_ONBOARDING_START_SEQUENCE="$start_sequence"
+printf 'JETSTREAM_STREAM=ENSAMBRIA\\nJETSTREAM_START_SEQUENCE=%s\\nJETSTREAM_DURABLE=%s\\n' "$start_sequence" "$durable"
+
 outbox="SELECT status FROM core.outbox_events WHERE event_id='$event_id'"
 wait_value "$CORE_OUTBOX_DATABASE_URL" "$outbox" pending outbox_initial_pending
 
@@ -127,7 +149,7 @@ stop_pid "$relay_pid"; relay_pid=""
 
 # Kill PLATFORM before its Inbox transaction; the durable consumer must redeliver.
 ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID="$event_id" \
-PLATFORM_JETSTREAM_ACK_WAIT_SECONDS=2 target/debug/platform-tenant-onboarding-consumer >"$run_dir/consumer-before-inbox.log" 2>&1 &
+PLATFORM_TENANT_ONBOARDING_DURABLE="$durable" PLATFORM_TENANT_ONBOARDING_START_SEQUENCE="$start_sequence" PLATFORM_JETSTREAM_ACK_WAIT_SECONDS=2 target/debug/platform-tenant-onboarding-consumer >"$run_dir/consumer-before-inbox.log" 2>&1 &
 consumer_pid=$!
 wait_log "$run_dir/consumer-before-inbox.log" 'FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction' "$consumer_pid"
 stop_pid "$consumer_pid"; consumer_pid=""
@@ -137,7 +159,7 @@ onboarding_zero="$(sql_scalar "$PLATFORM_VERIFY_DATABASE_URL" "SELECT count(*) F
 
 # Redelivery applies Inbox + onboarding atomically, then process is killed before ACK.
 ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID="$event_id" \
-PLATFORM_JETSTREAM_ACK_WAIT_SECONDS=2 target/debug/platform-tenant-onboarding-consumer >"$run_dir/consumer-after-commit.log" 2>&1 &
+PLATFORM_TENANT_ONBOARDING_DURABLE="$durable" PLATFORM_TENANT_ONBOARDING_START_SEQUENCE="$start_sequence" PLATFORM_JETSTREAM_ACK_WAIT_SECONDS=2 target/debug/platform-tenant-onboarding-consumer >"$run_dir/consumer-after-commit.log" 2>&1 &
 consumer_pid=$!
 wait_log "$run_dir/consumer-after-commit.log" 'FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK' "$consumer_pid"
 stop_pid "$consumer_pid"; consumer_pid=""
@@ -146,7 +168,7 @@ onboarding_one="$(sql_scalar "$PLATFORM_VERIFY_DATABASE_URL" "SELECT count(*) FR
 [[ "$inbox_one" == 1 && "$onboarding_one" == 1 ]] || fail "Inbox/onboarding transaction did not produce exactly one row"
 
 # Final redelivery must take the duplicate path and ACK without duplicating onboarding.
-PLATFORM_JETSTREAM_ACK_WAIT_SECONDS=2 target/debug/platform-tenant-onboarding-consumer >"$run_dir/consumer-final-redelivery.log" 2>&1 &
+PLATFORM_TENANT_ONBOARDING_DURABLE="$durable" PLATFORM_TENANT_ONBOARDING_START_SEQUENCE="$start_sequence" PLATFORM_JETSTREAM_ACK_WAIT_SECONDS=2 target/debug/platform-tenant-onboarding-consumer >"$run_dir/consumer-final-redelivery.log" 2>&1 &
 consumer_pid=$!
 wait_log "$run_dir/consumer-final-redelivery.log" 'Duplicate' "$consumer_pid"
 grep -Fq 'PLATFORM tenant event committed and ACKed' "$run_dir/consumer-final-redelivery.log" || fail "duplicate delivery was not ACKed"

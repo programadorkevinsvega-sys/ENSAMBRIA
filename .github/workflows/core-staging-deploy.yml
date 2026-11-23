@@ -155,6 +155,64 @@ jobs:
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
             "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
 
+      - name: Verify BUSINESS runtime on the staging VM
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+        run: |
+          install -m 0700 -d "$HOME/.ssh"
+          printf '%s\\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          # Reuse the existing staging tailnet access established by the deploy job.
+          ssh \\
+            -i "$HOME/.ssh/id_ed25519" \\
+            -o IdentitiesOnly=yes \\
+            -o BatchMode=yes \\
+            -o ConnectTimeout=20 \\
+            -o StrictHostKeyChecking=accept-new \\
+            "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \\
+            "sudo -n bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          service=ensambria-business.service
+          env_file=/etc/apps/ensambria/core/.env
+          binary=/opt/apps/ensambria/current/business
+          active="$(systemctl is-active "$service" 2>/dev/null || true)"
+          enabled="$(systemctl is-enabled "$service" 2>/dev/null || true)"
+          printf 'business_service_active=%s\\n' "${active:-missing}"
+          printf 'business_service_enabled=%s\\n' "${enabled:-missing}"
+          printf 'business_binary_present=%s\\n' "$([[ -x "$binary" ]] && echo yes || echo no)"
+          printf 'shared_env_present=%s\\n' "$([[ -s "$env_file" ]] && echo yes || echo no)"
+          if [[ -s "$env_file" ]]; then
+            for name in DATABASE_URL BUSINESS_DATABASE_URL CORE_DATABASE_MAX_CONNECTIONS CORE_DATABASE_ACQUIRE_TIMEOUT_MS CORE_PUBLIC_BASE_URL CORE_MFA_ENCRYPTION_KEY_VERSION CORE_MFA_ENCRYPTION_KEY_HEX CORE_AUTH_RATE_LIMIT_SECRET_HEX; do
+              if grep -qE "^${name}=.+" "$env_file"; then state=present; else state=missing; fi
+              printf 'shared_env_%s=%s\\n' "$name" "$state"
+            done
+          fi
+          fragment="$(systemctl show "$service" --property=FragmentPath --value 2>/dev/null || true)"
+          printf 'business_unit_file=%s\\n' "${fragment:-missing}"
+          if [[ -n "$fragment" && -f "$fragment" ]]; then
+            if grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' "$fragment"; then
+              printf 'business_uses_shared_env=yes\\n'
+            else
+              printf 'business_uses_shared_env=no\\n'
+            fi
+          else
+            printf 'business_uses_shared_env=unknown\\n'
+          fi
+          [[ "$active" == active ]]
+          [[ "$enabled" == enabled ]]
+          [[ -x "$binary" ]]
+          [[ -s "$env_file" ]]
+          grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' "$fragment"
+          for name in DATABASE_URL BUSINESS_DATABASE_URL CORE_DATABASE_MAX_CONNECTIONS CORE_DATABASE_ACQUIRE_TIMEOUT_MS CORE_PUBLIC_BASE_URL CORE_MFA_ENCRYPTION_KEY_VERSION CORE_MFA_ENCRYPTION_KEY_HEX CORE_AUTH_RATE_LIMIT_SECRET_HEX; do
+            grep -qE "^${name}=.+" "$env_file"
+          done
+          curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/health >/dev/null
+          printf 'business_http_health=ok\\n'
+          REMOTE
+
       - name: Remove deployment SSH key
         if: always()
         run: rm -f -- "$HOME/.ssh/id_ed25519"

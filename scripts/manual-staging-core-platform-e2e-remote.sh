@@ -35,6 +35,7 @@ command -v timeout >/dev/null || fail "timeout is required on the staging VM"
 command -v nats >/dev/null || fail "NATS CLI is required to isolate this run from historical JetStream messages"
 command -v jq >/dev/null || fail "jq is required to inspect JetStream stream metadata"
 : "${ENSAMBRIA_E2E_PRODUCT_ID:?Set ENSAMBRIA_E2E_PRODUCT_ID to an active staging product UUID}"
+[[ "$ENSAMBRIA_E2E_PRODUCT_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || fail "ENSAMBRIA_E2E_PRODUCT_ID must be a UUID"
 
 run_dir="$source_dir/.manual-staging-e2e"
 mkdir -m 700 -p "$run_dir"
@@ -67,8 +68,13 @@ for var in CORE_TENANT_DATABASE_URL CORE_OUTBOX_DATABASE_URL PLATFORM_EVENT_DATA
   psql "$url" -X -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' >/dev/null || fail "$var connection failed"
   printf 'PREFLIGHT_%s=ok\n' "$var"
 done
-for url in "$CORE_TENANT_DATABASE_URL" "$CORE_OUTBOX_DATABASE_URL" "$PLATFORM_EVENT_DATABASE_URL" "$PLATFORM_VERIFY_DATABASE_URL"; do
-  dbname="$(psql "$url" -X -Atqc 'SELECT current_database()')"
+core_tenant_db="$(psql "$CORE_TENANT_DATABASE_URL" -X -Atqc 'SELECT current_database()')"
+core_outbox_db="$(psql "$CORE_OUTBOX_DATABASE_URL" -X -Atqc 'SELECT current_database()')"
+platform_event_db="$(psql "$PLATFORM_EVENT_DATABASE_URL" -X -Atqc 'SELECT current_database()')"
+platform_verify_db="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -X -Atqc 'SELECT current_database()')"
+[[ "$core_tenant_db" == "$core_outbox_db" ]] || fail "CORE tenant and Outbox URLs must target the same database"
+[[ "$platform_event_db" == "$platform_verify_db" ]] || fail "PLATFORM event and verification URLs must target the same database"
+for dbname in "$core_tenant_db" "$platform_event_db"; do
   [[ "$dbname" != *prod* && "$dbname" != *production* ]] || fail "database name looks production-like; refusing to continue"
 done
 
@@ -176,7 +182,7 @@ grep -Fq 'PLATFORM tenant event committed and ACKed' "$run_dir/consumer-final-re
 stop_pid "$consumer_pid"; consumer_pid=""
 
 final_inbox="$(sql_scalar "$PLATFORM_VERIFY_DATABASE_URL" "SELECT count(*) FROM platform.inbox_messages WHERE event_id='$event_id' AND status='applied'")"
-final_onboarding="$(sql_scalar "$PLATFORM_VERIFY_DATABASE_URL" "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='$tenant_id' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND source_event_id='$event_id' AND status='onboarding_pending'")"
+final_onboarding="$(sql_scalar "$PLATFORM_VERIFY_DATABASE_URL" "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='$tenant_id' AND product_id='$ENSAMBRIA_E2E_PRODUCT_ID' AND source_event_id='$event_id' AND status='onboarding_pending'")"
 final_outbox="$(sql_scalar "$CORE_OUTBOX_DATABASE_URL" "SELECT count(*) FROM core.outbox_events WHERE event_id='$event_id' AND status='published'")"
 [[ "$final_inbox" == 1 && "$final_onboarding" == 1 && "$final_outbox" == 1 ]] || fail "final exactly-once assertions failed"
 printf 'ASSERTIONS=outbox_published:1,inbox_applied:1,onboarding_pending:1\n'

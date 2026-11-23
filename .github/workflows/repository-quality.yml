@@ -32,7 +32,7 @@ jobs:
     steps:
       # For pull_request, checkout's default GITHUB_SHA is the synthetic
       # PR merge commit. This validates the exact result that would enter main.
-      # For push, GITHUB_SHA is the exact commit already pushed to main.
+      # Pushes to main use the lightweight main-push-gate job below instead.
       - name: Check out tested revision (PR merge result or pushed commit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
@@ -93,6 +93,11 @@ jobs:
           grep -Fq 'backend/business/deployment/ensambria-business.service' .github/workflows/core-staging-deploy.yml
           grep -Fq 'core-staging.tar.gz' .github/workflows/core-staging-deploy.yml
           grep -Fq 'core-staging.tar.gz' backend/core/deployment/deploy-staging.sh
+          # Keep the main push path cheap while preserving the PR aggregate gate.
+          grep -Fq 'main-push-gate:' .github/workflows/repository-quality.yml
+          grep -Fq "if: github.event_name == 'push'" .github/workflows/repository-quality.yml
+          grep -Fq 'needs:' .github/workflows/repository-quality.yml
+          grep -Fq 'ref: ${{ github.event.workflow_run.head_sha }}' .github/workflows/core-staging-deploy.yml
 
   postgres-integration:
     if: github.event_name != 'push'

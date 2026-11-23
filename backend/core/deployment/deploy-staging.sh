@@ -24,8 +24,9 @@ readonly environment_directory=/etc/apps/ensambria/core
 readonly environment_file=/etc/apps/ensambria/core/.env
 
 temporary_directory=""
+release_directory=""
 previous_release=""
-temporary_link="${install_root}/.current-$$"
+temporary_link="${install_root}/.current-$"
 release_activated=false
 
 fail() {
@@ -292,6 +293,12 @@ cleanup() {
     fi
     if [[ -f "/etc/systemd/system/$env_reload_path_name" ]]; then
         systemctl enable --now "$env_reload_path_name" || status=1
+    fi
+    if [[ "$status" -ne 0 && -n "$release_directory" && -d "$release_directory" ]]; then
+        active_release="$(readlink -f "$current_link" 2>/dev/null || true)"
+        if [[ "$active_release" != "$release_directory" ]]; then
+            rm -rf -- "$release_directory"
+        fi
     fi
     [[ -z "$temporary_directory" ]] || rm -rf -- "$temporary_directory"
     exit "$status"

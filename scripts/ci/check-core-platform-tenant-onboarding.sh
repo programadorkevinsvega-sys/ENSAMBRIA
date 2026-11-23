@@ -30,7 +30,8 @@ for attempt in $(seq 1 60); do
   applied="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc     "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND status='onboarding_pending'")"
   published="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc     "SELECT count(*) FROM core.outbox_events WHERE aggregate_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND status='published'")"
   inbox="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc     "SELECT count(*) FROM platform.inbox_messages WHERE aggregate_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND status='applied'")"
-  if [[ "$applied" == "1" && "$published" == "1" && "$inbox" == "1" ]]; then
+  acknowledged="$(grep -c 'PLATFORM tenant event committed and ACKed' /tmp/ensambria-platform-consumer.log || true)"
+  if [[ "$applied" == "1" && "$published" == "1" && "$inbox" == "1" && "$acknowledged" -ge 1 ]]; then
     echo "CORE transaction -> Outbox -> JetStream publish ACK -> PLATFORM Inbox + onboarding commit -> consumer ACK verified"
     exit 0
   fi

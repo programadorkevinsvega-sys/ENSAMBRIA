@@ -6,6 +6,10 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 readonly service_name=ensambria-core.service
 readonly migration_service_name=ensambria-core-migrate.service
 readonly email_worker_service_name=ensambria-core-email-worker.service
+readonly business_service_name=ensambria-business.service
+readonly env_reload_path_name=ensambria-env-reload.path
+readonly business_service_user=ensambria-business
+readonly business_service_group=ensambria-business
 readonly service_user=ensambria-core
 readonly service_group=ensambria-core
 readonly migrator_user=ensambria-core-migrator
@@ -200,8 +204,9 @@ rollback() {
     if [[ -n "$previous_release" ]]; then
         ln -s "$previous_release" "$temporary_link"
         mv -Tf "$temporary_link" "$current_link"
-        systemctl restart "$service_name" || return 1
+        systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
         wait_until_healthy "$health_address" || return 1
+        curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/health >/dev/null || return 1
     else
         rm -f -- "$current_link"
         systemctl stop "$service_name" || return 1
@@ -251,7 +256,9 @@ grep -Fqx 'UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL' \
 ensure_group "$service_group"
 ensure_group "$migrator_group"
 ensure_group "$artifact_group"
+ensure_group "$business_service_group"
 ensure_user "$service_user" "$service_group"
+ensure_user "$business_service_user" "$business_service_group"
 ensure_user "$migrator_user" "$migrator_group"
 ensure_directory /opt/apps root 755
 ensure_directory "$install_root" "$artifact_group" 750
@@ -275,7 +282,12 @@ for required_variable in \
     CORE_HEALTH_LISTEN_ADDRESS \
     CORE_METRICS_LISTEN_ADDRESS \
     CORE_HEALTH_CHECK_INTERVAL_MS \
-    CORE_HEALTH_CHECK_TIMEOUT_MS
+    CORE_HEALTH_CHECK_TIMEOUT_MS \
+    BUSINESS_DATABASE_URL \
+    CORE_PUBLIC_BASE_URL \
+    CORE_MFA_ENCRYPTION_KEY_VERSION \
+    CORE_MFA_ENCRYPTION_KEY_HEX \
+    CORE_AUTH_RATE_LIMIT_SECRET_HEX
 do
     grep -q "^${required_variable}=." "$environment_file" \
         || fail "required CORE environment setting is missing"
@@ -303,24 +315,24 @@ archive="${staging_directory}/core-staging.tar.gz"
 payload="${temporary_directory}/payload"
 mkdir "$payload"
 tar -tzf "$archive" | while IFS= read -r entry; do
-    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == migrations/ ]] && continue
-    [[ "$entry" =~ ^migrations/[0-9]{14}_[a-z0-9_]+\.sql$ ]] \
+    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == business || "$entry" == migrations/ || "$entry" == business-migrations/ || "$entry" == business-migrations/bootstrap/ ]] && continue
+    [[ "$entry" =~ ^migrations/[0-9]{14}_[a-z0-9_]+\.sql$ || "$entry" =~ ^business-migrations/([a-z0-9_-]+/)?[0-9]{14}_[a-z0-9_]+\.sql$ ]] \
         || fail "deployment package contains an unexpected path"
 done || fail "deployment package contains unexpected files"
 tar -xzf "$archive" -C "$payload" --no-same-owner --no-same-permissions \
     || fail "could not extract deployment package"
-[[ -s "$payload/core" && -s "$payload/core-migrate" && -s "$payload/core-email-worker" ]] \
+[[ -s "$payload/core" && -s "$payload/core-migrate" && -s "$payload/core-email-worker" && -s "$payload/business" ]] \
     || fail "deployment package is missing a binary"
 find "$payload/migrations" -maxdepth 1 -type f -name '*.sql' -print -quit | grep -q . \
     || fail "deployment package is missing SQL migrations"
 
 release_directory="${release_root}/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 mkdir "$release_directory"
-mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/migrations" "$release_directory/"
+mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/business" "$payload/migrations" "$payload/business-migrations" "$release_directory/"
 chown -R "root:${artifact_group}" "$release_directory"
-chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker"
+chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker" "$release_directory/business"
 chmod 0750 "$release_directory/migrations"
-chmod 0640 "$release_directory"/migrations/*.sql
+chmod 0640 "$release_directory"/migrations/*.sql "$release_directory"/business-migrations/*.sql "$release_directory"/business-migrations/bootstrap/*.sql
 
 previous_release=""
 if [[ -L "$current_link" ]]; then
@@ -342,8 +354,15 @@ if ! systemctl start "$migration_service_name"; then
     report_migration_failure
     fail "automatic staging migrations failed"
 fi
-systemctl restart "$service_name" || fail "CORE service failed to restart"
+systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || fail "one or more ENSAMBRIA services failed to restart"
 wait_until_healthy "$health_address" || fail "CORE readiness check failed"
+for attempt in $(seq 1 30); do
+    if curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/health >/dev/null; then
+        break
+    fi
+    [[ "$attempt" -lt 30 ]] || fail "BUSINESS readiness check failed"
+    sleep 2
+done
 
 release_activated=false
 printf 'CORE deployed, migrations applied, and readiness verified.\n'

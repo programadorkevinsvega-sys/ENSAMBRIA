@@ -16,8 +16,6 @@ struct ClaimedEvent {
     schema_version: i32,
     aggregate_id: Uuid,
     aggregate_version: i64,
-    product_id: Uuid,
-    product_config_version: i32,
     correlation_id: Uuid,
     payload: Json<Value>,
     attempt_count: i32,
@@ -54,19 +52,7 @@ pub async fn publish_pending_once(
     let mut tx = pool.begin().await?;
     let rows = sqlx::query_as::<
         _,
-        (
-            Uuid,
-            String,
-            i32,
-            Uuid,
-            i64,
-            Uuid,
-            i32,
-            Uuid,
-            Json<Value>,
-            i32,
-            String,
-        ),
+        (Uuid, String, i32, Uuid, i64, Uuid, Json<Value>, i32, String),
     >(
         "WITH candidates AS (
             SELECT event_id FROM core.outbox_events
@@ -80,8 +66,7 @@ pub async fn publish_pending_once(
                 attempt_count = o.attempt_count + 1
            FROM candidates c WHERE o.event_id = c.event_id
          RETURNING o.event_id, o.event_type, o.schema_version, o.aggregate_id,
-                   o.aggregate_version, o.product_id, o.product_config_version,
-                   o.correlation_id, o.payload, o.attempt_count,
+                   o.aggregate_version, o.correlation_id, o.payload, o.attempt_count,
                    to_char(o.occurred_at AT TIME ZONE 'UTC',
                            'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
     )
@@ -100,12 +85,10 @@ pub async fn publish_pending_once(
             schema_version: row.2,
             aggregate_id: row.3,
             aggregate_version: row.4,
-            product_id: row.5,
-            product_config_version: row.6,
-            correlation_id: row.7,
-            payload: row.8,
-            attempt_count: row.9,
-            occurred_at: row.10,
+            correlation_id: row.5,
+            payload: row.6,
+            attempt_count: row.7,
+            occurred_at: row.8,
         };
         let envelope = EventEnvelope {
             event_id: event.event_id,

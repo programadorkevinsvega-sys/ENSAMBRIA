@@ -188,7 +188,7 @@ jobs:
           for binary in core core-migrate core-email-worker business business-migrate; do
             test -s "/opt/apps/ensambria/current/$binary"
             test -x "/opt/apps/ensambria/current/$binary"
-            printf '%s=present-and-executable\\n' "$binary"
+            printf '%s=present-and-executable\n' "$binary"
           done
           systemctl is-enabled --quiet ensambria-env-reload.path
           systemctl is-active --quiet ensambria-env-reload.path

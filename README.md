@@ -1,8 +1,8 @@
 # ENSAMBRIA
 
-ENSAMBRIA es una plataforma tecnológica en etapa de diseño documental para construir productos SaaS multiproducto y multindustria. El producto inicial previsto se orienta a belleza, estética y bienestar.
+ENSAMBRIA es una plataforma SaaS multiproducto y multindustria en desarrollo. El producto inicial previsto se orienta a belleza, estética y bienestar.
 
-> **Estado del repositorio:** reinicio de la implementación. El código de producto y sus artefactos ejecutables anteriores fueron retirados. Actualmente este repositorio conserva documentación y la estructura restante. No se declara ninguna capacidad de producto implementada, validada ni disponible.
+> **Estado del repositorio:** contiene crates Rust, migraciones PostgreSQL, procesos CORE/PLATFORM y workflows de integración. La presencia de código no implica aceptación de fase ni disponibilidad de producción; consulta el estado vigente y la evidencia por SHA en [ROADMAP.md](ROADMAP.md) y en los registros de fase.
 
 ## Fuentes principales
 
@@ -26,7 +26,7 @@ La arquitectura y responsabilidades completas están en [ARCHITECTURE_RULES.md](
 
 ## Estado de las fases
 
-**Todas las fases 0–11 están abiertas, no aceptadas y sin implementación de producto vigente.** Los registros de Fase 0, 1 y 2 contienen material de cortes anteriores; las afirmaciones sobre código, pruebas, migraciones o integraciones retiradas no son evidencia vigente. Consulta el [estado del roadmap](ROADMAP.md#estado-vigente-de-fases).
+**Las fases se aceptan por separado y ninguna se considera cerrada por la mera existencia de código o CI configurado.** La Fase 1 tiene trabajo implementado en el repositorio; la subfase 1.3 está en implementación/validación de resiliencia CORE→PLATFORM. Consulta el [estado del roadmap](ROADMAP.md#estado-vigente-de-fases) y exige CI del commit exacto más aceptación explícita.
 
 No hay instrucciones verificadas para instalar, ejecutar, compilar o desplegar el producto. No se deben inferir a partir de la arquitectura objetivo ni de registros históricos.
 

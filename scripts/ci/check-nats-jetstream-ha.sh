@@ -28,7 +28,7 @@ fi
 "${BOX[@]}" nats --server nats://nats-1:4222 consumer add ENSAMBRIA ENSAMBRIA-CI \
   --filter "ensambria.>" --ack explicit --pull --defaults
 
-"${BOX[@]}" nats --server nats://nats-1:4222 pub ensambria.ci.before-failure "before-failure" --ack
+"${BOX[@]}" nats --server nats://nats-1:4222 pub --jetstream ensambria.ci.before-failure "before-failure"
 before="$("${BOX[@]}" nats --server nats://nats-1:4222 consumer next ENSAMBRIA ENSAMBRIA-CI --count 1 --ack --timeout 10s)"
 grep -q "before-failure" <<<"$before"
 
@@ -40,7 +40,7 @@ for attempt in $(seq 1 45); do
   fi
   sleep 1
 done
-"${BOX[@]}" nats --server nats://nats-2:4222 pub ensambria.ci.during-failure "during-failure" --ack
+"${BOX[@]}" nats --server nats://nats-2:4222 pub --jetstream ensambria.ci.during-failure "during-failure"
 "${COMPOSE[@]}" start nats-1
 
 wait_for_stream nats://nats-2:4222

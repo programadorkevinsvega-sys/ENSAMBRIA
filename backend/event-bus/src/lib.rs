@@ -2,6 +2,7 @@ pub use async_nats;
 pub use async_nats::jetstream;
 
 use std::error::Error;
+
 pub type EventBusError = Box<dyn Error + Send + Sync>;
 
 pub async fn connect_jetstream(url: &str) -> Result<jetstream::Context, EventBusError> {
@@ -13,6 +14,9 @@ pub async fn publish_confirmed(
     subject: &str,
     payload: Vec<u8>,
 ) -> Result<(), EventBusError> {
-    context.publish(subject.to_owned(), payload.into()).await?.await?;
+    context
+        .publish(subject.to_owned(), payload.into())
+        .await?
+        .await?;
     Ok(())
 }

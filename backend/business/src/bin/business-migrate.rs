@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let sqlstate = match &error {
                 sqlx::Error::Database(database_error) => {
                     database_error.code().unwrap_or_default().into_owned()
-                },
+                }
                 _ => String::new(),
             };
             tracing::error!(

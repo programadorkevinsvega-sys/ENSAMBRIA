@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app = router::<OutboxEmailDelivery>(state);
 
     let address: SocketAddr = std::env::var("BUSINESS_HTTP_LISTEN_ADDRESS")
-        .unwrap_or_else(|_| "0.0.0.0:8080".to_owned())
+        .unwrap_or_else(|_| "127.0.0.1:22100".to_owned())
         .parse()?;
     let listener = TcpListener::bind(address).await?;
     tracing::info!(event="business.http.started", address=%listener.local_addr()?);

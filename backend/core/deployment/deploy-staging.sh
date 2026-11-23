@@ -9,6 +9,7 @@ readonly email_worker_service_name=ensambria-core-email-worker.service
 readonly business_service_name=ensambria-business.service
 readonly business_migration_service_name=ensambria-business-migrate.service
 readonly env_reload_path_name=ensambria-env-reload.path
+readonly env_reload_service_name=ensambria-env-reload.service
 readonly business_service_user=ensambria-business
 readonly business_service_group=ensambria-business
 readonly service_user=ensambria-core
@@ -201,13 +202,53 @@ if not matched:
     fi
 }
 
+
+report_business_migration_failure() {
+    local invocation_id
+    printf 'BUSINESS migration service status:\\n' >&2
+    systemctl show "$business_migration_service_name" --no-pager \\
+        --property=Result --property=LoadState --property=ActiveState \\
+        --property=SubState --property=ExecMainCode --property=ExecMainStatus >&2 || true
+    invocation_id="$(systemctl show "$business_migration_service_name" --property=InvocationID --value 2>/dev/null || true)"
+    if [[ ! "$invocation_id" =~ ^[[:xdigit:]]{32}$ ]]; then
+        printf 'BUSINESS migration invocation unavailable; raw journal withheld.\\n' >&2
+        return 0
+    fi
+    journalctl "_SYSTEMD_INVOCATION_ID=$invocation_id" --lines 100 --output json --no-pager 2>/dev/null |
+        python3 -c '
+import json, re, sys
+allowed = ("event", "component", "operation", "failure_class", "error_code", "sqlstate", "missing_roles")
+found = False
+for line in sys.stdin:
+    try:
+        record = json.loads(line)
+        message = record.get("MESSAGE", "")
+        event = json.loads(message) if isinstance(message, str) else {}
+    except (ValueError, TypeError):
+        continue
+    fields = event.get("fields", {}) if isinstance(event, dict) else {}
+    if not isinstance(fields, dict):
+        continue
+    safe = []
+    for key in allowed:
+        value = fields.get(key)
+        if type(value) in (str, int) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(value)):
+            safe.append(f"{key}={value}")
+    if safe:
+        print(" ".join(safe), file=sys.stderr)
+        found = True
+if not found:
+    print("No structured BUSINESS migration failure event; raw journal withheld.", file=sys.stderr)
+'
+}
+
 rollback() {
     if [[ -n "$previous_release" ]]; then
         ln -s "$previous_release" "$temporary_link"
         mv -Tf "$temporary_link" "$current_link"
         systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
         wait_until_healthy "$health_address" || return 1
-        curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/health >/dev/null || return 1
+        curl --fail --silent --show-error --max-time 5 "$business_health_url" >/dev/null || return 1
     else
         rm -f -- "$current_link"
         systemctl stop "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
@@ -291,6 +332,56 @@ ensure_directory "$environment_directory" root 755
 [[ "$(stat -c '%U:%G:%a' "$environment_file")" == "root:root:600" ]] \
     || fail "CORE environment file must be owned by root with mode 0600"
 [[ -s "$environment_file" ]] || fail "CORE environment file must be populated"
+
+# Stop the path watcher before normalizing listener addresses so it cannot
+# restart services halfway through an atomic deployment.
+systemctl stop "$env_reload_path_name" "$env_reload_service_name" >/dev/null 2>&1 || true
+python3 - "$environment_file" <<'PY'
+import os
+import pathlib
+import stat
+import sys
+import tempfile
+
+path = pathlib.Path(sys.argv[1])
+required = {
+    "CORE_HEALTH_LISTEN_ADDRESS": "127.0.0.1:22080",
+    "CORE_METRICS_LISTEN_ADDRESS": "127.0.0.1:22090",
+    "BUSINESS_HTTP_LISTEN_ADDRESS": "127.0.0.1:22100",
+}
+original = path.read_text(encoding="utf-8")
+lines = []
+written = set()
+for line in original.splitlines():
+    key, separator, _ = line.partition("=")
+    if separator and key in required:
+        if key not in written:
+            lines.append(f"{key}={required[key]}")
+            written.add(key)
+    else:
+        lines.append(line)
+for key, value in required.items():
+    if key not in written:
+        lines.append(f"{key}={value}")
+mode = stat.S_IMODE(path.stat().st_mode)
+metadata = path.stat()
+fd, temporary_name = tempfile.mkstemp(prefix=".ensambria-env.", dir=str(path.parent))
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as temporary:
+        temporary.write(chr(10).join(lines) + chr(10))
+        temporary.flush()
+        os.fsync(temporary.fileno())
+    os.chown(temporary_name, metadata.st_uid, metadata.st_gid)
+    os.chmod(temporary_name, mode)
+    os.replace(temporary_name, path)
+except BaseException:
+    try:
+        os.unlink(temporary_name)
+    except FileNotFoundError:
+        pass
+    raise
+PY
+
 for required_variable in \
     DATABASE_URL \
     MIGRATIONS_DATABASE_URL \
@@ -301,6 +392,7 @@ for required_variable in \
     CORE_HEALTH_CHECK_INTERVAL_MS \
     CORE_HEALTH_CHECK_TIMEOUT_MS \
     BUSINESS_DATABASE_URL \
+    BUSINESS_HTTP_LISTEN_ADDRESS \
     CORE_PUBLIC_BASE_URL \
     CORE_MFA_ENCRYPTION_KEY_VERSION \
     CORE_MFA_ENCRYPTION_KEY_HEX \
@@ -314,6 +406,13 @@ health_address="$(sed -n 's/^CORE_HEALTH_LISTEN_ADDRESS=//p' "$environment_file"
 [[ "$health_address" =~ ^127\.0\.0\.1:([1-9][0-9]{0,4})$ ]] \
     || fail "health listener must use 127.0.0.1 and a valid port"
 (( BASH_REMATCH[1] <= 65535 )) || fail "health listener port is invalid"
+
+business_address="$(sed -n 's/^BUSINESS_HTTP_LISTEN_ADDRESS=//p' "$environment_file")"
+[[ "$business_address" =~ ^127\.0\.0\.1:([1-9][0-9]{0,4})$ ]] \
+    || fail "BUSINESS listener must use 127.0.0.1 and a valid port"
+(( BASH_REMATCH[1] <= 65535 )) || fail "BUSINESS listener port is invalid"
+[[ "$business_address" != "$health_address" ]] || fail "CORE and BUSINESS listeners must use different ports"
+business_health_url="http://127.0.0.1:${business_address##*:}/health"
 
 install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-core.service" \
@@ -385,12 +484,14 @@ if ! systemctl start "$migration_service_name"; then
     report_migration_failure
     fail "automatic CORE staging migrations failed"
 fi
-systemctl start "$business_migration_service_name" \
-    || fail "automatic BUSINESS staging migrations failed"
+if ! systemctl start "$business_migration_service_name"; then
+    report_business_migration_failure
+    fail "automatic BUSINESS staging migrations failed"
+fi
 systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || fail "one or more ENSAMBRIA services failed to restart"
 wait_until_healthy "$health_address" || fail "CORE readiness check failed"
 for attempt in $(seq 1 30); do
-    if curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/health >/dev/null; then
+    if curl --fail --silent --show-error --max-time 3 "$business_health_url" >/dev/null; then
         break
     fi
     [[ "$attempt" -lt 30 ]] || fail "BUSINESS readiness check failed"

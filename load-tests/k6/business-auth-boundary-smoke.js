@@ -3,8 +3,8 @@ import { check } from 'k6';
 import { Rate } from 'k6/metrics';
 
 const unexpectedStatus = new Rate('business_auth_boundary_unexpected_status');
-const target = __ENV.TARGET_URL || 'http://127.0.0.1:18080/v1/business/establishments';
-const allowedTarget = 'http://127.0.0.1:18080/v1/business/establishments';
+const target = __ENV.TARGET_URL || 'http://127.0.0.1:22100/v1/business/establishments';
+const allowedTarget = 'http://127.0.0.1:22100/v1/business/establishments';
 
 if (target !== allowedTarget) {
   throw new Error('The CI smoke target must be exactly the local BUSINESS establishments route');

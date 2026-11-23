@@ -70,6 +70,7 @@ jobs:
       CORE_OUTBOX_DATABASE_URL: postgres://core_outbox_relay@127.0.0.1:5432/ensambria_core_test
       CORE_TENANT_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
       PLATFORM_EVENT_DATABASE_URL: postgres://platform_event_consumer@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_VERIFY_DATABASE_URL: postgres://core_admin@127.0.0.1:5432/ensambria_core_test
       PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
       BUSINESS_DATABASE_URL: postgres://business_runtime@127.0.0.1:5432/ensambria_core_test
       ENSAMBRIA_TEST_REDIS_URL: redis://127.0.0.1:6379/

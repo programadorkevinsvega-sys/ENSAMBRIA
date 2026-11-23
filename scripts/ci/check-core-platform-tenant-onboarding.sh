@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export ENSAMBRIA_NATS_URL="${ENSAMBRIA_NATS_URL:-nats://127.0.0.1:4222}"
+: "${PLATFORM_VERIFY_DATABASE_URL:?PLATFORM_VERIFY_DATABASE_URL is required}"
 docker compose -f infra/nats/compose.ci.yml exec -T nats-box \
   nats --server nats://nats-1:4222 stream add ENSAMBRIA \
   --subjects "ensambria.>" --storage file --replicas 3 --retention limits --defaults
@@ -26,9 +27,9 @@ sleep 2
 target/debug/core-tenant-onboarding-e2e
 
 for attempt in $(seq 1 60); do
-  applied="$(psql "$PLATFORM_EVENT_DATABASE_URL" -Atqc     "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND status='onboarding_pending'")"
+  applied="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc     "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND status='onboarding_pending'")"
   published="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc     "SELECT count(*) FROM core.outbox_events WHERE aggregate_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND status='published'")"
-  inbox="$(psql "$PLATFORM_EVENT_DATABASE_URL" -Atqc     "SELECT count(*) FROM platform.inbox_messages WHERE aggregate_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND status='applied'")"
+  inbox="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc     "SELECT count(*) FROM platform.inbox_messages WHERE aggregate_id='018f0f2a-7b3c-7abc-8def-0123456789ae' AND status='applied'")"
   if [[ "$applied" == "1" && "$published" == "1" && "$inbox" == "1" ]]; then
     echo "CORE transaction -> Outbox -> JetStream publish ACK -> PLATFORM Inbox + onboarding commit -> consumer ACK verified"
     exit 0

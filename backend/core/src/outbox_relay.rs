@@ -64,7 +64,7 @@ pub async fn publish_pending_once(
             SELECT event_id FROM core.outbox_events
              WHERE (status IN ('pending', 'retry_wait') AND available_at <= clock_timestamp())
                 OR (status = 'leased' AND lease_until < clock_timestamp())
-             ORDER BY occurred_at, event_id FOR UPDATE SKIP LOCKED LIMIT $2
+             ORDER BY occurred_at, event_id LIMIT $2 FOR UPDATE SKIP LOCKED
          )
          UPDATE core.outbox_events o
             SET status = 'leased', lease_owner = $1,

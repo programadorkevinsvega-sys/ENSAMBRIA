@@ -93,7 +93,7 @@ pub async fn create_tenant_with_outbox(
     .map_err(|_| TenantLifecycleError::Storage)?;
 
     enqueue_tenant_created(
-        &mut tx,
+        &mut *tx,
         &TenantCreatedOutboxEvent {
             event_id,
             tenant_id: input.tenant_id,

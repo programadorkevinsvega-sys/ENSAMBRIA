@@ -561,7 +561,10 @@ jobs:
         with:
           tool: cargo-audit,cargo-deny
 
-      - name: Audit committed Cargo.lock for vulnerabilities (cargo audit)
+      - name: Resolve workspace dependency graph before audit
+        if: steps.cargo_manifests.outputs.present == 'true'
+        run: cargo check --workspace
+      - name: Audit resolved Cargo.lock for vulnerabilities (cargo audit)
         if: steps.cargo_manifests.outputs.present == 'true'
         run: cargo audit
 

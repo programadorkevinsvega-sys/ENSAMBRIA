@@ -51,6 +51,12 @@ CREATE TABLE platform.tenant_onboardings (
     PRIMARY KEY (tenant_id, product_id)
 );
 
+ALTER TABLE platform.tenant_onboardings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform.tenant_onboardings FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_onboardings_tenant_scope ON platform.tenant_onboardings
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+
 REVOKE ALL ON
     platform.inbox_messages,
     platform.tenant_onboardings

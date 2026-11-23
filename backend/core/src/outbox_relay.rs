@@ -83,7 +83,7 @@ pub async fn publish_pending_once(
                    o.aggregate_version, o.product_id, o.product_config_version,
                    o.correlation_id, o.payload, o.attempt_count,
                    to_char(o.occurred_at AT TIME ZONE 'UTC',
-                           'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')",
+                           'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
     )
     .bind(relay_id)
     .bind(batch_size.clamp(1, 100))

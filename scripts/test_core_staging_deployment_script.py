@@ -59,6 +59,10 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
 
     def test_release_validation_lock_immutability_and_rollback_guards(self):
         self.assertIn("flock -n 9", self.script_source)
+        self.assertIn('temporary_link="${install_root}/.current-$"', self.script_source)
+        self.assertIn('rollback_available=false', self.script_source)
+        self.assertIn('No rollback-compatible previous release exists', self.script_source)
+        self.assertIn('[[ -x "$previous_release/core" && -x "$previous_release/core-email-worker" && -x "$previous_release/business" ]]', self.script_source)
         self.assertIn("validate_staging_package.py", self.script_source)
         self.assertIn("deployment artifact validation failed before host changes", self.script_source)
         self.assertIn("sha256sum --check --strict SHA256SUMS", self.script_source)

@@ -66,6 +66,8 @@ jobs:
           set -euo pipefail
           bash -n backend/core/deployment/deploy-staging.sh
           test -s backend/business/deployment/ensambria-business.service
+          test -s backend/business/deployment/ensambria-business-migrate.service
+          test -s backend/business/src/bin/business-migrate.rs
           test -s backend/core/deployment/ensambria-env-reload.service
           test -s backend/core/deployment/ensambria-env-reload.path
           grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' backend/business/deployment/ensambria-business.service
@@ -73,6 +75,8 @@ jobs:
           grep -Fqx 'PathChanged=/etc/apps/ensambria/core/.env' backend/core/deployment/ensambria-env-reload.path
           grep -Fqx 'PathModified=/etc/apps/ensambria/core/.env' backend/core/deployment/ensambria-env-reload.path
           grep -Fq 'ensambria-business.service' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'ensambria-business-migrate.service' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'business-migrate' .github/workflows/core-staging-deploy.yml
           grep -Fq 'ensambria-core-email-worker.service' backend/core/deployment/deploy-staging.sh
           grep -Fq 'ensambria-env-reload.path' backend/core/deployment/deploy-staging.sh
           grep -Fq 'business-migrations' .github/workflows/core-staging-deploy.yml

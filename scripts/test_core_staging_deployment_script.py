@@ -19,10 +19,28 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_email_worker_is_packaged_and_installed_without_auto_enabling(self):
+    def test_all_core_units_share_env_and_isolate_database_credentials(self):
+        deployment = Path(__file__).resolve().parents[1] / "backend/core/deployment"
+        api = (deployment / "ensambria-core.service").read_text(encoding="utf-8")
+        migrator = (deployment / "ensambria-core-migrate.service").read_text(encoding="utf-8")
+        worker = (deployment / "ensambria-core-email-worker.service").read_text(encoding="utf-8")
+
         self.assertIn("ensambria-core-email-worker.service", self.script_source)
         self.assertIn("core-email-worker", self.script_source)
-        self.assertIn("email-worker.env", self.script_source)
+        for service in (api, migrator, worker):
+            self.assertIn("EnvironmentFile=/etc/apps/ensambria/core/.env", service)
+
+        self.assertIn("UnsetEnvironment=MIGRATIONS_DATABASE_URL", api)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", api)
+        self.assertIn("CORE_SMTP_PASSWORD", api)
+
+        self.assertIn("UnsetEnvironment=DATABASE_URL", migrator)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", migrator)
+        self.assertIn("CORE_SMTP_PASSWORD", migrator)
+
+        self.assertIn("UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL", worker)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", self.script_source)
+        self.assertNotIn("email-worker.env", self.script_source)
         self.assertNotIn('systemctl enable "$email_worker_service_name"', self.script_source)
 
     def test_embedded_python_syntax(self):

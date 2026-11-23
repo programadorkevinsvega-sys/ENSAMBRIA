@@ -37,6 +37,9 @@ command -v tar >/dev/null || fail "tar is required"
 [[ -f Cargo.toml && -d backend/core && -d backend/platform ]] || fail "run from the ENSAMBRIA repository root"
 [[ -f "${ENSAMBRIA_STAGING_ENV_FILE}" ]] || fail "remote env-file path is not configured (it must exist on the VM)"
 [[ -f scripts/manual-staging-core-platform-e2e-remote.sh ]] || fail "remote runner is missing"
+printf 'This will create one real tenant and Outbox event in STAGING, publish to the real staging JetStream, and write PLATFORM Inbox/onboarding rows. It will not restart shared infrastructure or systemd services.\n'
+read -r -p 'Type RUN-STAGING-E2E to continue: ' confirmation
+[[ "$confirmation" == "RUN-STAGING-E2E" ]] || fail "confirmation did not match; nothing was uploaded or executed"
 
 ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes)
 if [[ -n "${ENSAMBRIA_STAGING_SSH_OPTS:-}" ]]; then

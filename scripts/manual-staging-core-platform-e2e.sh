@@ -69,9 +69,9 @@ fi
 mkdir -p reports/manual-staging-e2e
 local_report="reports/manual-staging-e2e/staging-e2e-$(date -u +%Y%m%dT%H%M%SZ).txt"
 if scp "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET:$remote_dir/report.txt" "$local_report" 2>/dev/null; then
-  printf 'Local report: %s\\n' "$local_report"
+  printf 'Local report: %s\n' "$local_report"
 else
-  printf 'WARNING: remote report was not available to copy.\\n' >&2
+  printf 'WARNING: remote report was not available to copy.\n' >&2
 fi
 ssh "${ssh_opts[@]}" "$ENSAMBRIA_STAGING_SSH_TARGET" "rm -rf '$remote_dir'" || true
 exit "$run_status"

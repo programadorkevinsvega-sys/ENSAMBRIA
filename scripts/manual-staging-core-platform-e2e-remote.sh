@@ -75,13 +75,6 @@ done
 printf 'BUILD=debug fault-injection binaries\n'
 cargo build --locked -p ensambria-core --bin core-tenant-onboarding-e2e --bin core-outbox-relay
 cargo build --locked -p ensambria-platform --bin platform-tenant-onboarding-consumer
-e2e_output="$(target/debug/core-tenant-onboarding-e2e)"
-printf '%s\n' "$e2e_output"
-event_id="$(sed -n 's/^EVENT_ID=//p' <<<"$e2e_output")"
-tenant_id="$(sed -n 's/^TENANT_ID=//p' <<<"$e2e_output")"
-[[ "$event_id" =~ ^[0-9a-fA-F-]{36}$ && "$tenant_id" =~ ^[0-9a-fA-F-]{36}$ ]] || fail "E2E binary did not return valid IDs"
-printf 'CORRELATION_EVENT_ID=%s\nTENANT_ID=%s\n' "$event_id" "$tenant_id"
-
 sql_scalar() {
   local url="$1" query="$2"
   psql "$url" -X -v ON_ERROR_STOP=1 -Atqc "$query"
@@ -131,6 +124,14 @@ durable="manual-staging-e2e-${$}-${RANDOM}"
 export PLATFORM_TENANT_ONBOARDING_DURABLE="$durable"
 export PLATFORM_TENANT_ONBOARDING_START_SEQUENCE="$start_sequence"
 printf 'JETSTREAM_STREAM=ENSAMBRIA\\nJETSTREAM_START_SEQUENCE=%s\\nJETSTREAM_DURABLE=%s\\n' "$start_sequence" "$durable"
+
+e2e_output="$(target/debug/core-tenant-onboarding-e2e)"
+printf '%s\n' "$e2e_output"
+event_id="$(sed -n 's/^EVENT_ID=//p' <<<"$e2e_output")"
+tenant_id="$(sed -n 's/^TENANT_ID=//p' <<<"$e2e_output")"
+[[ "$event_id" =~ ^[0-9a-fA-F-]{36}$ && "$tenant_id" =~ ^[0-9a-fA-F-]{36}$ ]] || fail "E2E binary did not return valid IDs"
+printf 'CORRELATION_EVENT_ID=%s\nTENANT_ID=%s\n' "$event_id" "$tenant_id"
+
 
 outbox="SELECT status FROM core.outbox_events WHERE event_id='$event_id'"
 wait_value "$CORE_OUTBOX_DATABASE_URL" "$outbox" pending outbox_initial_pending

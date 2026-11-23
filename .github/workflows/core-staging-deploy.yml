@@ -80,8 +80,14 @@ jobs:
           test -s "$artifacts/business"
           test -n "$(find "$artifacts/migrations" -type f -name '*.sql' -print -quit)"
           test -n "$(find "$artifacts/business-migrations" -type f -name '*.sql' -print -quit)"
+          (
+            cd "$artifacts"
+            find core core-migrate core-email-worker business business-migrate migrations business-migrations -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
           tar --create --gzip --file "$package" --directory "$artifacts" \
-            core core-migrate core-email-worker business business-migrate migrations business-migrations
+            SHA256SUMS core core-migrate core-email-worker business business-migrate migrations business-migrations
           echo "path=$package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings
@@ -142,6 +148,7 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             "$CORE_PACKAGE" \
             backend/core/deployment/deploy-staging.sh \
+            scripts/validate_staging_package.py \
             backend/core/deployment/ensambria-core.service \
             backend/core/deployment/ensambria-core-migrate.service \
             backend/core/deployment/ensambria-core-email-worker.service \
@@ -177,6 +184,11 @@ jobs:
             systemctl is-enabled --quiet "$service"
             systemctl is-active --quiet "$service"
             printf '%s=active-and-enabled\n' "$service"
+          done
+          for binary in core core-migrate core-email-worker business business-migrate; do
+            test -s "/opt/apps/ensambria/current/$binary"
+            test -x "/opt/apps/ensambria/current/$binary"
+            printf '%s=present-and-executable\n' "$binary"
           done
           systemctl is-enabled --quiet ensambria-env-reload.path
           systemctl is-active --quiet ensambria-env-reload.path

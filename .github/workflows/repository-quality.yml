@@ -70,6 +70,25 @@ jobs:
         run: |
           set -euo pipefail
           bash -n backend/core/deployment/deploy-staging.sh
+          grep -Fq 'flock -n 9' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'validate_staging_package.py' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'SHA256SUMS' backend/core/deployment/deploy-staging.sh
+          grep -Fq 'SHA256SUMS' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'scripts/validate_staging_package.py' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'StartLimitBurst=5' backend/business/deployment/ensambria-business.service
+          grep -Fq 'chmod 0550' backend/core/deployment/deploy-staging.sh
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          mapfile -t changed_migrations < <(git diff --name-only refs/remotes/origin/main...HEAD -- backend/core/migrations backend/business/migrations)
+          for migration in "${changed_migrations[@]}"; do
+            [[ -f "$migration" ]] || { echo "Migration files cannot be deleted during automatic deployment: $migration" >&2; exit 1; }
+          done
+          if (( ${#changed_migrations[@]} )); then
+            python3 scripts/check_expand_contract_migrations.py "${changed_migrations[@]}"
+          else
+            echo "No migration SQL changed; compatibility guard not required."
+          fi
+          python3 -m unittest discover -s scripts -p 'test_staging_package_validation.py'
+          python3 -m unittest discover -s scripts -p 'test_expand_contract_migration_policy.py'
           test -s backend/business/deployment/ensambria-business.service
           test -s backend/business/deployment/ensambria-business-migrate.service
           test -s backend/business/src/bin/business-migrate.rs
@@ -247,6 +266,26 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
+      - name: Apply CORE migrations twice and verify rollback compatibility
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        env:
+          MIGRATIONS_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+        run: |
+          set -euo pipefail
+          cargo run --locked --package ensambria-core --bin core-migrate -- backend/core/migrations
+          cargo run --locked --package ensambria-core --bin core-migrate -- backend/core/migrations
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $body$
+          BEGIN
+              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone)') IS NULL THEN
+                  RAISE EXCEPTION 'previous CORE release refresh-token function contract is missing';
+              END IF;
+              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone,bytea,timestamp with time zone)') IS NULL THEN
+                  RAISE EXCEPTION 'current CORE access-token refresh function contract is missing';
+              END IF;
+          END
+          $body$;
+          SQL
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace

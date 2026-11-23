@@ -23,6 +23,12 @@ readonly current_link=/opt/apps/ensambria/current
 readonly environment_directory=/etc/apps/ensambria/core
 readonly environment_file=/etc/apps/ensambria/core/.env
 
+temporary_directory=""
+release_directory=""
+previous_release=""
+temporary_link="${install_root}/.current-$"
+release_activated=false
+
 fail() {
     printf 'CORE staging deployment failed: %s\n' "$1" >&2
     exit 1
@@ -265,6 +271,8 @@ rollback() {
         mv -Tf "$temporary_link" "$current_link"
         systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || return 1
         wait_until_healthy "$health_address" || return 1
+        systemctl is-active --quiet "$email_worker_service_name" || return 1
+        systemctl is-active --quiet "$business_service_name" || return 1
         curl --fail --silent --show-error --max-time 5 "$business_health_url" >/dev/null || return 1
     else
         rm -f -- "$current_link"
@@ -283,6 +291,15 @@ cleanup() {
             status=1
         fi
     fi
+    if [[ -f "/etc/systemd/system/$env_reload_path_name" ]]; then
+        systemctl enable --now "$env_reload_path_name" || status=1
+    fi
+    if [[ "$status" -ne 0 && -n "$release_directory" && -d "$release_directory" ]]; then
+        active_release="$(readlink -f "$current_link" 2>/dev/null || true)"
+        if [[ "$active_release" != "$release_directory" ]]; then
+            rm -rf -- "$release_directory"
+        fi
+    fi
     [[ -z "$temporary_directory" ]] || rm -rf -- "$temporary_directory"
     exit "$status"
 }
@@ -299,10 +316,31 @@ for required_file in \
     "${staging_directory}/ensambria-business-migrate.service" \
     "${staging_directory}/ensambria-env-reload.service" \
     "${staging_directory}/ensambria-env-reload.path" \
+    "${staging_directory}/validate_staging_package.py" \
     "${staging_directory}/core-staging.tar.gz"
 do
     [[ -s "$required_file" ]] || fail "required deployment file is missing"
 done
+
+# Serialize deployments on the VM, including manual and out-of-band invocations.
+exec 9>/run/lock/ensambria-staging-deploy.lock
+flock -n 9 || fail "another ENSAMBRIA deployment is already running"
+
+python3 "${staging_directory}/validate_staging_package.py" "${staging_directory}/core-staging.tar.gz" \
+    || fail "deployment artifact validation failed before host changes"
+
+# Check every systemd executable contract before installing any unit files.
+grep -Fqx 'ExecStart=/opt/apps/ensambria/current/core' "${staging_directory}/ensambria-core.service" \
+    || fail "CORE ExecStart does not match the release layout"
+grep -Fqx 'ExecStart=/opt/apps/ensambria/current/core-email-worker' "${staging_directory}/ensambria-core-email-worker.service" \
+    || fail "email worker ExecStart does not match the release layout"
+grep -Fqx 'ExecStart=/opt/apps/ensambria/current/business' "${staging_directory}/ensambria-business.service" \
+    || fail "BUSINESS ExecStart does not match the release layout"
+grep -Fqx 'ExecStart=/opt/apps/ensambria/current/core-migrate /opt/apps/ensambria/current/migrations' "${staging_directory}/ensambria-core-migrate.service" \
+    || fail "CORE migrator ExecStart does not match the release layout"
+grep -Fqx 'ExecStart=/opt/apps/ensambria/current/business-migrate /opt/apps/ensambria/current/business-migrations' "${staging_directory}/ensambria-business-migrate.service" \
+    || fail "BUSINESS migrator ExecStart does not match the release layout"
+
 grep -Fqx 'UnsetEnvironment=MIGRATIONS_DATABASE_URL BUSINESS_DATABASE_URL BUSINESS_DATABASE_MAX_CONNECTIONS BUSINESS_HTTP_LISTEN_ADDRESS ENSAMBRIA_REDIS_REQUIRED CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
     "${staging_directory}/ensambria-core.service" \
     || fail "CORE systemd service must exclude migration and email-worker secrets"
@@ -327,6 +365,10 @@ grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
 grep -Fqx 'UnsetEnvironment=DATABASE_URL BUSINESS_DATABASE_URL BUSINESS_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
     "${staging_directory}/ensambria-business-migrate.service" \
     || fail "BUSINESS migrator must exclude runtime and worker credentials"
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ensure_group "$service_group"
 ensure_group "$migrator_group"
@@ -431,6 +473,42 @@ business_address="$(sed -n 's/^BUSINESS_HTTP_LISTEN_ADDRESS=//p' "$environment_f
 [[ "$business_address" != "$health_address" ]] || fail "CORE and BUSINESS listeners must use different ports"
 business_health_url="http://127.0.0.1:${business_address##*:}/health"
 
+temporary_directory="$(mktemp -d "${release_root}/.incoming.XXXXXX")"
+archive="${staging_directory}/core-staging.tar.gz"
+payload="${temporary_directory}/payload"
+mkdir "$payload"
+tar -tzf "$archive" | while IFS= read -r entry; do
+    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == business || "$entry" == business-migrate || "$entry" == SHA256SUMS || "$entry" == migrations/ || "$entry" == business-migrations/ || "$entry" == business-migrations/bootstrap/ ]] && continue
+    [[ "$entry" =~ ^migrations/[0-9]{14}_[a-z0-9_]+\.sql$ || "$entry" =~ ^business-migrations/([a-z0-9_-]+/)?[0-9]{14}_[a-z0-9_]+\.sql$ ]] \
+        || fail "deployment package contains an unexpected path"
+done || fail "deployment package contains unexpected files"
+tar -xzf "$archive" -C "$payload" --no-same-owner --no-same-permissions \
+    || fail "could not extract deployment package"
+(cd "$payload" && sha256sum --check --strict SHA256SUMS) \
+    || fail "deployment package checksum verification failed"
+for binary in core core-migrate core-email-worker business business-migrate; do
+    [[ -s "$payload/$binary" && -x "$payload/$binary" ]] \
+        || fail "deployment package binary is missing or not executable: $binary"
+done
+find "$payload/migrations" -maxdepth 1 -type f -name '*.sql' -print -quit | grep -q . \
+    || fail "deployment package is missing SQL migrations"
+
+release_directory="${release_root}/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+mkdir "$release_directory"
+mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/business" "$payload/business-migrate" "$payload/migrations" "$payload/business-migrations" "$release_directory/"
+chown -R "root:${artifact_group}" "$release_directory"
+chmod 0550 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker" "$release_directory/business" "$release_directory/business-migrate"
+find "$release_directory/migrations" "$release_directory/business-migrations" -type d -exec chmod 0550 {} +
+find "$release_directory/migrations" "$release_directory/business-migrations" -type f -name '*.sql' -exec chmod 0440 {} +
+
+previous_release=""
+if [[ -L "$current_link" ]]; then
+    previous_release="$(readlink -f "$current_link")"
+    [[ "$previous_release" == "$release_root/"* ]] || fail "current release link is invalid"
+elif [[ -e "$current_link" ]]; then
+    fail "current release path is not a symbolic link"
+fi
+
 install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-core.service" \
     /etc/systemd/system/ensambria-core.service
@@ -454,46 +532,9 @@ install -o root -g root -m 0644 \
     /etc/systemd/system/ensambria-env-reload.path
 systemctl daemon-reload
 systemctl enable "$service_name" "$email_worker_service_name" "$business_service_name" "$env_reload_path_name"
-systemctl enable --now "$env_reload_path_name"
 
-temporary_directory="$(mktemp -d "${release_root}/.incoming.XXXXXX")"
-archive="${staging_directory}/core-staging.tar.gz"
-payload="${temporary_directory}/payload"
-mkdir "$payload"
-tar -tzf "$archive" | while IFS= read -r entry; do
-    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == business || "$entry" == business-migrate || "$entry" == migrations/ || "$entry" == business-migrations/ || "$entry" == business-migrations/bootstrap/ ]] && continue
-    [[ "$entry" =~ ^migrations/[0-9]{14}_[a-z0-9_]+\.sql$ || "$entry" =~ ^business-migrations/([a-z0-9_-]+/)?[0-9]{14}_[a-z0-9_]+\.sql$ ]] \
-        || fail "deployment package contains an unexpected path"
-done || fail "deployment package contains unexpected files"
-tar -xzf "$archive" -C "$payload" --no-same-owner --no-same-permissions \
-    || fail "could not extract deployment package"
-[[ -s "$payload/core" && -s "$payload/core-migrate" && -s "$payload/core-email-worker" && -s "$payload/business" && -s "$payload/business-migrate" ]] \
-    || fail "deployment package is missing a binary"
-find "$payload/migrations" -maxdepth 1 -type f -name '*.sql' -print -quit | grep -q . \
-    || fail "deployment package is missing SQL migrations"
 
-release_directory="${release_root}/$(date -u +%Y%m%dT%H%M%SZ)-$$"
-mkdir "$release_directory"
-mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/business" "$payload/business-migrate" "$payload/migrations" "$payload/business-migrations" "$release_directory/"
-chown -R "root:${artifact_group}" "$release_directory"
-chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker" "$release_directory/business" "$release_directory/business-migrate"
-chmod 0750 "$release_directory/migrations"
-find "$release_directory/migrations" "$release_directory/business-migrations" -type d -exec chmod 0750 {} +
-find "$release_directory/migrations" "$release_directory/business-migrations" -type f -name '*.sql' -exec chmod 0640 {} +
 
-previous_release=""
-if [[ -L "$current_link" ]]; then
-    previous_release="$(readlink -f "$current_link")"
-    [[ "$previous_release" == "$release_root/"* ]] || fail "current release link is invalid"
-elif [[ -e "$current_link" ]]; then
-    fail "current release path is not a symbolic link"
-fi
-
-temporary_link="${install_root}/.current-$$"
-release_activated=false
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 ln -s "$release_directory" "$temporary_link"
 mv -Tf "$temporary_link" "$current_link"
 release_activated=true
@@ -506,6 +547,12 @@ if ! systemctl start "$business_migration_service_name"; then
     fail "automatic BUSINESS staging migrations failed"
 fi
 systemctl restart "$service_name" "$email_worker_service_name" "$business_service_name" || fail "one or more ENSAMBRIA services failed to restart"
+for required_service in "$service_name" "$email_worker_service_name" "$business_service_name"; do
+    systemctl is-active --quiet "$required_service" || fail "service did not remain active: $required_service"
+done
+for binary in core core-email-worker business; do
+    [[ -x "$current_link/$binary" ]] || fail "active release is missing executable: $binary"
+done
 wait_until_healthy "$health_address" || fail "CORE readiness check failed"
 for attempt in $(seq 1 30); do
     if curl --fail --silent --show-error --max-time 3 "$business_health_url" >/dev/null; then
@@ -515,5 +562,6 @@ for attempt in $(seq 1 30); do
     sleep 2
 done
 
+systemctl enable --now "$env_reload_path_name"
 release_activated=false
 printf 'CORE deployed, migrations applied, and readiness verified.\n'

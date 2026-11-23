@@ -121,7 +121,7 @@ wait_for_database_value "$CORE_OUTBOX_DATABASE_URL" "$outbox_query" "published" 
 stop_process "$RELAY_PID"
 RELAY_PID=""
 
-stream_messages="$("${BOX[@]}" nats --server nats://nats-1:4222 stream info ENSAMBRIA | awk '/Messages:/ {print $2; exit}')"
+stream_messages="$("${BOX[@]}" nats --server nats://nats-1:4222 stream info ENSAMBRIA | awk '$1 == "Messages:" {print $2; exit}')"
 [[ "$stream_messages" == "1" ]] || {
   echo "JetStream stored $stream_messages messages; expected one deduplicated event" >&2
   exit 1

@@ -30,7 +30,7 @@ class ExpandContractMigrationPolicyTests(unittest.TestCase):
         self.assertIn("DROP requires a later contract migration", result.stderr)
 
     def test_destructive_keyword_in_comment_is_ignored(self):
-        result = self.run_policy("-- DROP TABLE old_table;\\nSELECT 1;")
+        result = self.run_policy("-- DROP TABLE old_table;\nSELECT 1;")
         self.assertEqual(result.returncode, 0, result.stderr)
 
 

@@ -14,6 +14,9 @@ use sqlx::{
 use tracing::Instrument;
 use uuid::Uuid;
 
+const CORE_MIGRATION_LOCK_NAMESPACE: i32 = 0x454E5341;
+const CORE_MIGRATION_LOCK_RESOURCE: i32 = 1;
+
 #[derive(Clone, Copy)]
 pub enum CoreMigrationFailureKind {
     Configuration,
@@ -260,7 +263,42 @@ pub async fn run_core_migrations_from_path(
                 )
             })?;
         migrator.dangerous_set_table_name("core._sqlx_migrations");
-        migrator.run(&mut connection).await.map_err(|source| {
+
+        // Serialize all migrators, including concurrent deploys and test processes.
+        sqlx::query("SELECT pg_advisory_lock($1, $2)")
+            .bind(CORE_MIGRATION_LOCK_NAMESPACE)
+            .bind(CORE_MIGRATION_LOCK_RESOURCE)
+            .execute(&mut connection)
+            .await
+            .map_err(|source| {
+                CoreMigrationError::new(
+                    CoreMigrationFailureKind::Migration,
+                    "CORE migration lock could not be acquired",
+                    Some(Box::new(source)),
+                )
+            })?;
+
+        let migration_result = migrator.run(&mut connection).await;
+        let lock_released: bool = sqlx::query_scalar("SELECT pg_advisory_unlock($1, $2)")
+            .bind(CORE_MIGRATION_LOCK_NAMESPACE)
+            .bind(CORE_MIGRATION_LOCK_RESOURCE)
+            .fetch_one(&mut connection)
+            .await
+            .map_err(|source| {
+                CoreMigrationError::new(
+                    CoreMigrationFailureKind::Connection,
+                    "CORE migration lock could not be released",
+                    Some(Box::new(source)),
+                )
+            })?;
+        if !lock_released {
+            return Err(CoreMigrationError::new(
+                CoreMigrationFailureKind::Connection,
+                "CORE migration lock ownership was lost",
+                None,
+            ));
+        }
+        migration_result.map_err(|source| {
             CoreMigrationError::new(
                 CoreMigrationFailureKind::Migration,
                 "CORE database migration failed",

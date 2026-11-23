@@ -103,6 +103,27 @@ No es necesario generar carga elevada sobre una aplicación que todavía no est�
 
 Sí es obligatorio tener preparado el estándar, la infraestructura de pruebas y los criterios que se utilizarán cuando las funcionalidades estén disponibles.
 
+## 4.4. Planificación no equivale a ejecución obligatoria en cada fase
+
+La aplicación desde Fase 0 significa que el proyecto debe planificar la estrategia, riesgos, ownership, escenarios potenciales, métricas y criterios de rendimiento. **No significa ejecutar Load/Stress/Spike/Soak/Breakpoint en una fase sin un comportamiento ejecutable, un target autorizado o parámetros aprobados.** Cada fase/subfase debe registrar qué escenarios aplican a los casos que introduce, cuáles ejecutó y cuáles difiere, con motivo y fase/condición de reprogramación.
+
+Distinguir siempre:
+
+- **Script/syntax validation:** verifica que el script puede cargarse y configurarse; no prueba el servicio.
+- **Smoke funcional:** carga mínima para verificar conectividad, autenticación/resultado esperado y compatibilidad del endpoint. No mide ni demuestra capacidad.
+- **Load/Stress/Spike/Soak/Breakpoint/Scalability:** experimentos de rendimiento/capacidad con perfiles, métricas, thresholds, observabilidad y condiciones de seguridad aprobados.
+
+No convertir la falta de un entorno de carga autorizado en fallo de CI funcional. Debe quedar como `NOT RUN / BLOCKED BY PRECONDITIONS`, identificando exactamente lo que falta. Tampoco se permite presentar esa omisión como evidencia positiva de capacidad.
+
+### 4.5. Precondiciones mínimas para ejecutar carga
+
+Antes de una prueba de carga de impacto, documentar y aprobar: (1) owner y autorización escrita del target/entorno; (2) aislamiento respecto de usuarios/datos productivos y dataset sintético con creación/limpieza; (3) escenario de negocio y modelo cerrado/abierto; (4) VUs o tasa de llegada, duración, ramp-up y pausas justificadas; (5) thresholds y línea base o fundamento de cada objetivo; (6) límites máximos de carga/recursos y stop conditions; (7) responsable de supervisión y cancelación; (8) métricas de aplicación, PostgreSQL, Redis, mensajería, workers y generador según aplique; (9) procedimiento de recuperación, verificación de integridad y limpieza; (10) política de retención/redacción de resultados. Si falta una precondición, no ejecutar la carga; registrar el bloqueo y no inventar valores.
+
+### 4.6. Regla específica de la subfase 1.2
+
+La evidencia CI de 1.2 incluye únicamente un smoke k6 de una petición GET protegida con respuesta esperada HTTP 401 en las matrices Redis Sentinel/Cluster y después del failover. Esto verifica que el endpoint protegido responde en esos estados de infraestructura. **No es una prueba de rendimiento ni de capacidad** y no permite afirmar throughput, latencia bajo carga, concurrencia soportada o capacidad máxima. Load, Stress, Spike, Soak, Breakpoint y Capacity Planning se reservan para las fases futuras que incorporen targets y recorridos medibles y satisfagan las precondiciones de §4.5.
+
+
 ## 4.2. Durante la implementación
 
 Toda funcionalidad relevante debe incorporar escenarios de rendimiento cuando corresponda.

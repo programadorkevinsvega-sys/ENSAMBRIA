@@ -5,6 +5,7 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 readonly service_name=ensambria-core.service
 readonly migration_service_name=ensambria-core-migrate.service
+readonly email_worker_service_name=ensambria-core-email-worker.service
 readonly service_user=ensambria-core
 readonly service_group=ensambria-core
 readonly migrator_user=ensambria-core-migrator
@@ -226,6 +227,7 @@ readonly staging_directory="$1"
 for required_file in \
     "${staging_directory}/ensambria-core.service" \
     "${staging_directory}/ensambria-core-migrate.service" \
+    "${staging_directory}/ensambria-core-email-worker.service" \
     "${staging_directory}/core-staging.tar.gz"
 do
     [[ -s "$required_file" ]] || fail "required deployment file is missing"
@@ -236,6 +238,9 @@ grep -Fqx 'UnsetEnvironment=MIGRATIONS_DATABASE_URL' \
 grep -Fqx 'UnsetEnvironment=DATABASE_URL' \
     "${staging_directory}/ensambria-core-migrate.service" \
     || fail "migration systemd service must exclude the runtime credential"
+grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/email-worker.env' \
+    "${staging_directory}/ensambria-core-email-worker.service" \
+    || fail "email worker must use its dedicated secret file"
 
 ensure_group "$service_group"
 ensure_group "$migrator_group"
@@ -281,6 +286,9 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
     "${staging_directory}/ensambria-core-migrate.service" \
     /etc/systemd/system/ensambria-core-migrate.service
+install -o root -g root -m 0644 \
+    "${staging_directory}/ensambria-core-email-worker.service" \
+    /etc/systemd/system/ensambria-core-email-worker.service
 systemctl daemon-reload
 systemctl enable "$service_name"
 
@@ -289,22 +297,22 @@ archive="${staging_directory}/core-staging.tar.gz"
 payload="${temporary_directory}/payload"
 mkdir "$payload"
 tar -tzf "$archive" | while IFS= read -r entry; do
-    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == migrations/ ]] && continue
+    [[ "$entry" == core || "$entry" == core-migrate || "$entry" == core-email-worker || "$entry" == migrations/ ]] && continue
     [[ "$entry" =~ ^migrations/[0-9]{14}_[a-z0-9_]+\.sql$ ]] \
         || fail "deployment package contains an unexpected path"
 done || fail "deployment package contains unexpected files"
 tar -xzf "$archive" -C "$payload" --no-same-owner --no-same-permissions \
     || fail "could not extract deployment package"
-[[ -s "$payload/core" && -s "$payload/core-migrate" ]] \
+[[ -s "$payload/core" && -s "$payload/core-migrate" && -s "$payload/core-email-worker" ]] \
     || fail "deployment package is missing a binary"
 find "$payload/migrations" -maxdepth 1 -type f -name '*.sql' -print -quit | grep -q . \
     || fail "deployment package is missing SQL migrations"
 
 release_directory="${release_root}/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 mkdir "$release_directory"
-mv "$payload/core" "$payload/core-migrate" "$payload/migrations" "$release_directory/"
+mv "$payload/core" "$payload/core-migrate" "$payload/core-email-worker" "$payload/migrations" "$release_directory/"
 chown -R "root:${artifact_group}" "$release_directory"
-chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate"
+chmod 0750 "$release_directory" "$release_directory/core" "$release_directory/core-migrate" "$release_directory/core-email-worker"
 chmod 0750 "$release_directory/migrations"
 chmod 0640 "$release_directory"/migrations/*.sql
 

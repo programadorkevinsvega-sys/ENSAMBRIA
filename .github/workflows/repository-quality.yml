@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/core-identity-tenancy-1-2
   push:
     branches:
       - main
@@ -21,9 +22,44 @@ jobs:
     name: repository-quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    steps:
+      - name: Check out latest PR source branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt
+
+      - name: Validate engineering skills and agent profiles
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 scripts/validate_engineering_skills.py
+
+      - name: Check Rust formatting (cargo fmt)
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo fmt --all -- --check
+
+      - name: Compile Rust workspace (cargo check)
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo check --locked --workspace --all-targets
+
+      - name: Lint Rust workspace (cargo clippy)
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+
+  postgres-integration:
+    name: postgres-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
       CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
+      CORE_EMAIL_WORKER_DATABASE_URL: postgres://core_email_worker@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
+      BUSINESS_DATABASE_URL: postgres://business_runtime@127.0.0.1:5432/ensambria_core_test
+      ENSAMBRIA_TEST_REDIS_URL: redis://127.0.0.1:6379/
       RUSTUP_TOOLCHAIN: 1.99.1
     services:
       postgres:
@@ -39,26 +75,23 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt
+        run: rustup toolchain install 1.99.1 --profile minimal
 
-      - name: Validate engineering skills and agent profiles
-        run: |
-          python3 -m unittest discover -s scripts -p 'test_*.py'
-          python3 scripts/validate_engineering_skills.py
-
-      - name: Validate Rust workspace
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: |
-          cargo fmt --all -- --check
-          cargo check --locked --workspace --all-targets
-          cargo clippy --locked --workspace --all-targets -- -D warnings
-
-      - name: Create isolated PostgreSQL test roles and CORE schema
+      - name: Create isolated PostgreSQL test roles and CORE and PLATFORM schemas
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: |
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
@@ -75,14 +108,290 @@ jobs:
             -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator;"
+            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE platform_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT platform_schema_owner TO core_migrator;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/platform/migrations/bootstrap/00000000000000_platform_schema.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_schema_owner" \
+            -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE platform_schema_owner;
+          BEGIN;
+          INSERT INTO platform.products (id, product_key, display_name, brand_name, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'ensambria-core', 'ENSAMBRIA Core', 'ENSAMBRIA', 'draft');
+          INSERT INTO platform.product_configurations (product_id, version, schema_version, configuration, status, published_at)
+          VALUES (
+              '018f0f2a-7b3c-7abc-8def-0123456789ab',
+              1,
+              'product-config.v1',
+              '{"branding":{"displayName":"ENSAMBRIA Core","brandName":"ENSAMBRIA"},"domains":["shop.example.test"],"markets":[{"countryCode":"CO","currencyCode":"COP","locale":"es-CO"}],"surfaces":[{"code":"operator.web","configurationVersion":1}],"capabilities":[{"code":"identity.auth","contractVersion":"v1"}]}'::jsonb,
+              'published',
+              clock_timestamp()
+          );
+          UPDATE platform.products
+             SET status = 'active', published_configuration_version = 1, updated_at = clock_timestamp()
+           WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789ab';
+          INSERT INTO platform.product_domains (id, product_id, domain_name, status, verified_at)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ac', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'shop.example.test', 'active', clock_timestamp());
+          INSERT INTO platform.product_markets (product_id, country_code, currency_code, locale, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'CO', 'COP', 'es-CO', 'enabled');
+          INSERT INTO platform.product_surfaces (product_id, surface_code, configuration_version, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'operator.web', 1, 'enabled');
+          INSERT INTO platform.capability_catalog (capability_code, contract_version, implementation_status)
+          VALUES ('identity.auth', 'v1', 'available');
+          INSERT INTO platform.product_capabilities (product_id, capability_code, configuration_version, status)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'identity.auth', 1, 'enabled');
+          COMMIT;
+          SQL
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
 
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE business_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE business_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT business_schema_owner TO core_migrator;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
+
+      - name: Apply BUSINESS schema after CORE migrations
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: |
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/business/migrations/bootstrap/00000000000000_business_schema.sql
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE business_schema_owner" \
+            -f backend/business/migrations/20261122000001_business_establishments.sql
+
+
+  redis-ha-integration:
+    name: redis-ha-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      REDIS_PASSWORD: ensambria-ci-only
+      PLATFORM_REDIS_USERNAME: default
+      PLATFORM_REDIS_PASSWORD: ensambria-ci-only
+      PLATFORM_REDIS_POOL_SIZE: 2
+      ENSAMBRIA_REDIS_REQUIRED: "true"
+      DATABASE_URL: postgres://core_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      CORE_DATABASE_MAX_CONNECTIONS: "4"
+      CORE_DATABASE_ACQUIRE_TIMEOUT_MS: "1500"
+      CORE_MFA_ENCRYPTION_KEY_VERSION: ci-v1
+      CORE_MFA_ENCRYPTION_KEY_HEX: "1111111111111111111111111111111111111111111111111111111111111111"
+      CORE_AUTH_RATE_LIMIT_SECRET_HEX: "2222222222222222222222222222222222222222222222222222222222222222"
+      CORE_PUBLIC_BASE_URL: https://business.example.test
+      BUSINESS_DATABASE_URL: postgres://business_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      BUSINESS_DATABASE_MAX_CONNECTIONS: "4"
+      BUSINESS_HTTP_LISTEN_ADDRESS: 127.0.0.1:18080
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
+
+      - name: Provision Redis Sentinel and Cluster on the GitHub runner
+        run: docker compose -f infra/redis-ha/compose.ci.yml up -d
+
+      - name: Wait for Redis nodes and create the six-node cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 sh -ec '
+            for attempt in $(seq 1 90); do
+              ready=1
+              for spec in 172.29.0.21:7001 172.29.0.22:7002 172.29.0.23:7003 172.29.0.24:7004 172.29.0.25:7005 172.29.0.26:7006; do
+                host=${spec%:*}; port=${spec#*:}
+                if ! redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG; then ready=0; break; fi
+              done
+              if [ "$ready" -eq 1 ]; then exit 0; fi
+              sleep 1
+            done
+            echo "Not all six Redis Cluster nodes became ready" >&2
+            exit 1
+          '
+          timeout 120s docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-1 \
+            redis-cli -a "$REDIS_PASSWORD" --cluster create \
+            172.29.0.21:7001 172.29.0.22:7002 172.29.0.23:7003 \
+            172.29.0.24:7004 172.29.0.25:7005 172.29.0.26:7006 \
+            --cluster-replicas 1 --cluster-yes
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 sh -ec '
+            for attempt in $(seq 1 60); do
+              master="$(redis-cli -p 26379 --raw SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | head -n 1 || true)"
+              if [ -n "$master" ]; then echo "Sentinel reports master: $master"; exit 0; fi
+              sleep 1
+            done
+            echo "Sentinel did not discover its monitored master" >&2
+            exit 1
+          '
+          sudo sh -c 'printf "172.29.0.10 redis-master\\n172.29.0.11 redis-replica\\n" >> /etc/hosts'
+      - name: Prepare PostgreSQL roles for the real BUSINESS runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres sh -ec '
+            for attempt in $(seq 1 60); do
+              if pg_isready -U core_admin -d ensambria_ci; then exit 0; fi
+              sleep 1
+            done
+            exit 1
+          '
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
+            psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE core_runtime LOGIN PASSWORD 'ensambria-ci-only';"
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
+            psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE business_runtime LOGIN PASSWORD 'ensambria-ci-only';"
+
+      - name: Build the actual BUSINESS HTTP runtime
+        run: cargo build --locked -p ensambria-business --bin business
+
+      - name: Build shared Redis runtime smoke test
+        run: cargo build --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Verify BUSINESS and CORE shared-cache adapter through Sentinel
+        env:
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Start BUSINESS HTTP runtime with required Sentinel caches
+        env:
+          BUSINESS_HTTP_TEST_PROFILE: sentinel-primary
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
+
+      - name: Force Sentinel master failure and verify automatic failover
+        shell: bash
+        env:
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml stop redis-master
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T sentinel-1 sh -ec '
+            promoted=false
+            for attempt in $(seq 1 60); do
+              master="$(redis-cli -p 26379 --raw SENTINEL get-master-addr-by-name ensambria-master 2>/dev/null | head -n 1 || true)"
+              if [ "$master" = "redis-replica" ] || [ "$master" = "172.29.0.11" ]; then
+                echo "Sentinel promoted replica: $master"
+                promoted=true
+                break
+              fi
+              sleep 1
+            done
+            test "$promoted" = true
+          '
+          cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+      - name: Start BUSINESS HTTP runtime after Sentinel failover
+        env:
+          BUSINESS_HTTP_TEST_PROFILE: sentinel-after-failover
+          PLATFORM_REDIS_MODE: sentinel
+          PLATFORM_REDIS_SENTINEL_URLS: redis://172.29.0.12:26379;redis://172.29.0.13:26379;redis://172.29.0.14:26379
+          PLATFORM_REDIS_SENTINEL_MASTER_NAME: ensambria-master
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
+      - name: Verify backend shared-cache adapter through Redis Cluster
+        env:
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.21:7001;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Start BUSINESS HTTP runtime with required Cluster caches
+        env:
+          BUSINESS_HTTP_TEST_PROFILE: cluster-primary
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.21:7001;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
+
+      - name: Force Redis Cluster master failure and verify replica promotion
+        shell: bash
+        env:
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: |
+          set -euo pipefail
+          docker compose -f infra/redis-ha/compose.ci.yml stop cluster-1
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T cluster-5 sh -ec '
+            promoted=false
+            for attempt in $(seq 1 60); do
+              state="$(redis-cli -a "$REDIS_PASSWORD" -p 7005 --raw CLUSTER INFO 2>/dev/null | tr -d "\\r" | grep "^cluster_state:" || true)"
+              nodes="$(redis-cli -a "$REDIS_PASSWORD" -p 7005 --raw CLUSTER NODES 2>/dev/null || true)"
+              myid="$(redis-cli -a "$REDIS_PASSWORD" -p 7005 --raw CLUSTER MYID 2>/dev/null || true)"
+              if [ "$state" = "cluster_state:ok" ] && printf "%s\\n" "$nodes" | grep -Eq "^$myid .*master"; then
+                echo "Replica 172.29.0.25:7005 was promoted and cluster state is healthy"
+                promoted=true
+                break
+              fi
+              sleep 1
+            done
+            test "$promoted" = true
+          '
+          cargo run --locked -p ensambria-shared-cache --example redis_ha_smoke
+
+      - name: Start BUSINESS HTTP runtime after Cluster failover
+        env:
+          BUSINESS_HTTP_TEST_PROFILE: cluster-after-failover
+          PLATFORM_REDIS_MODE: cluster
+          PLATFORM_REDIS_CLUSTER_URLS: redis://default:ensambria-ci-only@172.29.0.25:7005;redis://default:ensambria-ci-only@172.29.0.22:7002;redis://default:ensambria-ci-only@172.29.0.23:7003;redis://default:ensambria-ci-only@172.29.0.24:7004;redis://default:ensambria-ci-only@172.29.0.26:7006
+        run: bash scripts/ci/check-business-redis-runtime.sh
+
+      - name: Upload BUSINESS k6 smoke evidence
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: business-k6-smoke-${{ github.run_id }}
+          path: artifacts/k6/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Collect Redis HA diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -f infra/redis-ha/compose.ci.yml ps
+          docker compose -f infra/redis-ha/compose.ci.yml logs --no-color --tail=200
+
+      - name: Tear down Redis HA topology
+        if: always()
+        run: docker compose -f infra/redis-ha/compose.ci.yml down --volumes --remove-orphans
 
   security-dependencies:
     name: security-dependencies
@@ -108,11 +417,11 @@ jobs:
         with:
           tool: cargo-audit,cargo-deny
 
-      - name: Audit dependencies for vulnerabilities (cargo audit)
+      - name: Audit committed Cargo.lock for vulnerabilities (cargo audit)
         if: steps.cargo_manifests.outputs.present == 'true'
         run: cargo audit
 
-      - name: Validate supply chain and license compliance (cargo deny)
+      - name: Validate committed dependency graph and licenses (cargo deny)
         if: steps.cargo_manifests.outputs.present == 'true'
         run: cargo deny check
 

@@ -355,7 +355,9 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         env:
           MIGRATIONS_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
-        run: cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
+        run: |
+          cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
+          cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
 
 
   redis-ha-integration:

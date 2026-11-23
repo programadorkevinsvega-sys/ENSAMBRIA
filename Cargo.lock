@@ -566,7 +566,7 @@ name = "ensambria-core"
 version = "0.1.0"
 dependencies = [
  "argon2",
- "base64 0.22.1",
+ "base64 0.23.1",
  "ensambria-event-bus",
  "ensambria-platform",
  "ensambria-platform-contract",

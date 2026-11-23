@@ -62,7 +62,7 @@ jobs:
         id: package
         shell: bash
         run: |
-          package="${RUNNER_TEMP}/ensambria-staging.tar.gz"
+          package="${RUNNER_TEMP}/core-staging.tar.gz"
           artifacts="$(mktemp -d "${RUNNER_TEMP}/ensambria-artifacts.XXXXXX")"
           trap 'rm -rf -- "$artifacts"' EXIT
           for binary in core core-migrate core-email-worker business business-migrate; do

@@ -81,6 +81,8 @@ jobs:
           grep -Fq 'ensambria-env-reload.path' backend/core/deployment/deploy-staging.sh
           grep -Fq 'business-migrations' .github/workflows/core-staging-deploy.yml
           grep -Fq 'backend/business/deployment/ensambria-business.service' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'core-staging.tar.gz' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'core-staging.tar.gz' backend/core/deployment/deploy-staging.sh
 
   postgres-integration:
     name: postgres-integration

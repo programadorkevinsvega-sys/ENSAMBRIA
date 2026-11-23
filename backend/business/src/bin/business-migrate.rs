@@ -84,7 +84,7 @@ async fn apply_migrations(
         }
 
         let migration = fs::read_to_string(migration_path)?;
-        sqlx::raw_sql(sqlx::AssertSqlSafe(&migration))
+        sqlx::raw_sql(sqlx::AssertSqlSafe(&*migration))
             .execute(&mut *transaction)
             .await?;
         sqlx::query("INSERT INTO business.schema_migrations (version) VALUES ($1)")

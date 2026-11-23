@@ -57,6 +57,12 @@ pub async fn apply_tenant_created(
         .await
         .map_err(|_| TenantOnboardingError::Storage)?;
 
+    sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
+        .bind(event.tenant_id.to_string())
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| TenantOnboardingError::Storage)?;
+
     let inserted = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO platform.inbox_messages (
             event_id, consumer_name, event_type, schema_version, aggregate_id,

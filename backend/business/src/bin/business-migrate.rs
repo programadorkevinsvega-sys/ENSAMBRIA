@@ -1,7 +1,6 @@
 use std::{
     error::Error,
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -85,9 +84,7 @@ async fn apply_migrations(
         }
 
         let migration = fs::read_to_string(migration_path)?;
-        sqlx::raw_sql(&migration)
-            .execute(&mut *transaction)
-            .await?;
+        sqlx::raw_sql(&migration).execute(&mut *transaction).await?;
         sqlx::query("INSERT INTO business.schema_migrations (version) VALUES ($1)")
             .bind(version)
             .execute(&mut *transaction)

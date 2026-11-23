@@ -170,7 +170,8 @@ jobs:
           service=ensambria-business.service
           env_file=/etc/apps/ensambria/core/.env
           exec_start="$(systemctl show "$service" --property=ExecStart --value 2>/dev/null || true)"
-          binary="$(printf '%s\\n' "$exec_start" | sed -n 's/.*path=\\([^ ;]*\\).*/\\1/p')"
+          binary=""
+          if [[ "$exec_start" =~ path=([^[:space:];]+) ]]; then binary="${BASH_REMATCH[1]}"; fi
           active="$(systemctl is-active "$service" 2>/dev/null || true)"
           enabled="$(systemctl is-enabled "$service" 2>/dev/null || true)"
           printf 'business_service_active=%s\n' "${active:-missing}"

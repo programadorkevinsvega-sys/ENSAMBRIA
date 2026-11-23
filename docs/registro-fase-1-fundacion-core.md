@@ -161,7 +161,7 @@ La prueba autorizada se ejecutó el 2026-11-19 con un archivo temporal root-only
 La evidencia y los criterios completos se mantienen en [contrato Redis](architecture/redis-cache-contract.md).
 ## Subfase 1.3 — Alta operativa durable CORE → PLATFORM
 
-**Estado:** implementación presente; resiliencia integral y redelivery real añadidos en la rama `feat/core-platform-redelivery-recovery-1-3`; validación CI del HEAD de esa entrega y aceptación formal pendientes.
+**Estado:** implementación y resiliencia integral validadas técnicamente por CI #400; PR #16 fusionada a `main` en `4fa23605f1d6797bf9ae20b47b2f64ca2b8f82dc`. La aceptación formal de la subfase 1.3 sigue pendiente.
 
 ### Matriz de integración y evidencia requerida
 
@@ -175,4 +175,6 @@ La evidencia y los criterios completos se mantienen en [contrato Redis](architec
 
 La aceptación no declara entrega exactamente-una-vez en el transporte: el transporte puede redeliverar y el relay puede volver a publicar; el efecto de negocio se hace idempotente mediante Inbox/constraints en PLATFORM. No se crean planes, suscripciones, trial, facturas, cobros ni entitlements automáticos.
 
-**Cierre:** marcar VALIDADO solo cuando el job `postgres-integration` pase en el SHA del PR y el log confirme cada punto de corte, redelivery, ACK y conteos finales. La fase/subfase permanece abierta hasta la aceptación explícita del propietario.
+**Evidencia ejecutada:** CI #400 pasó para HEAD `4c342a350a067889adedc49cc9c274bc0bd17984`. Los cinco jobs (`repository-quality`, `security-dependencies`, `postgres-integration`, `nats-jetstream-ha-integration`, `redis-ha-integration`) finalizaron SUCCESS. El job PostgreSQL ejecutó satisfactoriamente el script E2E de redelivery/recuperación, la verificación de permisos e idempotencia de Inbox y la integración de esquema BUSINESS posterior a CORE. Merge a `main`: `4fa23605f1d6797bf9ae20b47b2f64ca2b8f82dc`.
+
+**Cierre formal:** la implementación y sus pruebas quedan VALIDADO TÉCNICAMENTE; la subfase 1.3 permanece abierta hasta la aceptación explícita del propietario.

@@ -235,15 +235,18 @@ for required_file in \
 do
     [[ -s "$required_file" ]] || fail "required deployment file is missing"
 done
-grep -Fqx 'UnsetEnvironment=MIGRATIONS_DATABASE_URL' \
+grep -Fqx 'UnsetEnvironment=MIGRATIONS_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
     "${staging_directory}/ensambria-core.service" \
-    || fail "CORE systemd service must exclude the migration credential"
-grep -Fqx 'UnsetEnvironment=DATABASE_URL' \
+    || fail "CORE systemd service must exclude migration and email-worker secrets"
+grep -Fqx 'UnsetEnvironment=DATABASE_URL CORE_EMAIL_WORKER_DATABASE_URL CORE_EMAIL_WORKER_DATABASE_MAX_CONNECTIONS CORE_EMAIL_WORKER_DATABASE_ACQUIRE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_IDLE_TIMEOUT_MS CORE_EMAIL_WORKER_DATABASE_MAX_LIFETIME_MS CORE_SMTP_HOST CORE_SMTP_PORT CORE_SMTP_USERNAME CORE_SMTP_PASSWORD CORE_SMTP_FROM' \
     "${staging_directory}/ensambria-core-migrate.service" \
-    || fail "migration systemd service must exclude the runtime credential"
-grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/email-worker.env' \
+    || fail "migration systemd service must exclude runtime and email-worker secrets"
+grep -Fqx 'EnvironmentFile=/etc/apps/ensambria/core/.env' \
     "${staging_directory}/ensambria-core-email-worker.service" \
-    || fail "email worker must use its dedicated secret file"
+    || fail "email worker must use the shared CORE environment file"
+grep -Fqx 'UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL' \
+    "${staging_directory}/ensambria-core-email-worker.service" \
+    || fail "email worker must exclude runtime and migration credentials"
 
 ensure_group "$service_group"
 ensure_group "$migrator_group"

@@ -110,7 +110,7 @@ jobs:
           hostname: github-core-staging
           ping: ${{ vars.CORE_STAGING_HOST }}
 
-      - name: Deploy CORE and create its systemd services
+      - name: Deploy all ENSAMBRIA services and apply both schemas
         env:
           REMOTE_DIRECTORY: /tmp/ensambria-core-${{ github.run_id }}-${{ github.run_attempt }}
           CORE_PACKAGE: ${{ steps.package.outputs.path }}

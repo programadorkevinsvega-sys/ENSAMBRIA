@@ -70,6 +70,9 @@ jobs:
         run: |
           set -euo pipefail
           bash -n backend/core/deployment/deploy-staging.sh
+          python3 scripts/check_expand_contract_migrations.py backend/core/migrations backend/business/migrations
+          python3 -m unittest discover -s scripts -p 'test_staging_package_validation.py'
+          python3 -m unittest discover -s scripts -p 'test_expand_contract_migration_policy.py'
           test -s backend/business/deployment/ensambria-business.service
           test -s backend/business/deployment/ensambria-business-migrate.service
           test -s backend/business/src/bin/business-migrate.rs

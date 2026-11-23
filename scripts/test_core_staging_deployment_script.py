@@ -19,10 +19,17 @@ class CoreStagingDeploymentScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_email_worker_is_packaged_and_installed_without_auto_enabling(self):
+    def test_email_worker_uses_shared_env_and_isolated_database_credentials(self):
+        service = (
+            Path(__file__).resolve().parents[1]
+            / "backend/core/deployment/ensambria-core-email-worker.service"
+        ).read_text(encoding="utf-8")
         self.assertIn("ensambria-core-email-worker.service", self.script_source)
         self.assertIn("core-email-worker", self.script_source)
-        self.assertIn("email-worker.env", self.script_source)
+        self.assertIn("EnvironmentFile=/etc/apps/ensambria/core/.env", service)
+        self.assertIn("UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL", service)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", self.script_source)
+        self.assertNotIn("email-worker.env", self.script_source)
         self.assertNotIn('systemctl enable "$email_worker_service_name"', self.script_source)
 
     def test_embedded_python_syntax(self):

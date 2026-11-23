@@ -55,7 +55,7 @@ jobs:
         run: >-
           cargo build --locked --release --package ensambria-core
           --bin core --bin core-migrate --bin core-email-worker
-          --package ensambria-business --bin business
+          --package ensambria-business --bin business --bin business-migrate
           --target x86_64-unknown-linux-musl
 
       - name: Package every runtime binary and migration SQL
@@ -65,7 +65,7 @@ jobs:
           package="${RUNNER_TEMP}/ensambria-staging.tar.gz"
           artifacts="$(mktemp -d "${RUNNER_TEMP}/ensambria-artifacts.XXXXXX")"
           trap 'rm -rf -- "$artifacts"' EXIT
-          for binary in core core-migrate core-email-worker business; do
+          for binary in core core-migrate core-email-worker business business-migrate; do
             install -m 0750 "target/x86_64-unknown-linux-musl/release/$binary" "$artifacts/$binary"
           done
           mkdir -p "$artifacts/migrations" "$artifacts/business-migrations/bootstrap"
@@ -146,6 +146,7 @@ jobs:
             backend/core/deployment/ensambria-core-migrate.service \
             backend/core/deployment/ensambria-core-email-worker.service \
             backend/business/deployment/ensambria-business.service \
+            backend/business/deployment/ensambria-business-migrate.service \
             backend/core/deployment/ensambria-env-reload.service \
             backend/core/deployment/ensambria-env-reload.path \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}:${REMOTE_DIRECTORY}/"

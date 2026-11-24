@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::ExitCode,
 };
@@ -35,11 +34,26 @@ fn architecture() -> Result<(), Vec<String>> {
 
     let workspace = read(root.join("Cargo.toml"), &mut errors);
     let contracts = [
-        ("ensambria-core-identity-auth-contracts", "backend/core-identity-auth-contracts"),
-        ("ensambria-core-tenancy-contracts", "backend/core-tenancy-contracts"),
-        ("ensambria-business-establishment-catalog-contracts", "backend/business-establishment-catalog-contracts"),
-        ("ensambria-platform-product-catalog-contracts", "backend/platform-product-catalog-contracts"),
-        ("ensambria-platform-tenant-onboarding-contracts", "backend/platform-tenant-onboarding-contracts"),
+        (
+            "ensambria-core-identity-auth-contracts",
+            "backend/core-identity-auth-contracts",
+        ),
+        (
+            "ensambria-core-tenancy-contracts",
+            "backend/core-tenancy-contracts",
+        ),
+        (
+            "ensambria-business-establishment-catalog-contracts",
+            "backend/business-establishment-catalog-contracts",
+        ),
+        (
+            "ensambria-platform-product-catalog-contracts",
+            "backend/platform-product-catalog-contracts",
+        ),
+        (
+            "ensambria-platform-tenant-onboarding-contracts",
+            "backend/platform-tenant-onboarding-contracts",
+        ),
     ];
     for (package_name, path) in contracts {
         if !workspace.contains(path) {
@@ -59,8 +73,13 @@ fn architecture() -> Result<(), Vec<String>> {
     for (manifest, dependency) in forbidden {
         let content = read(root.join(manifest), &mut errors);
         let dependencies = dependency_section(&content);
-        if dependencies.lines().any(|line| line.trim_start().starts_with(dependency)) {
-            errors.push(format!("{manifest} has forbidden implementation dependency {dependency}"));
+        if dependencies
+            .lines()
+            .any(|line| line.trim_start().starts_with(dependency))
+        {
+            errors.push(format!(
+                "{manifest} has forbidden implementation dependency {dependency}"
+            ));
         }
     }
 
@@ -76,7 +95,10 @@ fn architecture() -> Result<(), Vec<String>> {
             let content = read(file.clone(), &mut errors);
             for token in forbidden_tokens {
                 if content.contains(token) {
-                    errors.push(format!("{} imports forbidden implementation path {token}", file.display()));
+                    errors.push(format!(
+                        "{} imports forbidden implementation path {token}",
+                        file.display()
+                    ));
                 }
             }
         }
@@ -101,30 +123,57 @@ fn architecture() -> Result<(), Vec<String>> {
         "contracts/protobuf/ensambria/core/identity_authentication/v1/identity_authentication.proto",
         "contracts/protobuf/ensambria/core/tenancy/v1/tenancy.proto",
         "contracts/protobuf/ensambria/business/establishment_catalog/v1/establishment_catalog.proto",
-        "contracts/protobuf/ensambria/platform/product_catalog/v1/product_catalog.proto",
+        "contracts/protobuf/platform/product_catalog/v1/product_catalog.proto",
         "contracts/protobuf/ensambria/platform/tenant_onboarding/v1/tenant_onboarding.proto",
     ] {
         require_file(root, proto, &mut errors);
     }
 
-    let outbox = read(root.join("backend/core/migrations/20261122000011_core_tenant_created_outbox.sql"), &mut errors);
-    let inbox = read(root.join("backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql"), &mut errors);
-    for field in ["event_id", "aggregate_version", "correlation_id", "payload", "published_at"] {
+    let outbox = read(
+        root.join("backend/core/migrations/20261122000011_core_tenant_created_outbox.sql"),
+        &mut errors,
+    );
+    let inbox = read(
+        root.join("backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql"),
+        &mut errors,
+    );
+    for field in [
+        "event_id",
+        "aggregate_version",
+        "correlation_id",
+        "payload",
+        "published_at",
+    ] {
         if !outbox.contains(field) {
             errors.push(format!("CORE Outbox contract is missing {field}"));
         }
     }
-    for field in ["event_id", "aggregate_version", "correlation_id", "payload_hash", "applied_at", "quarantined"] {
+    for field in [
+        "event_id",
+        "aggregate_version",
+        "correlation_id",
+        "payload_hash",
+        "applied_at",
+        "quarantined",
+    ] {
         if !inbox.contains(field) {
             errors.push(format!("PLATFORM Inbox contract is missing {field}"));
         }
     }
 
-    let ci = read(root.join(".github/workflows/repository-quality.yml"), &mut errors);
+    let ci = read(
+        root.join(".github/workflows/repository-quality.yml"),
+        &mut errors,
+    );
     if !ci.contains("cargo xtask architecture") {
         errors.push("CI does not execute cargo xtask architecture".to_owned());
     }
-    if errors.is_empty() { Ok(()) } else { Err(errors) }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 fn dependency_section(manifest: &str) -> String {
@@ -135,7 +184,8 @@ fn dependency_section(manifest: &str) -> String {
             active = line == "[dependencies]";
         } else if active {
             result.push_str(line);
-            result.push('\n');
+            result.push('
+');
         }
     }
     result
@@ -144,7 +194,10 @@ fn dependency_section(manifest: &str) -> String {
 fn require_file(root: &Path, relative: impl AsRef<Path>, errors: &mut Vec<String>) {
     let path = root.join(relative.as_ref());
     if !path.is_file() {
-        errors.push(format!("required file is missing: {}", relative.as_ref().display()));
+        errors.push(format!(
+            "required file is missing: {}",
+            relative.as_ref().display()
+        ));
     }
 }
 

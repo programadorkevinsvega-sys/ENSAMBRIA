@@ -97,3 +97,10 @@ No hay PostgreSQL runtime ni pruebas reales ejecutadas.
 - [Contrato de arquitectura](../../ARCHITECTURE_RULES.md)
 - [Guía de pooling PostgreSQL](../rules/ENSAMBRIA_Connection_Pooling_PostgreSQL.md)
 - [Registro de Fase 0](../registro-fase-0-descubrimiento-arquitectura.md)
+
+
+## Enmienda normativa — enforcement por roles PostgreSQL (ADR-0012)
+
+El ownership de datos se impone en PostgreSQL, no solo por convenciones o análisis estático. Cada módulo propietario dispone de rol runtime mínimo y grants únicamente sobre su schema/objetos autorizados. Roles de migración/DDL y setup de pruebas son distintos y no se usan para ejecutar workloads. Workers y tests funcionales se conectan con el mismo rol runtime restringido del módulo propietario. Se revocan grants heredados de PUBLIC y se revisan memberships, secuencias, vistas, funciones, procedimientos y privilegios por defecto.
+
+La suite PostgreSQL debe demostrar denegación real de SELECT/DML/uso de objetos ajenos, incluyendo secuencias, vistas y funciones pertinentes. RLS sigue aplicando donde corresponde para aislamiento tenant y no sustituye ownership por rol/schema. El análisis estático SQL es una segunda capa de consistencia del inventario. No se permiten joins, FKs ni transacciones entre bounded contexts. Véase [ADR-0012](ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y la [regla especializada](../rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md).

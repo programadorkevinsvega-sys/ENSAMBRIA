@@ -8,7 +8,6 @@ use ensambria_event_bus::{
 use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
 use serde::Deserialize;
-use sqlx::PgPool;
 use std::{env, error::Error, sync::Arc, time::Duration};
 use uuid::Uuid;
 

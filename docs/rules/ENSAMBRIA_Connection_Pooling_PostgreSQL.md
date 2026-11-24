@@ -471,3 +471,14 @@ ENSAMBRIA utilizará **una única base de datos PostgreSQL compartida** por los 
 **PgBouncer será opcional**, incorporado únicamente cuando exista evidencia de que aporta valor y después de validar compatibilidad. El aislamiento multi-tenant no dependerá del pool: se garantizará mediante autorización, ownership, permisos SQL y RLS correctamente aplicado dentro de transacciones.
 
 El objetivo no es maximizar el número de conexiones, sino mantener un número controlado que permita atender la concurrencia prevista sin saturar PostgreSQL ni comprometer el aislamiento entre tenants.
+
+
+## 18. Enforcement de ownership por roles de módulo
+
+La separación de schemas y permisos se impone en PostgreSQL. Cada módulo que posee datos tiene rol runtime propio con privilegios mínimos sobre su schema y objetos autorizados. No se conceden permisos de lectura/escritura sobre schemas de otros bounded contexts. Se revocan privilegios heredados de PUBLIC y se revisan memberships, ownership, secuencias, vistas, funciones, procedimientos y default privileges.
+
+Los roles de migración/DDL son separados de runtime. Un worker utiliza el rol runtime del módulo dueño de los datos que procesa. Los tests de integración ejecutan el escenario funcional con esos mismos roles restringidos; un rol de setup puede preparar fixtures, pero no ejecuta las consultas bajo prueba. Nunca usar superuser, BYPASSRLS o schema owner para simular runtime.
+
+Las pruebas negativas PostgreSQL deben intentar acceso a tablas, secuencias, vistas y funciones ajenas y comprobar denegación real. RLS sigue siendo obligatoria donde aplica a filas tenant-scoped; no sustituye grants ni ownership. El análisis estático de SQL/migraciones es una segunda capa para validar inventario y detectar referencias sospechosas, no el mecanismo de seguridad primario. No se permiten FK, joins ni transacciones entre bounded contexts.
+
+Aplicar junto con [ADR-0001](../adr/ADR-0001-base-postgresql-compartida.md), [ADR-0012](../adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y la [regla de fronteras modulares](ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md).

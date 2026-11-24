@@ -716,10 +716,10 @@ jobs:
   # It keeps every integration/security job mandatory while allowing them
   # to execute concurrently.
   rustfmt-snapshot:
-    name: rustfmt-snapshot (temporary formatting export)
+    name: rustfmt-snapshot (temporary formatting and lock export)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -727,17 +727,14 @@ jobs:
       - name: Install pinned Rust formatter
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
 
-      - name: Export formatter patch without weakening the quality gate
+      - name: Export formatter and Cargo.lock patch without weakening the quality gate
         run: |
           set -euo pipefail
           cargo +1.99.1 fmt --all
-          printf 'RUSTFMT_PATCH_BEGIN\\n'
-          git diff --binary -- \\
-            backend/core/src/identity_authentication/service.rs \\
-            backend/core/tests/email_outbox.rs \\
-            backend/core/tests/identity_authentication.rs \\
-            backend/core/tests/identity_authorization.rs | base64 -w0
-          printf '\\nRUSTFMT_PATCH_END\\n'
+          cargo +1.99.1 metadata --format-version 1 > /dev/null
+          printf '%s\\n' 'RUSTFMT_PATCH_BEGIN'
+          git diff --binary -- Cargo.lock backend/core/src/identity_authentication/service.rs backend/core/tests/email_outbox.rs backend/core/tests/identity_authentication.rs backend/core/tests/identity_authorization.rs | base64 -w0
+          printf '%s\\n' 'RUSTFMT_PATCH_END'
 
   repository-quality:
     name: repository-quality

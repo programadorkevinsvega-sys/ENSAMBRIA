@@ -1,7 +1,6 @@
 use ensambria_event_bus::connect_jetstream;
 use ensambria_platform::{
-    product_catalog::ProductCatalog,
-    tenant_onboarding::PlatformTenantOnboarding,
+    product_catalog::ProductCatalog, tenant_onboarding::PlatformTenantOnboarding,
     tenant_onboarding_consumer,
 };
 use ensambria_platform_product_catalog_contracts::ProductCatalog as ProductCatalogPort;

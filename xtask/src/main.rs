@@ -197,26 +197,35 @@ fn architecture() -> Result<(), Vec<String>> {
     );
     if !product_catalog_migration.contains("platform_product_catalog.products")
         || !product_catalog_migration.contains("platform_product_catalog_runtime")
-        || !product_catalog_migration.contains("GRANT USAGE ON SCHEMA platform_product_catalog TO platform_product_catalog_runtime")
+        || !product_catalog_migration.contains(
+            "GRANT USAGE ON SCHEMA platform_product_catalog TO platform_product_catalog_runtime",
+        )
     {
-        errors.push("PLATFORM product catalog is not owned by its isolated schema/runtime".to_owned());
+        errors.push(
+            "PLATFORM product catalog is not owned by its isolated schema/runtime".to_owned(),
+        );
     }
     let onboarding_migration = read(
-        root.join("backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql"),
+        root.join(
+            "backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql",
+        ),
         &mut errors,
     );
     if !onboarding_migration.contains("platform_tenant_onboarding.inbox_messages")
         || !onboarding_migration.contains("platform_tenant_onboarding_runtime")
         || onboarding_migration.contains("GRANT SELECT ON\n    platform.products")
     {
-        errors.push("PLATFORM onboarding is not isolated from the product catalog schema".to_owned());
+        errors
+            .push("PLATFORM onboarding is not isolated from the product catalog schema".to_owned());
     }
     let onboarding_service = read(
         root.join("backend/platform/src/tenant_onboarding.rs"),
         &mut errors,
     );
     if onboarding_service.contains("platform_product_catalog.") {
-        errors.push("PLATFORM onboarding implementation queries product catalog tables directly".to_owned());
+        errors.push(
+            "PLATFORM onboarding implementation queries product catalog tables directly".to_owned(),
+        );
     }
 
     let onboarding_consumer = read(
@@ -228,7 +237,9 @@ fn architecture() -> Result<(), Vec<String>> {
         || !onboarding_consumer.contains("PLATFORM_PRODUCT_CATALOG_DATABASE_URL")
         || !onboarding_consumer.contains("PLATFORM_TENANT_ONBOARDING_DATABASE_URL")
     {
-        errors.push("CORE-to-PLATFORM E2E does not use isolated PLATFORM schemas and identities".to_owned());
+        errors.push(
+            "CORE-to-PLATFORM E2E does not use isolated PLATFORM schemas and identities".to_owned(),
+        );
     }
 
     let ci = read(

@@ -1,9 +1,9 @@
-use ensambria_platform_tenant_onboarding_contracts::{
-    OnboardingOutcome, TenantCreated, TenantOnboarding,
-};
 use ensambria_event_bus::{
     async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy},
     jetstream::Context,
+};
+use ensambria_platform_tenant_onboarding_contracts::{
+    OnboardingOutcome, TenantCreated, TenantOnboarding,
 };
 use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
@@ -149,7 +149,10 @@ pub async fn consume_one(
     Ok(outcome)
 }
 
-pub async fn run(service: Arc<dyn TenantOnboarding>, jetstream: Context) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn run(
+    service: Arc<dyn TenantOnboarding>,
+    jetstream: Context,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     loop {
         match consume_one(service.as_ref(), &jetstream).await {
             Ok(outcome) => {

@@ -28,14 +28,17 @@ impl PlatformTenantOnboarding {
 
     async fn apply(&self, event: &TenantCreated) -> Result<OnboardingOutcome, OnboardingFailure> {
         validate_event(event)?;
-        let active_product = match self.product_catalog.get_active_product(event.product_id).await {
+        let active_product = match self
+            .product_catalog
+            .get_active_product(event.product_id)
+            .await
+        {
             Ok(product) => Some(product),
             Err(ProductCatalogFailure::NotFound) => None,
             Err(_) => return Err(OnboardingFailure::Unavailable),
         };
-        let product_configuration_is_active = active_product.is_some_and(|product| {
-            product.configuration_version == event.product_config_version
-        });
+        let product_configuration_is_active = active_product
+            .is_some_and(|product| product.configuration_version == event.product_config_version);
 
         let product_config_version = i32::try_from(event.product_config_version)
             .map_err(|_| OnboardingFailure::InvalidEvent)?;
@@ -98,11 +101,17 @@ impl PlatformTenantOnboarding {
 
             match existing.6.as_str() {
                 "applied" => {
-                    transaction.commit().await.map_err(|_| OnboardingFailure::Unavailable)?;
+                    transaction
+                        .commit()
+                        .await
+                        .map_err(|_| OnboardingFailure::Unavailable)?;
                     return Ok(OnboardingOutcome::Duplicate);
                 }
                 "quarantined" => {
-                    transaction.commit().await.map_err(|_| OnboardingFailure::Unavailable)?;
+                    transaction
+                        .commit()
+                        .await
+                        .map_err(|_| OnboardingFailure::Unavailable)?;
                     return Ok(OnboardingOutcome::Quarantined);
                 }
                 "received" => {}
@@ -117,7 +126,10 @@ impl PlatformTenantOnboarding {
                 "PRODUCT_CONFIGURATION_UNAVAILABLE",
             )
             .await?;
-            transaction.commit().await.map_err(|_| OnboardingFailure::Unavailable)?;
+            transaction
+                        .commit()
+                        .await
+                        .map_err(|_| OnboardingFailure::Unavailable)?;
             return Ok(OnboardingOutcome::Quarantined);
         }
 
@@ -156,7 +168,10 @@ impl PlatformTenantOnboarding {
                     "TENANT_PRODUCT_ALREADY_ONBOARDED",
                 )
                 .await?;
-                transaction.commit().await.map_err(|_| OnboardingFailure::Unavailable)?;
+                transaction
+                    .commit()
+                    .await
+                    .map_err(|_| OnboardingFailure::Unavailable)?;
                 return Ok(OnboardingOutcome::Quarantined);
             }
         }
@@ -171,7 +186,10 @@ impl PlatformTenantOnboarding {
         .await
         .map_err(|_| OnboardingFailure::Unavailable)?;
 
-        transaction.commit().await.map_err(|_| OnboardingFailure::Unavailable)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| OnboardingFailure::Unavailable)?;
         Ok(OnboardingOutcome::Applied)
     }
 }

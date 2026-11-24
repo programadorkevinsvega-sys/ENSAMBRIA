@@ -1,7 +1,7 @@
-use ensambria_shared_cache::TtlCache;
 use ensambria_platform_product_catalog_contracts::{
     ContractFuture, ProductCatalog as ProductCatalogPort, ProductCatalogFailure,
 };
+use ensambria_shared_cache::TtlCache;
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{PgPool, types::Json};
@@ -228,7 +228,13 @@ impl ProductCatalogPort for ProductCatalog {
     fn get_active_product<'a>(
         &'a self,
         product_id: Uuid,
-    ) -> ContractFuture<'a, Result<ensambria_platform_product_catalog_contracts::ProductCatalogEntry, ProductCatalogFailure>> {
+    ) -> ContractFuture<
+        'a,
+        Result<
+            ensambria_platform_product_catalog_contracts::ProductCatalogEntry,
+            ProductCatalogFailure,
+        >,
+    > {
         Box::pin(async move {
             let product = ProductCatalog::get_active_product(self, product_id)
                 .await
@@ -241,7 +247,13 @@ impl ProductCatalogPort for ProductCatalog {
     fn resolve_active_domain<'a>(
         &'a self,
         domain_name: &'a str,
-    ) -> ContractFuture<'a, Result<Option<ensambria_platform_product_catalog_contracts::ProductCatalogEntry>, ProductCatalogFailure>> {
+    ) -> ContractFuture<
+        'a,
+        Result<
+            Option<ensambria_platform_product_catalog_contracts::ProductCatalogEntry>,
+            ProductCatalogFailure,
+        >,
+    > {
         Box::pin(async move {
             ProductCatalog::resolve_active_domain(self, domain_name)
                 .await
@@ -255,21 +267,30 @@ impl ProductCatalogPort for ProductCatalog {
         &'a self,
         product_id: Uuid,
         version: u32,
-    ) -> ContractFuture<'a, Result<Option<ensambria_platform_product_catalog_contracts::ProductConfiguration>, ProductCatalogFailure>> {
+    ) -> ContractFuture<
+        'a,
+        Result<
+            Option<ensambria_platform_product_catalog_contracts::ProductConfiguration>,
+            ProductCatalogFailure,
+        >,
+    > {
         Box::pin(async move {
-            let version = i32::try_from(version).map_err(|_| ProductCatalogFailure::InvalidRequest)?;
+            let version =
+                i32::try_from(version).map_err(|_| ProductCatalogFailure::InvalidRequest)?;
             ProductCatalog::get_published_configuration(self, product_id, version)
                 .await
                 .map_err(map_contract_error)?
                 .map(|configuration| {
-                    Ok(ensambria_platform_product_catalog_contracts::ProductConfiguration {
-                        product_id: configuration.product_id,
-                        version: u32::try_from(configuration.version)
-                            .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
-                        schema_version: configuration.schema_version,
-                        canonical_json: configuration.canonical_json,
-                        published_at_unix: configuration.published_at.map(system_time_to_unix),
-                    })
+                    Ok(
+                        ensambria_platform_product_catalog_contracts::ProductConfiguration {
+                            product_id: configuration.product_id,
+                            version: u32::try_from(configuration.version)
+                                .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
+                            schema_version: configuration.schema_version,
+                            canonical_json: configuration.canonical_json,
+                            published_at_unix: configuration.published_at.map(system_time_to_unix),
+                        },
+                    )
                 })
                 .transpose()
         })
@@ -288,54 +309,78 @@ fn map_contract_error(error: ProductCatalogError) -> ProductCatalogFailure {
 }
 
 fn system_time_to_unix(value: SystemTime) -> i64 {
-    let seconds = value.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let seconds = value
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
     i64::try_from(seconds).unwrap_or(i64::MAX)
 }
 
 fn to_contract_entry(
     product: ProductCatalogEntry,
-) -> Result<ensambria_platform_product_catalog_contracts::ProductCatalogEntry, ProductCatalogFailure> {
-    Ok(ensambria_platform_product_catalog_contracts::ProductCatalogEntry {
-        product_id: product.product_id,
-        product_key: product.product_key,
-        display_name: product.display_name,
-        brand_name: product.brand_name,
-        configuration_version: u32::try_from(product.configuration_version)
-            .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
-        configuration_schema_version: product.configuration_schema_version,
-        configuration: product.configuration,
-        domains: product.domains.into_iter().map(|domain| {
-            ensambria_platform_product_catalog_contracts::ProductDomain {
-                domain_name: domain.domain_name,
-                status: domain.status,
-            }
-        }).collect(),
-        markets: product.markets.into_iter().map(|market| {
-            ensambria_platform_product_catalog_contracts::ProductMarket {
-                country_code: market.country_code,
-                currency_code: market.currency_code,
-                locale: market.locale,
-                status: market.status,
-            }
-        }).collect(),
-        surfaces: product.surfaces.into_iter().map(|surface| {
-            Ok(ensambria_platform_product_catalog_contracts::ProductSurface {
-                surface_code: surface.surface_code,
-                configuration_version: u32::try_from(surface.configuration_version)
-                    .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
-                status: surface.status,
-            })
-        }).collect::<Result<Vec<_>, ProductCatalogFailure>>()?,
-        capabilities: product.capabilities.into_iter().map(|capability| {
-            ensambria_platform_product_catalog_contracts::ProductCapability {
-                capability_code: capability.capability_code,
-                contract_version: capability.contract_version,
-                implementation_status: capability.implementation_status,
-                product_status: capability.product_status,
-            }
-        }).collect(),
-        published_at_unix: system_time_to_unix(product.published_at),
-    })
+) -> Result<ensambria_platform_product_catalog_contracts::ProductCatalogEntry, ProductCatalogFailure>
+{
+    Ok(
+        ensambria_platform_product_catalog_contracts::ProductCatalogEntry {
+            product_id: product.product_id,
+            product_key: product.product_key,
+            display_name: product.display_name,
+            brand_name: product.brand_name,
+            configuration_version: u32::try_from(product.configuration_version)
+                .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
+            configuration_schema_version: product.configuration_schema_version,
+            configuration: product.configuration,
+            domains: product
+                .domains
+                .into_iter()
+                .map(
+                    |domain| ensambria_platform_product_catalog_contracts::ProductDomain {
+                        domain_name: domain.domain_name,
+                        status: domain.status,
+                    },
+                )
+                .collect(),
+            markets: product
+                .markets
+                .into_iter()
+                .map(
+                    |market| ensambria_platform_product_catalog_contracts::ProductMarket {
+                        country_code: market.country_code,
+                        currency_code: market.currency_code,
+                        locale: market.locale,
+                        status: market.status,
+                    },
+                )
+                .collect(),
+            surfaces: product
+                .surfaces
+                .into_iter()
+                .map(|surface| {
+                    Ok(
+                        ensambria_platform_product_catalog_contracts::ProductSurface {
+                            surface_code: surface.surface_code,
+                            configuration_version: u32::try_from(surface.configuration_version)
+                                .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
+                            status: surface.status,
+                        },
+                    )
+                })
+                .collect::<Result<Vec<_>, ProductCatalogFailure>>()?,
+            capabilities: product
+                .capabilities
+                .into_iter()
+                .map(
+                    |capability| ensambria_platform_product_catalog_contracts::ProductCapability {
+                        capability_code: capability.capability_code,
+                        contract_version: capability.contract_version,
+                        implementation_status: capability.implementation_status,
+                        product_status: capability.product_status,
+                    },
+                )
+                .collect(),
+            published_at_unix: system_time_to_unix(product.published_at),
+        },
+    )
 }
 
 #[derive(Deserialize)]

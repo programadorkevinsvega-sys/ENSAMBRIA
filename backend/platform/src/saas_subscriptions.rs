@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ring::digest::{digest, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Row, types::Json};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -187,7 +187,7 @@ impl SaaSSubscriptions {
         .bind(command.product_id)
         .bind(command.offer_id)
         .bind(command.offer_version)
-        .bind(offer.get::<Value, _>("entitlements"))
+        .bind(offer.get::<Json<Value>, _>("entitlements"))
         .bind(command.ends_at_epoch)
         .bind(command.actor_id)
         .fetch_optional(&mut *transaction)

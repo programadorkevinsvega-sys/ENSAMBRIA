@@ -110,6 +110,23 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
 
+  protobuf-contracts:
+    name: protobuf-contracts
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out complete history for compatibility checks
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Lint versioned Protobuf contracts with Buf
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace bufbuild/buf:1.50.0 lint
+      - name: Reject breaking Protobuf changes against main
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace bufbuild/buf:1.50.0 breaking --against '.git#branch=main,subdir=contracts/protobuf'
+
   deployment-contract:
     needs: changes
     if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
@@ -725,6 +742,7 @@ jobs:
       - changes
       - rust-workspace-quality
       - deployment-contract
+      - protobuf-contracts
       - postgres-integration
       - redis-ha-integration
       - nats-jetstream-ha-integration
@@ -737,6 +755,7 @@ jobs:
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           RUST_WORKSPACE_RESULT: ${{ needs.rust-workspace-quality.result }}
           DEPLOYMENT_CONTRACT_RESULT: ${{ needs.deployment-contract.result }}
+          PROTOBUF_RESULT: ${{ needs.protobuf-contracts.result }}
           POSTGRES_RESULT: ${{ needs.postgres-integration.result }}
           REDIS_HA_RESULT: ${{ needs.redis-ha-integration.result }}
           NATS_HA_RESULT: ${{ needs.nats-jetstream-ha-integration.result }}
@@ -747,7 +766,7 @@ jobs:
             echo "Documentation-only change: build, tests, integration and security jobs intentionally skipped."
             exit 0
           fi
-          for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
+          for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$PROTOBUF_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
             if [[ "$result" != success ]]; then
               echo "Required CI suite did not pass (result: $result)" >&2
               exit 1

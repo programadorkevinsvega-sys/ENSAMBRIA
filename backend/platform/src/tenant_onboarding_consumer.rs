@@ -128,7 +128,7 @@ pub async fn consume_one(
     let event_id = event.event_id;
     if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event_id) {
         tracing::error!(
-            event_id = %event.event_id,
+            event_id = %event_id,
             "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction"
         );
         tokio::time::sleep(Duration::from_secs(60)).await;
@@ -139,7 +139,7 @@ pub async fn consume_one(
         .map_err(|error| std::io::Error::other(format!("{error:?}")))?;
     if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event_id) {
         tracing::error!(
-            event_id = %event.event_id,
+            event_id = %event_id,
             "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK"
         );
         tokio::time::sleep(Duration::from_secs(60)).await;

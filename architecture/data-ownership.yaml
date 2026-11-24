@@ -1,0 +1,113 @@
+version: 1
+description: "Canonical PostgreSQL module ownership target. Runtime grants are activated only by the corresponding module cutover migration."
+modules:
+  - id: core.identity-authentication
+    backend: CORE
+    context: identity-authentication
+    schema: core_identity_auth
+    schema_owner_role: core_identity_auth_schema_owner
+    runtime_role: core_identity_auth_runtime
+    tables:
+      - identities
+      - identity_credentials
+      - auth_sessions
+      - identity_mfa_totp
+      - identity_mfa_recovery_codes
+      - auth_rate_limits
+      - account_recovery_tokens
+      - account_recovery_token_lookup
+      - identity_verification_tokens
+      - identity_verification_token_lookup
+      - auth_mfa_challenges
+      - auth_mfa_challenge_lookup
+      - security_audit_events
+      - email_outbox
+    functions:
+      - auth_lookup_identity
+      - auth_find_refresh_session
+      - auth_find_recovery_token
+      - auth_record_login_failure
+      - auth_record_login_success
+      - auth_consume_rate_limit
+      - auth_rotate_refresh_token
+      - auth_complete_recovery
+      - auth_accept_totp_step
+      - auth_create_session
+      - auth_find_access_session
+      - auth_issue_recovery_token
+      - auth_issue_verification_token
+      - auth_consume_verification_token
+      - auth_mfa_is_enabled
+      - auth_issue_mfa_challenge
+      - auth_find_mfa_challenge
+      - auth_consume_mfa_challenge
+      - auth_consume_mfa_recovery_code
+      - auth_confirm_totp_step
+      - auth_lookup_pending_identity
+      - auth_record_security_event
+  - id: core.tenancy-membership-organization-branch-product
+    backend: CORE
+    context: tenancy-membership-organization-branch-product
+    schema: core_tenancy
+    schema_owner_role: core_tenancy_schema_owner
+    runtime_role: core_tenancy_runtime
+    tables:
+      - tenants
+      - organizations
+      - branches
+      - tenant_memberships
+      - permissions
+      - tenant_roles
+      - tenant_role_permissions
+      - membership_role_assignments
+      - tenant_products
+      - outbox_events
+    functions:
+      - has_permission
+      - resolve_regional_context
+    contract_dependencies:
+      - core.identity-authentication
+      - platform.product-catalog
+  - id: business.establishment-catalog-verticals
+    backend: BUSINESS
+    context: establishment-catalog-verticals
+    schema: business_establishment_catalog
+    schema_owner_role: business_establishment_catalog_schema_owner
+    runtime_role: business_establishment_catalog_runtime
+    tables:
+      - establishments
+    contract_dependencies:
+      - core.identity-authentication
+      - core.tenancy-membership-organization-branch-product
+  - id: platform.product-catalog
+    backend: PLATFORM
+    context: product-catalog-configuration
+    schema: platform_product_catalog
+    schema_owner_role: platform_product_catalog_schema_owner
+    runtime_role: platform_product_catalog_runtime
+    tables:
+      - products
+      - product_configurations
+      - product_domains
+      - product_markets
+      - product_surfaces
+      - capability_catalog
+      - product_capabilities
+    contract_dependencies: []
+  - id: platform.tenant-onboarding
+    backend: PLATFORM
+    context: commercial-account-onboarding
+    schema: platform_tenant_onboarding
+    schema_owner_role: platform_tenant_onboarding_schema_owner
+    runtime_role: platform_tenant_onboarding_runtime
+    tables:
+      - inbox_messages
+      - tenant_onboardings
+    contract_dependencies:
+      - platform.product-catalog
+      - core.tenancy-membership-organization-branch-product
+notes:
+  - "IDs crossing module boundaries are opaque references; no cross-module foreign keys."
+  - "No runtime role receives access to another module schema."
+  - "The current legacy schemas remain in place until all application SQL, functions, workers, tests and deploy configuration are migrated."
+  - "No compatibility view may bypass module ownership."

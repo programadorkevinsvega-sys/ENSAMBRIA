@@ -76,6 +76,7 @@ CREATE TABLE platform.saas_subscriptions (
     product_id uuid NOT NULL REFERENCES platform.products(id),
     offer_id uuid NOT NULL,
     offer_version integer NOT NULL,
+    entitlements_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(entitlements_snapshot) = 'object'),
     status text NOT NULL CHECK (status IN ('active', 'suspended', 'cancelled', 'expired')),
     starts_at timestamptz NOT NULL,
     ends_at timestamptz,

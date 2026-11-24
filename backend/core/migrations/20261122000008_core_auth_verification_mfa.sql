@@ -247,3 +247,6 @@ GRANT EXECUTE ON FUNCTION core_identity_auth.auth_find_mfa_challenge(bytea) TO c
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_consume_mfa_challenge(bytea) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_consume_mfa_recovery_code(uuid, bytea) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_confirm_totp_step(uuid, bigint) TO core_identity_auth_runtime;
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

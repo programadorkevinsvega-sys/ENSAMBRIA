@@ -56,3 +56,6 @@ REVOKE ALL ON FUNCTION core_identity_auth.auth_lookup_pending_identity(text) FRO
 REVOKE ALL ON FUNCTION core_identity_auth.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_lookup_pending_identity(text) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) TO core_identity_auth_runtime;
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

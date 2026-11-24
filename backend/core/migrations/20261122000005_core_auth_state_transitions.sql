@@ -265,3 +265,6 @@ GRANT EXECUTE ON FUNCTION core_identity_auth.auth_consume_rate_limit(bytea, text
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_complete_recovery(bytea, text) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_accept_totp_step(uuid, bigint) TO core_identity_auth_runtime;
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

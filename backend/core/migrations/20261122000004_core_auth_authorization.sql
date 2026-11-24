@@ -295,3 +295,6 @@ COMMENT ON TABLE core_identity_auth.identity_mfa_totp IS
     'TOTP secret ciphertext only; encryption/decryption and key custody are application/KMS responsibilities.';
 COMMENT ON TABLE core_identity_auth.auth_rate_limits IS
     'Pre-authentication throttling state keyed by a keyed digest; direct reads are denied.';
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

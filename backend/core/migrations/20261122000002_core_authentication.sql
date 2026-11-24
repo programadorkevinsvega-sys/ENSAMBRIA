@@ -63,3 +63,6 @@ COMMENT ON TABLE core_identity_auth.account_recovery_tokens IS
     'Single-use, expiring recovery token state; only a SHA-256 digest is indexed.';
 COMMENT ON TABLE core_identity_auth.identity_verification_tokens IS
     'Single-use email verification token state; only a SHA-256 digest is indexed.';
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

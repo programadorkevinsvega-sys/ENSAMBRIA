@@ -28,3 +28,5 @@ GRANT SELECT, UPDATE ON core_identity_auth.email_outbox TO core_email_worker;
 COMMENT ON TABLE core_identity_auth.email_outbox IS
     'Durable transactional email queue. Payloads contain one-time links; access is restricted to CORE runtime workers.';
 
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

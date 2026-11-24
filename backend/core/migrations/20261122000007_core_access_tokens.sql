@@ -164,3 +164,6 @@ GRANT EXECUTE ON FUNCTION core_identity_auth.auth_rotate_refresh_token(bytea, uu
 
 COMMENT ON COLUMN core_identity_auth.auth_sessions.access_token_hash IS
     'SHA-256 digest of a random, short-lived opaque access token; raw bearer material is never persisted.';
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

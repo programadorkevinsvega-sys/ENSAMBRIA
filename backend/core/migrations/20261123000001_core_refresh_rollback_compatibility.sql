@@ -73,3 +73,6 @@ $$;
 
 REVOKE ALL ON FUNCTION core_identity_auth.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) TO core_identity_auth_runtime;
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

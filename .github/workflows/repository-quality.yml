@@ -277,9 +277,9 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_schema_owner" \
             -f backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \\
-            -v ON_ERROR_STOP=1 \\
-            -c "SET ROLE platform_schema_owner" \\
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "SET ROLE platform_schema_owner" \
             -f backend/platform/migrations/20261124000003_platform_saas_subscriptions.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE platform_schema_owner;

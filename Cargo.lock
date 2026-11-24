@@ -579,6 +579,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ensambria-architecture-e2e"
+version = "0.1.0"
+dependencies = [
+ "ensambria-core",
+ "ensambria-platform",
+ "ensambria-platform-contract",
+ "sqlx",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "uuid",
+]
+
+[[package]]
 name = "ensambria-business-runtime"
 version = "0.1.0"
 dependencies = [

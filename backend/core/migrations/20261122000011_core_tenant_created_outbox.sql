@@ -72,3 +72,6 @@ COMMENT ON TABLE core_tenancy.outbox_events IS
     'Durable CORE-owned facts awaiting confirmed JetStream publication; inserted atomically with the tenant aggregate.';
 
 GRANT USAGE ON SCHEMA core_tenancy TO core_outbox_relay;
+
+-- SQLx migration ledger is owned by core_tenancy_schema_owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

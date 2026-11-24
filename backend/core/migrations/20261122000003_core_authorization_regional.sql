@@ -116,3 +116,6 @@ COMMENT ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) IS
     'Evaluates active membership permissions at tenant, organization or branch scope under transaction-local actor and tenant RLS context.';
 COMMENT ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) IS
     'Resolves regional settings with branch > organization > tenant precedence and validates the supplied scope.';
+
+-- SQLx migration ledger is owned by core_tenancy_schema_owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

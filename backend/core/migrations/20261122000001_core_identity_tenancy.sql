@@ -281,3 +281,6 @@ COMMENT ON TABLE core_tenancy.tenant_products IS
     'CORE-owned technical tenant/product association; product_id and version are validated through PLATFORM contracts, never SQL joins.';
 COMMENT ON TABLE core_tenancy.permissions IS
     'Global, non-tenant permission vocabulary. Tenant roles bind these codes to scoped memberships.';
+
+-- SQLx migration ledger is owned by core_tenancy_schema_owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

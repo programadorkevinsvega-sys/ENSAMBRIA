@@ -49,3 +49,6 @@ BEGIN
     END LOOP;
 END
 $$;
+
+-- SQLx migration ledger is owned by core_tenancy_schema_owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

@@ -88,7 +88,7 @@ impl SaaSSubscriptions {
             return Err(SubscriptionError::OfferUnavailable);
         }
         let id = Uuid::now_v7();
-        let inserted = sqlx::query("INSERT INTO platform.saas_subscriptions (id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,created_by) VALUES ($1,$2,$3,$4,$5,'active',clock_timestamp(),to_timestamp($6),$7) ON CONFLICT DO NOTHING RETURNING id")
+        let inserted = sqlx::query("INSERT INTO platform.saas_subscriptions (id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,created_by) VALUES ($1,$2,$3,$4,$5,'active',clock_timestamp(),to_timestamp($6::double precision),$7) ON CONFLICT DO NOTHING RETURNING id")
             .bind(id).bind(command.tenant_id).bind(command.product_id).bind(command.offer_id)
             .bind(command.offer_version).bind(command.ends_at_epoch).bind(command.actor_id)
             .fetch_optional(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
@@ -132,7 +132,7 @@ impl SaaSSubscriptions {
             _ => return Err(SubscriptionError::InvalidTransition),
         };
         let new_end = if matches!(command.action, SubscriptionAction::Renew) { command.new_ends_at_epoch } else { row.get("ends_at_epoch") };
-        sqlx::query("UPDATE platform.saas_subscriptions SET status=$3,ends_at=to_timestamp($4),suspended_at=CASE WHEN $3='suspended' THEN clock_timestamp() ELSE NULL END,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE NULL END,version=$5,updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2 AND version=$6")
+        sqlx::query("UPDATE platform.saas_subscriptions SET status=$3,ends_at=to_timestamp($4::double precision),suspended_at=CASE WHEN $3='suspended' THEN clock_timestamp() ELSE NULL END,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE NULL END,version=$5,updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2 AND version=$6")
             .bind(command.subscription_id).bind(command.tenant_id).bind(next).bind(new_end)
             .bind(current_version + 1).bind(current_version)
             .execute(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;

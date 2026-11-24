@@ -5,7 +5,7 @@ use sqlx::{PgPool, types::Json};
 use std::{env, error::Error, time::Duration};
 use uuid::Uuid;
 
-const SUBJECT: &str = "ensambria.core_tenancy.tenant.created.v1";
+const SUBJECT: &str = "ensambria.core.tenant.created.v1";
 const MAX_ATTEMPTS: i32 = 12;
 const LEASE_SECONDS: i32 = 45;
 

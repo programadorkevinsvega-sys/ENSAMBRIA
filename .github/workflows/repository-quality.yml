@@ -205,11 +205,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TEST_DATABASE_URL: postgres://core_identity_auth_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TENANCY_DATABASE_URL: postgres://core_tenancy_runtime@127.0.0.1:5432/ensambria_core_test
       CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
       CORE_EMAIL_WORKER_DATABASE_URL: postgres://core_email_worker@127.0.0.1:5432/ensambria_core_test
       CORE_OUTBOX_DATABASE_URL: postgres://core_outbox_relay@127.0.0.1:5432/ensambria_core_test
-      CORE_TENANT_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TENANT_DATABASE_URL: postgres://core_tenancy_runtime@127.0.0.1:5432/ensambria_core_test
       PLATFORM_PRODUCT_CATALOG_DATABASE_URL: postgres://platform_product_catalog_runtime@127.0.0.1:5432/ensambria_core_test
       PLATFORM_TENANT_ONBOARDING_DATABASE_URL: postgres://platform_tenant_onboarding_runtime@127.0.0.1:5432/ensambria_core_test
       PLATFORM_VERIFY_DATABASE_URL: postgres://core_admin@127.0.0.1:5432/ensambria_core_test
@@ -252,25 +253,16 @@ jobs:
         run: |
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT core_schema_owner TO core_migrator;"
+            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker, core_outbox_relay;"
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_migrator, core_email_worker, core_outbox_relay;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
@@ -362,7 +354,7 @@ jobs:
         run: |
           set -euo pipefail
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE core_runtime;
+          SET ROLE core_tenancy_runtime;
           BEGIN;
           SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
           INSERT INTO core.outbox_events (
@@ -396,13 +388,13 @@ jobs:
           psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $body$
           BEGIN
-              IF NOT has_table_privilege('core_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
-                  RAISE EXCEPTION 'core_runtime must append Outbox rows in the tenant transaction';
+              IF NOT has_table_privilege('core_tenancy_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core_tenancy' AND c.relname = 'outbox_events'), 'INSERT') THEN
+                  RAISE EXCEPTION 'core_tenancy_runtime must append Outbox rows in the tenant transaction';
               END IF;
-              IF NOT has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'SELECT,UPDATE') THEN
+              IF NOT has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core_tenancy' AND c.relname = 'outbox_events'), 'SELECT,UPDATE') THEN
                   RAISE EXCEPTION 'core_outbox_relay must claim and publish Outbox rows';
               END IF;
-              IF has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
+              IF has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core_tenancy' AND c.relname = 'outbox_events'), 'INSERT') THEN
                   RAISE EXCEPTION 'core_outbox_relay must not create business events';
               END IF;
               IF NOT has_table_privilege('platform_tenant_onboarding_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform_tenant_onboarding' AND c.relname = 'inbox_messages'), 'INSERT,UPDATE,SELECT') THEN
@@ -501,7 +493,8 @@ jobs:
       PLATFORM_REDIS_PASSWORD: ensambria-ci-only
       PLATFORM_REDIS_POOL_SIZE: 2
       ENSAMBRIA_REDIS_REQUIRED: "true"
-      DATABASE_URL: postgres://core_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      DATABASE_URL: postgres://core_identity_auth_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      CORE_TENANCY_DATABASE_URL: postgres://core_tenancy_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
       CORE_DATABASE_MAX_CONNECTIONS: "4"
       CORE_DATABASE_ACQUIRE_TIMEOUT_MS: "1500"
       CORE_MFA_ENCRYPTION_KEY_VERSION: ci-v1

@@ -96,7 +96,7 @@ event_id="$(sed -n 's/^EVENT_ID=//p' <<<"$e2e_output")"
 tenant_id="$(sed -n 's/^TENANT_ID=//p' <<<"$e2e_output")"
 [[ -n "$event_id" && -n "$tenant_id" ]]
 
-outbox_query="SELECT status FROM core.outbox_events WHERE event_id='$event_id'"
+outbox_query="SELECT status FROM core_tenancy.outbox_events WHERE event_id='$event_id'"
 wait_for_database_value "$CORE_OUTBOX_DATABASE_URL" "$outbox_query" "pending" "committed Outbox event before relay startup"
 
 # Crash the relay after JetStream confirms the publish but before PostgreSQL marks it published.
@@ -110,7 +110,7 @@ wait_for_log /tmp/ensambria-core-outbox-relay-first.log \
 stop_process "$RELAY_PID"
 RELAY_PID=""
 
-leased="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc "SELECT status FROM core.outbox_events WHERE event_id='$event_id'")"
+leased="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc "SELECT status FROM core_tenancy.outbox_events WHERE event_id='$event_id'")"
 [[ "$leased" == "leased" ]]
 
 # The lease expires; a restarted relay republishes with the same Nats-Msg-Id.
@@ -191,7 +191,7 @@ grep -q "PLATFORM tenant event committed and ACKed" /tmp/ensambria-platform-cons
 
 final_inbox="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.inbox_messages WHERE event_id='$event_id' AND status='applied'")"
 final_onboarding="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.tenant_onboardings WHERE tenant_id='$tenant_id' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND source_event_id='$event_id' AND status='onboarding_pending'")"
-final_outbox="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc "SELECT count(*) FROM core.outbox_events WHERE event_id='$event_id' AND status='published'")"
+final_outbox="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc "SELECT count(*) FROM core_tenancy.outbox_events WHERE event_id='$event_id' AND status='published'")"
 [[ "$final_inbox" == "1" && "$final_onboarding" == "1" && "$final_outbox" == "1" ]]
 
 echo "PASS: Outbox pending recovery; relay crash after JetStream PubAck; same event republished and broker-deduplicated; three-node JetStream restart; consumer crash before Inbox transaction; consumer crash after Inbox commit but before ACK; real JetStream redelivery; Inbox duplicate handling; exactly one onboarding_pending projection."

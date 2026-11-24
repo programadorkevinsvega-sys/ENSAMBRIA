@@ -5,7 +5,7 @@ SET LOCAL ROLE core_tenancy_schema_owner;
 -- The business mutation and this row must be inserted in the same CORE transaction.
 CREATE TABLE core_tenancy.outbox_events (
     event_id uuid PRIMARY KEY,
-    event_type text NOT NULL CHECK (event_type = 'core_tenancy.tenant.created.v1'),
+    event_type text NOT NULL CHECK (event_type = 'core.tenant.created.v1'),
     schema_version integer NOT NULL CHECK (schema_version = 1),
     aggregate_type text NOT NULL CHECK (aggregate_type = 'tenant'),
     aggregate_id uuid NOT NULL,

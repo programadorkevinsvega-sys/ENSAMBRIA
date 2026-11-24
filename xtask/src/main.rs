@@ -161,6 +161,28 @@ fn architecture() -> Result<(), Vec<String>> {
         }
     }
 
+    let business_service = read(root.join("backend/business/src/service.rs"), &mut errors);
+    if business_service.contains("core.") || business_service.contains("platform.") {
+        errors.push("BUSINESS implementation contains a direct cross-owner schema reference".to_owned());
+    }
+    let business_bootstrap = read(
+        root.join("backend/business/migrations/bootstrap/00000000000000_business_schema.sql"),
+        &mut errors,
+    );
+    if business_bootstrap.contains("GRANT USAGE ON SCHEMA core") {
+        errors.push("BUSINESS bootstrap grants direct CORE schema access".to_owned());
+    }
+    let business_migration = read(
+        root.join("backend/business/migrations/20261122000001_business_establishments.sql"),
+        &mut errors,
+    );
+    if !business_migration.contains("business_establishment_catalog.establishments")
+        || business_migration.contains("business.establishments")
+    {
+        errors.push("BUSINESS establishments are not migrated to the owned schema".to_owned());
+    }
+    require_file(root, "scripts/ci/check-business-module-isolation.sh", &mut errors);
+
     let ci = read(
         root.join(".github/workflows/repository-quality.yml"),
         &mut errors,

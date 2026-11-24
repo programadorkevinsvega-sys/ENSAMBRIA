@@ -103,12 +103,13 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
         .await
         .expect("identity transaction must commit");
 
-    let lookup: Option<(Uuid, String)> =
-        sqlx::query_as("SELECT identity_id, password_hash FROM core_identity_auth.auth_lookup_identity($1)")
-            .bind(&email)
-            .fetch_optional(&pool)
-            .await
-            .expect("narrow pre-auth lookup must be executable");
+    let lookup: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT identity_id, password_hash FROM core_identity_auth.auth_lookup_identity($1)",
+    )
+    .bind(&email)
+    .fetch_optional(&pool)
+    .await
+    .expect("narrow pre-auth lookup must be executable");
     let (found_identity, phc) = lookup.expect("active verified identity must be found");
     assert_eq!(found_identity, identity_id);
     let restored = PasswordHash::from_phc(&phc).expect("PHC hash must be valid");
@@ -116,18 +117,20 @@ async fn credentials_and_sessions_are_actor_scoped_and_pre_auth_lookup_is_narrow
 
     let mut transaction = pool.begin().await.expect("second transaction must begin");
     set_actor(&mut transaction, other_actor).await;
-    let visible_credentials: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.identity_credentials WHERE identity_id = $1")
-            .bind(identity_id)
-            .fetch_one(&mut *transaction)
-            .await
-            .expect("credential lookup must be scoped");
-    let visible_sessions: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.auth_sessions WHERE identity_id = $1")
-            .bind(identity_id)
-            .fetch_one(&mut *transaction)
-            .await
-            .expect("session lookup must be scoped");
+    let visible_credentials: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core_identity_auth.identity_credentials WHERE identity_id = $1",
+    )
+    .bind(identity_id)
+    .fetch_one(&mut *transaction)
+    .await
+    .expect("credential lookup must be scoped");
+    let visible_sessions: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core_identity_auth.auth_sessions WHERE identity_id = $1",
+    )
+    .bind(identity_id)
+    .fetch_one(&mut *transaction)
+    .await
+    .expect("session lookup must be scoped");
     assert_eq!(visible_credentials, 0);
     assert_eq!(visible_sessions, 0);
     transaction
@@ -258,12 +261,13 @@ async fn transactional_email_delivery_failures_are_reported_to_callers() {
         )
         .await
         .expect("registration response must not reveal email delivery or account state");
-    let persisted_failed_registration: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.identities WHERE email_normalized = $1")
-            .bind(&registration_email)
-            .fetch_one(&pool)
-            .await
-            .expect("inspect failed registration");
+    let persisted_failed_registration: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core_identity_auth.identities WHERE email_normalized = $1",
+    )
+    .bind(&registration_email)
+    .fetch_one(&pool)
+    .await
+    .expect("inspect failed registration");
     assert_eq!(
         persisted_failed_registration, 0,
         "failed transactional enqueue must roll back the identity and verification token"

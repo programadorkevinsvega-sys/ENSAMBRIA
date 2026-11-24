@@ -78,7 +78,10 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     .expect("Argon2id verifier must be persisted");
     identity_tx.commit().await.expect("identity must commit");
 
-    let mut tx = tenancy_pool.begin().await.expect("tenancy transaction must begin");
+    let mut tx = tenancy_pool
+        .begin()
+        .await
+        .expect("tenancy transaction must begin");
     ActorContext::new(ActorId::new(actor))
         .establish(&mut tx)
         .await
@@ -150,35 +153,32 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     .await
     .expect("role must be assigned at branch scope");
 
-    let allowed: bool = sqlx::query_scalar(
-        "SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, $4)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .bind(branch)
-    .fetch_one(&mut *tx)
-    .await
-    .expect("authorization evaluator must execute");
-    let denied_wrong_branch: bool = sqlx::query_scalar(
-        "SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, $4)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .bind(Uuid::now_v7())
-    .fetch_one(&mut *tx)
-    .await
-    .expect("authorization evaluator must execute for another branch");
-    let denied_organization_scope: bool = sqlx::query_scalar(
-        "SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, NULL)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .fetch_one(&mut *tx)
-    .await
-    .expect("branch-scoped permission must not imply organization scope");
+    let allowed: bool =
+        sqlx::query_scalar("SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, $4)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .bind(branch)
+            .fetch_one(&mut *tx)
+            .await
+            .expect("authorization evaluator must execute");
+    let denied_wrong_branch: bool =
+        sqlx::query_scalar("SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, $4)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .bind(Uuid::now_v7())
+            .fetch_one(&mut *tx)
+            .await
+            .expect("authorization evaluator must execute for another branch");
+    let denied_organization_scope: bool =
+        sqlx::query_scalar("SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, NULL)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .fetch_one(&mut *tx)
+            .await
+            .expect("branch-scoped permission must not imply organization scope");
     let denied_tenant_scope: bool = sqlx::query_scalar(
         "SELECT core_tenancy.has_permission($1, $2, 'branch.manage', NULL, NULL)",
     )
@@ -268,16 +268,15 @@ async fn authorization_and_regional_resolution_are_explicit_and_scope_aware() {
     .expect("identity context state must be readable");
     assert_eq!(residual_identity_context, (None, None));
 
-    let denied_without_context: bool = sqlx::query_scalar(
-        "SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, $4)",
-    )
-    .bind(actor)
-    .bind(tenant)
-    .bind(organization)
-    .bind(branch)
-    .fetch_one(&tenancy_pool)
-    .await
-    .expect("authorization must fail closed without transaction context");
+    let denied_without_context: bool =
+        sqlx::query_scalar("SELECT core_tenancy.has_permission($1, $2, 'branch.manage', $3, $4)")
+            .bind(actor)
+            .bind(tenant)
+            .bind(organization)
+            .bind(branch)
+            .fetch_one(&tenancy_pool)
+            .await
+            .expect("authorization must fail closed without transaction context");
     assert!(!denied_without_context);
     let regional_without_context: Option<RegionalContext> = sqlx::query_as(
         "SELECT country_code::text, currency_code::text, locale, time_zone FROM core_tenancy.resolve_regional_context($1, $2, $3)",
@@ -412,7 +411,10 @@ async fn one_global_identity_can_hold_independent_memberships_in_multiple_tenant
         .fetch_one(&mut *tx)
         .await
         .expect("foreign tenant permission must be evaluated");
-        assert!(allowed, "identity must retain its membership in each tenant");
+        assert!(
+            allowed,
+            "identity must retain its membership in each tenant"
+        );
         assert!(
             !cross_tenant,
             "a valid identity and foreign tenant ID must not cross the transaction scope"

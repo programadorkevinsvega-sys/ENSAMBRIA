@@ -308,12 +308,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             .begin()
             .await
             .map_err(|_| AuthenticationError::Storage)?;
-        let pending: Option<Uuid> =
-            sqlx::query_scalar("SELECT identity_id FROM core_identity_auth.auth_lookup_pending_identity($1)")
-                .bind(&email)
-                .fetch_optional(&mut *transaction)
-                .await
-                .map_err(|_| AuthenticationError::Storage)?;
+        let pending: Option<Uuid> = sqlx::query_scalar(
+            "SELECT identity_id FROM core_identity_auth.auth_lookup_pending_identity($1)",
+        )
+        .bind(&email)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
         let Some(identity_id) = pending else {
             return Ok(());
         };
@@ -399,12 +400,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let verifier =
             PasswordHash::from_phc(&encoded).map_err(|_| AuthenticationError::Storage)?;
         if !verify_password(password, &verifier).map_err(|_| AuthenticationError::Cryptography)? {
-            let _: bool =
-                sqlx::query_scalar("SELECT core_identity_auth.auth_record_login_failure($1, 5, 900) IS NOT NULL")
-                    .bind(identity_id)
-                    .fetch_one(&self.pool)
-                    .await
-                    .map_err(|_| AuthenticationError::Storage)?;
+            let _: bool = sqlx::query_scalar(
+                "SELECT core_identity_auth.auth_record_login_failure($1, 5, 900) IS NOT NULL",
+            )
+            .bind(identity_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
             self.record_audit(
                 Some(identity_id),
                 "auth.login.failed",
@@ -448,11 +450,12 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             return Err(AuthenticationError::TemporarilyLocked);
         }
 
-        let mfa_enabled: bool = sqlx::query_scalar("SELECT core_identity_auth.auth_mfa_is_enabled($1)")
-            .bind(identity_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|_| AuthenticationError::Storage)?;
+        let mfa_enabled: bool =
+            sqlx::query_scalar("SELECT core_identity_auth.auth_mfa_is_enabled($1)")
+                .bind(identity_id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
         if mfa_enabled {
             let (challenge, challenge_hash) =
                 SessionToken::generate().map_err(|_| AuthenticationError::Cryptography)?;
@@ -549,21 +552,24 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 .map_err(|_| AuthenticationError::Cryptography)?;
             let secret = TotpSecret::from_bytes(secret_array);
             if let Some(step) = secret.verify_at(factor, unix_seconds) {
-                factor_valid = sqlx::query_scalar("SELECT core_identity_auth.auth_accept_totp_step($1, $2)")
-                    .bind(identity_id)
-                    .bind(step as i64)
-                    .fetch_one(&mut *transaction)
-                    .await
-                    .map_err(|_| AuthenticationError::Storage)?;
+                factor_valid =
+                    sqlx::query_scalar("SELECT core_identity_auth.auth_accept_totp_step($1, $2)")
+                        .bind(identity_id)
+                        .bind(step as i64)
+                        .fetch_one(&mut *transaction)
+                        .await
+                        .map_err(|_| AuthenticationError::Storage)?;
             }
         } else {
             let code_hash = digest(&SHA256, factor.as_bytes());
-            factor_valid = sqlx::query_scalar("SELECT core_identity_auth.auth_consume_mfa_recovery_code($1, $2)")
-                .bind(identity_id)
-                .bind(code_hash.as_ref())
-                .fetch_one(&mut *transaction)
-                .await
-                .map_err(|_| AuthenticationError::Storage)?;
+            factor_valid = sqlx::query_scalar(
+                "SELECT core_identity_auth.auth_consume_mfa_recovery_code($1, $2)",
+            )
+            .bind(identity_id)
+            .bind(code_hash.as_ref())
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(|_| AuthenticationError::Storage)?;
         }
         if !factor_valid {
             transaction
@@ -692,12 +698,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
     pub async fn request_recovery(&self, email: &str) -> Result<(), AuthenticationError> {
         let email = normalize_email(email).map_err(|_| AuthenticationError::InvalidInput)?;
         self.enforce_rate_limit("recovery", &email).await?;
-        let identity: Option<Uuid> =
-            sqlx::query_scalar("SELECT identity_id FROM core_identity_auth.auth_lookup_identity($1)")
-                .bind(&email)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(|_| AuthenticationError::Storage)?;
+        let identity: Option<Uuid> = sqlx::query_scalar(
+            "SELECT identity_id FROM core_identity_auth.auth_lookup_identity($1)",
+        )
+        .bind(&email)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
         let Some(identity_id) = identity else {
             self.record_audit(None, "auth.recovery.requested", "success", None, None)
                 .await?;
@@ -926,12 +933,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         let step = secret
             .verify_at(code, unix_seconds)
             .ok_or(AuthenticationError::InvalidMfaFactor)?;
-        let confirmed: bool = sqlx::query_scalar("SELECT core_identity_auth.auth_confirm_totp_step($1, $2)")
-            .bind(identity_id)
-            .bind(step as i64)
-            .fetch_one(&mut *transaction)
-            .await
-            .map_err(|_| AuthenticationError::Storage)?;
+        let confirmed: bool =
+            sqlx::query_scalar("SELECT core_identity_auth.auth_confirm_totp_step($1, $2)")
+                .bind(identity_id)
+                .bind(step as i64)
+                .fetch_one(&mut *transaction)
+                .await
+                .map_err(|_| AuthenticationError::Storage)?;
         if !confirmed {
             return Err(AuthenticationError::InvalidMfaFactor);
         }
@@ -985,11 +993,13 @@ impl<D: EmailDelivery> AuthenticationService<D> {
             &mut transaction,
         )
         .await?;
-        sqlx::query("DELETE FROM core_identity_auth.identity_mfa_recovery_codes WHERE identity_id = $1")
-            .bind(identity_id)
-            .execute(&mut *transaction)
-            .await
-            .map_err(|_| AuthenticationError::Storage)?;
+        sqlx::query(
+            "DELETE FROM core_identity_auth.identity_mfa_recovery_codes WHERE identity_id = $1",
+        )
+        .bind(identity_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
         sqlx::query("DELETE FROM core_identity_auth.identity_mfa_totp WHERE identity_id = $1")
             .bind(identity_id)
             .execute(&mut *transaction)
@@ -1192,16 +1202,17 @@ impl<D: EmailDelivery> AuthenticationService<D> {
                 }
             }
         }
-        let allowed: bool =
-            sqlx::query_scalar("SELECT core_identity_auth.auth_consume_rate_limit($1, $2, $3, $4, $5)")
-                .bind(digest.as_ref())
-                .bind(action)
-                .bind(RATE_WINDOW_SECONDS)
-                .bind(RATE_MAX_ATTEMPTS)
-                .bind(RATE_BLOCK_SECONDS)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|_| AuthenticationError::Storage)?;
+        let allowed: bool = sqlx::query_scalar(
+            "SELECT core_identity_auth.auth_consume_rate_limit($1, $2, $3, $4, $5)",
+        )
+        .bind(digest.as_ref())
+        .bind(action)
+        .bind(RATE_WINDOW_SECONDS)
+        .bind(RATE_MAX_ATTEMPTS)
+        .bind(RATE_BLOCK_SECONDS)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| AuthenticationError::Storage)?;
         if allowed {
             Ok(())
         } else {

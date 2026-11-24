@@ -95,12 +95,13 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
             .expect("worker must claim message"),
         0
     );
-    let state: (String, i32) =
-        sqlx::query_as("SELECT status, attempts FROM core_identity_auth.email_outbox WHERE recipient = $1")
-            .bind(format!("{id}@example.test"))
-            .fetch_one(&worker_pool)
-            .await
-            .expect("retry state must persist");
+    let state: (String, i32) = sqlx::query_as(
+        "SELECT status, attempts FROM core_identity_auth.email_outbox WHERE recipient = $1",
+    )
+    .bind(format!("{id}@example.test"))
+    .fetch_one(&worker_pool)
+    .await
+    .expect("retry state must persist");
     assert_eq!(state.0, "pending");
     assert_eq!(state.1, 1);
 
@@ -124,19 +125,21 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
         1
     );
     assert_eq!(successful.sent.load(Ordering::SeqCst), 1);
-    let final_state: String =
-        sqlx::query_scalar("SELECT status FROM core_identity_auth.email_outbox WHERE recipient = $1")
-            .bind(format!("{id}@example.test"))
-            .fetch_one(&worker_pool)
-            .await
-            .expect("sent state must persist");
+    let final_state: String = sqlx::query_scalar(
+        "SELECT status FROM core_identity_auth.email_outbox WHERE recipient = $1",
+    )
+    .bind(format!("{id}@example.test"))
+    .fetch_one(&worker_pool)
+    .await
+    .expect("sent state must persist");
     assert_eq!(final_state, "sent");
-    let retained_body: String =
-        sqlx::query_scalar("SELECT text_body FROM core_identity_auth.email_outbox WHERE recipient = $1")
-            .bind(format!("{id}@example.test"))
-            .fetch_one(&worker_pool)
-            .await
-            .expect("sent payload metadata must remain");
+    let retained_body: String = sqlx::query_scalar(
+        "SELECT text_body FROM core_identity_auth.email_outbox WHERE recipient = $1",
+    )
+    .bind(format!("{id}@example.test"))
+    .fetch_one(&worker_pool)
+    .await
+    .expect("sent payload metadata must remain");
     assert_eq!(retained_body, "[REDACTED]");
 
     assert!(
@@ -173,12 +176,13 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
         .await
         .expect("transaction must roll back");
 
-    let after_rollback: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1")
-            .bind(&recipient)
-            .fetch_one(&worker_pool)
-            .await
-            .expect("inspect rolled-back outbox row");
+    let after_rollback: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1",
+    )
+    .bind(&recipient)
+    .fetch_one(&worker_pool)
+    .await
+    .expect("inspect rolled-back outbox row");
     assert_eq!(after_rollback, 0);
 
     let mut committed = runtime_pool
@@ -198,12 +202,13 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
         .expect("outbox insert must join the caller transaction");
     committed.commit().await.expect("transaction must commit");
 
-    let after_commit: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1")
-            .bind(&recipient)
-            .fetch_one(&worker_pool)
-            .await
-            .expect("inspect committed outbox row");
+    let after_commit: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1",
+    )
+    .bind(&recipient)
+    .fetch_one(&worker_pool)
+    .await
+    .expect("inspect committed outbox row");
     assert_eq!(after_commit, 1);
 
     runtime_pool.close().await;

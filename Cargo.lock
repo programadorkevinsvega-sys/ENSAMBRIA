@@ -594,6 +594,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ensambria-business-establishment-catalog-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "ensambria-business-runtime"
 version = "0.1.0"
 dependencies = [
@@ -606,14 +614,6 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
- "uuid",
-]
-
-[[package]]
-name = "ensambria-business-establishment-catalog-contracts"
-version = "0.1.0"
-dependencies = [
- "serde",
  "uuid",
 ]
 
@@ -655,6 +655,7 @@ dependencies = [
  "serde",
  "uuid",
 ]
+
 [[package]]
 name = "ensambria-core-tenancy-contracts"
 version = "0.1.0"
@@ -675,11 +676,10 @@ dependencies = [
 name = "ensambria-platform"
 version = "0.1.0"
 dependencies = [
- "ensambria-platform-tenant-onboarding-contracts",
- "ensambria-platform-product-catalog-contracts",
- "ensambria-core",
  "ensambria-event-bus",
  "ensambria-platform-contract",
+ "ensambria-platform-product-catalog-contracts",
+ "ensambria-platform-tenant-onboarding-contracts",
  "ensambria-shared-cache",
  "futures-util",
  "http",
@@ -712,6 +712,7 @@ dependencies = [
  "serde_json",
  "uuid",
 ]
+
 [[package]]
 name = "ensambria-platform-tenant-onboarding-contracts"
 version = "0.1.0"
@@ -3247,6 +3248,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
+name = "xtask"
+version = "0.1.0"
+
+[[package]]
 name = "xxhash-rust"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3315,10 +3320,6 @@ dependencies = [
  "syn 3.0.10",
  "synstructure",
 ]
-
-[[package]]
-name = "xtask"
-version = "0.1.0"
 
 [[package]]
 name = "zeroize"

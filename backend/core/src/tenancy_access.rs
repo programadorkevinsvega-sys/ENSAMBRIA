@@ -44,11 +44,11 @@ impl TenancyAccess for CoreTenancyAccess {
                         array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL),
                         ARRAY[]::text[]
                     )
-                FROM core.tenant_memberships m
-                LEFT JOIN core.membership_role_assignments a
+                FROM core_tenancy.tenant_memberships m
+                LEFT JOIN core_tenancy.membership_role_assignments a
                     ON a.tenant_id = m.tenant_id
                    AND a.membership_id = m.id
-                LEFT JOIN core.tenant_roles r
+                LEFT JOIN core_tenancy.tenant_roles r
                     ON r.tenant_id = a.tenant_id
                    AND r.id = a.role_id
                 WHERE m.tenant_id = $1
@@ -97,7 +97,7 @@ impl TenancyAccess for CoreTenancyAccess {
             let row = sqlx::query_as::<_, (Uuid, Uuid)>(
                 r#"
                 SELECT id, tenant_id
-                FROM core.organizations
+                FROM core_tenancy.organizations
                 WHERE tenant_id = $1
                   AND id = $2
                   AND status = 'active'
@@ -140,7 +140,7 @@ impl TenancyAccess for CoreTenancyAccess {
             let row = sqlx::query_as::<_, (Uuid, Uuid, Uuid)>(
                 r#"
                 SELECT id, tenant_id, organization_id
-                FROM core.branches
+                FROM core_tenancy.branches
                 WHERE tenant_id = $1
                   AND organization_id = $2
                   AND id = $3

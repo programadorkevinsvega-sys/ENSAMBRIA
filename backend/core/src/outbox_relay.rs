@@ -5,7 +5,7 @@ use sqlx::{PgPool, types::Json};
 use std::{env, error::Error, time::Duration};
 use uuid::Uuid;
 
-const SUBJECT: &str = "ensambria.core.tenant.created.v1";
+const SUBJECT: &str = "ensambria.core_tenancy.tenant.created.v1";
 const MAX_ATTEMPTS: i32 = 12;
 const LEASE_SECONDS: i32 = 45;
 
@@ -52,12 +52,12 @@ pub async fn publish_pending_once(
     let mut tx = pool.begin().await?;
     let rows = sqlx::query_as::<_, (Uuid, String, i32, Uuid, i64, Uuid, Json<Value>, i32, String)>(
         "WITH candidates AS (
-            SELECT event_id FROM core.outbox_events
+            SELECT event_id FROM core_tenancy.outbox_events
              WHERE (status IN ('pending', 'retry_wait') AND available_at <= clock_timestamp())
                 OR (status = 'leased' AND lease_until < clock_timestamp())
              ORDER BY occurred_at, event_id LIMIT $2 FOR UPDATE SKIP LOCKED
          )
-         UPDATE core.outbox_events o
+         UPDATE core_tenancy.outbox_events o
             SET status = 'leased', lease_owner = $1,
                 lease_until = clock_timestamp() + make_interval(secs => $3),
                 attempt_count = o.attempt_count + 1
@@ -117,7 +117,7 @@ pub async fn publish_pending_once(
                     tokio::time::sleep(Duration::from_secs(60)).await;
                 }
                 let changed = sqlx::query(
-                    "UPDATE core.outbox_events SET status='published',
+                    "UPDATE core_tenancy.outbox_events SET status='published',
                         published_at=clock_timestamp(), lease_owner=NULL, lease_until=NULL,
                         last_error_code=NULL
                       WHERE event_id=$1 AND status='leased' AND lease_owner=$2",
@@ -139,7 +139,7 @@ pub async fn publish_pending_once(
                 let jitter_millis = f64::from(event.event_id.as_bytes()[0]) * 1000.0 / 255.0;
                 let delay_seconds = base_delay + jitter_millis / 1000.0;
                 sqlx::query(
-                    "UPDATE core.outbox_events
+                    "UPDATE core_tenancy.outbox_events
                         SET status=CASE WHEN $3 THEN 'quarantined' ELSE 'retry_wait' END,
                             available_at=clock_timestamp()+make_interval(secs=>$4),
                             lease_owner=NULL, lease_until=NULL,

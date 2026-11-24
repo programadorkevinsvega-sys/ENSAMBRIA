@@ -39,11 +39,11 @@ pub async fn enqueue_tenant_created(
     }
 
     sqlx::query(
-        "INSERT INTO core.outbox_events (
+        "INSERT INTO core_tenancy.outbox_events (
             event_id, event_type, schema_version, aggregate_type, aggregate_id,
             aggregate_version, product_id, product_config_version, correlation_id,
             payload, occurred_at
-         ) VALUES ($1, 'core.tenant.created.v1', 1, 'tenant', $2, $3, $4, $5, $6,
+         ) VALUES ($1, 'core_tenancy.tenant.created.v1', 1, 'tenant', $2, $3, $4, $5, $6,
                    $7::jsonb, clock_timestamp())",
     )
     .bind(event.event_id)

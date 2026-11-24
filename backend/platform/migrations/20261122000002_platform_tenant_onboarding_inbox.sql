@@ -1,6 +1,6 @@
 -- Durable Inbox and commercial onboarding projection for CORE tenant-created events.
 -- The consumer inserts Inbox + onboarding in one PLATFORM transaction before ACKing JetStream.
-CREATE TABLE platform.inbox_messages (
+CREATE TABLE platform_tenant_onboarding.inbox_messages (
     event_id uuid PRIMARY KEY,
     consumer_name text NOT NULL CHECK (consumer_name = 'platform.tenant-onboarding'),
     event_type text NOT NULL CHECK (event_type = 'core.tenant.created.v1'),
@@ -27,51 +27,51 @@ CREATE TABLE platform.inbox_messages (
 );
 
 CREATE INDEX inbox_messages_unapplied_idx
-    ON platform.inbox_messages (received_at, event_id)
+    ON platform_tenant_onboarding.inbox_messages (received_at, event_id)
     WHERE status = 'received';
 
 -- Both tables carry tenant data. The durable consumer sets this transaction-local
 -- context from the validated event before touching either table.
-ALTER TABLE platform.inbox_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform.inbox_messages FORCE ROW LEVEL SECURITY;
-CREATE POLICY inbox_tenant_scope ON platform.inbox_messages
+ALTER TABLE platform_tenant_onboarding.inbox_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_tenant_onboarding.inbox_messages FORCE ROW LEVEL SECURITY;
+CREATE POLICY inbox_tenant_scope ON platform_tenant_onboarding.inbox_messages
     USING (aggregate_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     WITH CHECK (aggregate_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 
 
-CREATE TABLE platform.tenant_onboardings (
+CREATE TABLE platform_tenant_onboarding.tenant_onboardings (
     tenant_id uuid NOT NULL,
-    product_id uuid NOT NULL REFERENCES platform.products(id),
+    product_id uuid NOT NULL,
     product_config_version integer NOT NULL CHECK (product_config_version > 0),
-    source_event_id uuid NOT NULL UNIQUE REFERENCES platform.inbox_messages(event_id),
+    source_event_id uuid NOT NULL UNIQUE REFERENCES platform_tenant_onboarding.inbox_messages(event_id),
     status text NOT NULL DEFAULT 'onboarding_pending'
         CHECK (status = 'onboarding_pending'),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (tenant_id, product_id)
 );
 
-ALTER TABLE platform.tenant_onboardings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform.tenant_onboardings FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_onboardings_tenant_scope ON platform.tenant_onboardings
+ALTER TABLE platform_tenant_onboarding.tenant_onboardings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_tenant_onboarding.tenant_onboardings FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_onboardings_tenant_scope ON platform_tenant_onboarding.tenant_onboardings
     USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 REVOKE ALL ON
-    platform.inbox_messages,
-    platform.tenant_onboardings
+    platform_tenant_onboarding.inbox_messages,
+    platform_tenant_onboarding.tenant_onboardings
 FROM PUBLIC;
 
-GRANT USAGE ON SCHEMA platform TO platform_event_consumer;
-GRANT SELECT, INSERT, UPDATE ON platform.inbox_messages TO platform_event_consumer;
-GRANT SELECT, INSERT, UPDATE ON platform.tenant_onboardings TO platform_event_consumer;
+GRANT USAGE ON SCHEMA platform_tenant_onboarding TO platform_tenant_onboarding_runtime;
+GRANT SELECT, INSERT, UPDATE ON platform_tenant_onboarding.inbox_messages TO platform_tenant_onboarding_runtime;
+GRANT SELECT, INSERT, UPDATE ON platform_tenant_onboarding.tenant_onboardings TO platform_tenant_onboarding_runtime;
 GRANT SELECT ON
     platform.products,
-    platform.product_configurations,
-    platform.active_product_catalog
-TO platform_event_consumer;
+    platform_product_catalog.product_configurations,
+    platform_product_catalog.active_product_catalog
+TO platform_tenant_onboarding_runtime;
 
-COMMENT ON TABLE platform.inbox_messages IS
+COMMENT ON TABLE platform_tenant_onboarding.inbox_messages IS
     'Idempotency ledger for durable CORE events; applied only in the same transaction as the consumer effect.';
-COMMENT ON TABLE platform.tenant_onboardings IS
+COMMENT ON TABLE platform_tenant_onboarding.tenant_onboardings IS
     'PLATFORM-owned commercial reference created from CORE tenant facts; starts pending and does not activate a subscription.';

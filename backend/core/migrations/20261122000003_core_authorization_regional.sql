@@ -110,6 +110,10 @@ $function$;
 REVOKE ALL ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) TO core_tenancy_runtime;
+-- The non-login identity schema owner installs auth objects whose RLS/RI
+-- validation resolves the tenancy authorization primitive; runtime remains isolated.
+GRANT EXECUTE ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid)
+    TO core_identity_auth_schema_owner;
 GRANT EXECUTE ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) TO core_tenancy_runtime;
 
 COMMENT ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) IS

@@ -61,3 +61,8 @@ Ejemplo conceptual: inventario puede conservar la autoridad de stock, lotes y mo
 - [Contrato arquitectónico central](../../ARCHITECTURE_RULES.md)
 - [Modelo de dominios y estructura](../arquitectura-dominios.md)
 - [ADR-0004: plataforma multiproducto](ADR-0004-plataforma-multiproducto.md)
+
+
+## Materialización por crates — ADR-0012
+
+Las capacidades compartidas neutrales y los módulos verticales conservan el ownership y límites definidos aquí. Cada bounded context/módulo funcional implementado se materializa como crate propietario separado y expone un crate `*-contracts`; los consumidores dependen únicamente del contrato. Esta regla no mezcla capacidades neutrales con implementación vertical ni permite imports entre ellas. La llamada co-residente es trait en memoria; Protobuf se versiona desde el inicio y Tonic se incorpora como adapter al separar procesos. Véase [ADR-0012](ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md).

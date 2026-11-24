@@ -1,4 +1,4 @@
-CREATE TABLE business.establishments (
+CREATE TABLE business_establishment_catalog.establishments (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
     organization_id uuid NOT NULL,
@@ -10,11 +10,13 @@ CREATE TABLE business.establishments (
     UNIQUE (tenant_id, id)
 );
 CREATE INDEX establishments_tenant_created_idx
-    ON business.establishments (tenant_id, created_at DESC, id DESC);
-ALTER TABLE business.establishments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE business.establishments FORCE ROW LEVEL SECURITY;
-CREATE POLICY establishments_tenant_scope ON business.establishments
+    ON business_establishment_catalog.establishments (tenant_id, created_at DESC, id DESC);
+ALTER TABLE business_establishment_catalog.establishments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE business_establishment_catalog.establishments FORCE ROW LEVEL SECURITY;
+CREATE POLICY establishments_tenant_scope ON business_establishment_catalog.establishments
     USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
-GRANT USAGE ON SCHEMA business TO business_runtime;
-GRANT SELECT, INSERT, UPDATE ON business.establishments TO business_runtime;
+GRANT USAGE ON SCHEMA business_establishment_catalog TO business_establishment_catalog_runtime;
+GRANT SELECT, INSERT, UPDATE
+    ON business_establishment_catalog.establishments
+    TO business_establishment_catalog_runtime;

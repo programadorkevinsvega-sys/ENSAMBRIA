@@ -22,6 +22,8 @@ Planificación, scripts, modelos de carga, thresholds, datos de prueba, ejecuci�
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — modular boundaries and architecture compliance](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) (consult when the task changes module ownership, data access, or release acceptance)
+
 - [Reglas ENSAMBRIA de pruebas k6](../../../docs/rules/ENSAMBRIA_k6_performance_load_stress_and_capacity_testing_rules.md), fuente normativa de alcance, seguridad, modelos de carga, aceptación y evidencia.
 - [Ingeniería de calidad empresarial para Rust](../../../docs/rules/ENSAMBRIA_prompt_maestro_enterprise_quality_engineering.md), cuando aplique a código, pruebas o CI Rust.
 - [Observabilidad, monitoreo, alertas y SLO](../../../docs/rules/ENSAMBRIA_Observability_Monitoring_Alerting_SLO.md), para correlacionar carga con señales de aplicación e infraestructura.
@@ -74,4 +76,4 @@ Si faltan autorización, perfil de carga aprobado, thresholds, entorno seguro o 
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Al cambiar las normas k6, la versión disponible o los pipelines, actualiza esta Skill y los perfiles asociados; ejecuta `python3 scripts/validate_engineering_skills.py`.
+Revisada el 2026-11-24. Al cambiar las normas k6, la versión disponible o los pipelines, actualiza esta Skill y los perfiles asociados; ejecuta `python3 scripts/validate_engineering_skills.py`.

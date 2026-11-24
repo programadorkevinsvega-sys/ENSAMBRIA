@@ -39,7 +39,7 @@ pub async fn enqueue_tenant_created(
     }
 
     sqlx::query(
-        "INSERT INTO core.outbox_events (
+        "INSERT INTO core_tenancy.outbox_events (
             event_id, event_type, schema_version, aggregate_type, aggregate_id,
             aggregate_version, product_id, product_config_version, correlation_id,
             payload, occurred_at

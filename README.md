@@ -12,6 +12,8 @@ ENSAMBRIA es una plataforma SaaS multiproducto y multindustria en desarrollo. El
 - [Modelo de dominios y estructura objetivo](docs/arquitectura-dominios.md)
 - [Instrucciones para agentes](AGENTS.md)
 - [Reglas normativas](docs/rules/)
+- [Fronteras modulares y cumplimiento arquitectónico obligatorio](docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+- [ADR-0012 — Fronteras modulares ejecutables](docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
 - [Decisiones arquitectónicas](docs/adr/)
 
 El requerimiento, el contrato de arquitectura, los documentos de dominio, los ADR y las reglas aplicables definen el diseño y las obligaciones futuras. Su existencia no demuestra implementación ni aceptación de una fase.

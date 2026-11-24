@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
+    platform_product_catalog_grpc::GrpcPlatformProductCatalog,
     platform_product_policy::{PlatformContractError, PlatformProductPolicy},
     postgres::{ActorContext, ActorId, TenantContext, TenantId},
 };
@@ -57,7 +60,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     assert_eq!(configuration.version, 1);
     assert!(!configuration.canonical_json.is_empty());
 
-    let policy = PlatformProductPolicy::new(client);
+    let policy = PlatformProductPolicy::new(Arc::new(GrpcPlatformProductCatalog::new(client)));
     let product = policy
         .require_capability(product_id, "identity.auth", "v1", 1)
         .await
@@ -66,7 +69,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
 
     let core_migrator_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("CORE_TEST_MIGRATOR_DATABASE_URL must be configured");
-    let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/migrations");
     run_core_migrations_from_path(&core_migrator_url, &migrations)
         .await
         .expect("CORE migrations must apply");
@@ -162,7 +165,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
         .await
         .expect("PLATFORM domain resolver must be reachable")
         .expect("published verified domain must resolve");
-    assert_eq!(resolved.product_id, product_id.to_string());
+    assert_eq!(resolved.product_id, product_id);
 
     let _ = shutdown_sender.send(());
     server

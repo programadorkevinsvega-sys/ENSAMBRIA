@@ -21,6 +21,9 @@ Workspace/crates, módulos, capas, dependencias, contratos entre módulos y back
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — enforceable modular boundaries](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [Modular boundaries and architecture compliance](../../../docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+
 - [Contrato integrado de arquitectura, políticas y responsabilidades de ENSAMBRIA](../../../ARCHITECTURE_RULES.md): autoridad central para topología, ownership y decisiones del proyecto
 - [Reglas técnicas Rust de monolito modular](../../../docs/rules/ENSAMBRIA_reglas-estrictas-de-arquitectura-monolito-modular.md): detalle complementario de implementación; no redefine la topología ni el ownership fijados en el contrato central
 - [Estándar de gobierno del repositorio GitHub](../../../docs/rules/ENSAMBRIA_github_repository_governance_and_engineering_rules.md), cuando el cambio afecte reglas de repositorio, workflows o proceso de integración.
@@ -67,4 +70,4 @@ La topología ENSAMBRIA de cuatro backends, el workspace único y el ownership s
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Actualizada junto con la guía estricta el 2026-11-10 para reflejar los cuatro backends. Revisa esta Skill junto con cambios a las fuentes enlazadas; conserva únicamente metadatos de versión/fecha presentes en la fuente.
+Revisada el 2026-11-24. Actualizada junto con la guía estricta el 2026-11-10 para reflejar los cuatro backends. Revisa esta Skill junto con cambios a las fuentes enlazadas; conserva únicamente metadatos de versión/fecha presentes en la fuente.

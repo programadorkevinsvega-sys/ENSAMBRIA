@@ -1143,3 +1143,10 @@ Si descubres una decisión arquitectónica que impide cumplir un requisito, expl
 ---
 
 **OBJETIVO FINAL:** convertir el repositorio en un sistema cuya calidad funcional, seguridad, resiliencia y rendimiento se evalúen mediante una estrategia reproducible, automatizable, trazable y respaldada por evidencia técnica real.
+
+
+## Cumplimiento arquitectónico obligatorio
+
+La estrategia de calidad aplica [ADR-0012](../adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y [ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md](ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md). El punto único de entrada de validación es `cargo xtask architecture`; carga los inventarios YAML una vez y delega en cargo metadata, cargo-deny/cargo-modules, Buf y PostgreSQL según corresponda. No se mantienen listas duplicadas en scripts Bash.
+
+Los gates PR verifican crates/contracts, grafo Cargo, Buf lint/breaking, superficies BFF, Outbox/Inbox, topología de artefactos y tests PostgreSQL con roles runtime restringidos. El gate de release/staging verifica servicios activos/conectados y E2E real con SHA exacto. El mapa requisito→caso→prueba se versiona, pero SHA, run/job, resultados y artefactos los inyecta CI. No se acepta check omitido, mock sustitutivo de integración real ni resultado manual.

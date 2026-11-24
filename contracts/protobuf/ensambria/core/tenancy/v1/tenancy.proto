@@ -1,0 +1,14 @@
+syntax = "proto3";
+package ensambria.core.tenancy.v1;
+
+service TenancyAccess {
+  rpc RequireActiveMembership(RequireActiveMembershipRequest) returns (ActiveTenantMembership);
+  rpc RequireActiveOrganization(RequireActiveOrganizationRequest) returns (ActiveOrganization);
+  rpc RequireActiveBranch(RequireActiveBranchRequest) returns (ActiveBranch);
+}
+message RequireActiveMembershipRequest { string identity_id = 1; string tenant_id = 2; }
+message RequireActiveOrganizationRequest { string tenant_id = 1; string organization_id = 2; }
+message RequireActiveBranchRequest { string tenant_id = 1; string organization_id = 2; string branch_id = 3; }
+message ActiveTenantMembership { string membership_id = 1; string tenant_id = 2; string identity_id = 3; repeated string role_codes = 4; }
+message ActiveOrganization { string organization_id = 1; string tenant_id = 2; }
+message ActiveBranch { string branch_id = 1; string tenant_id = 2; string organization_id = 3; }

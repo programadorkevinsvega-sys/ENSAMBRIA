@@ -4,14 +4,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ensambria_core::observability::initialize_tracing;
 use sqlx::postgres::PgPoolOptions;
 
 const BOOTSTRAP: &str = "bootstrap/00000000000000_business_schema.sql";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    initialize_tracing()?;
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .json()
+        .try_init()
+        .map_err(io::Error::other)?;
     let mut arguments = std::env::args_os().skip(1);
     let migrations_directory = arguments
         .next()
@@ -109,14 +112,14 @@ async fn apply_migrations(
 
     let mut transaction = pool.begin().await?;
 
-    // The dedicated migrator is a member of both schema-owner roles. The
-    // bootstrap switches roles explicitly so CORE grants remain owned by CORE.
+    // The dedicated migrator is a member of the BUSINESS schema-owner role.
+    // CORE access is performed through CORE's public tenancy contract.
     sqlx::raw_sql(sqlx::AssertSqlSafe(bootstrap))
         .execute(&mut *transaction)
         .await?;
     sqlx::raw_sql(
-        "SET LOCAL ROLE business_schema_owner;
-         CREATE TABLE IF NOT EXISTS business.schema_migrations (
+        "SET LOCAL ROLE business_establishment_catalog_schema_owner;
+         CREATE TABLE IF NOT EXISTS business_establishment_catalog.schema_migrations (
              version text PRIMARY KEY,
              applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
          );",
@@ -130,7 +133,7 @@ async fn apply_migrations(
             .and_then(|name| name.to_str())
             .ok_or_else(|| io::Error::other("invalid business migration filename"))?;
         let already_applied: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM business.schema_migrations WHERE version = $1)",
+            "SELECT EXISTS (SELECT 1 FROM business_establishment_catalog.schema_migrations WHERE version = $1)",
         )
         .bind(version)
         .fetch_one(&mut *transaction)
@@ -143,10 +146,12 @@ async fn apply_migrations(
         sqlx::raw_sql(sqlx::AssertSqlSafe(&*migration))
             .execute(&mut *transaction)
             .await?;
-        sqlx::query("INSERT INTO business.schema_migrations (version) VALUES ($1)")
-            .bind(version)
-            .execute(&mut *transaction)
-            .await?;
+        sqlx::query(
+            "INSERT INTO business_establishment_catalog.schema_migrations (version) VALUES ($1)",
+        )
+        .bind(version)
+        .execute(&mut *transaction)
+        .await?;
     }
 
     transaction.commit().await?;
@@ -156,7 +161,7 @@ async fn apply_migrations(
 async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     let missing_roles: Vec<String> = sqlx::query_scalar(
         "SELECT required.role_name
-         FROM (VALUES ('business_schema_owner'), ('core_schema_owner')) AS required(role_name)
+         FROM (VALUES ('business_establishment_catalog_schema_owner')) AS required(role_name)
          LEFT JOIN pg_roles role ON role.rolname = required.role_name
          WHERE role.oid IS NULL OR NOT pg_has_role(current_user, role.oid, 'MEMBER')
          ORDER BY required.role_name",
@@ -182,7 +187,7 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     let unsafe_owner_roles: Vec<String> = sqlx::query_scalar(
         "SELECT rolname
          FROM pg_roles
-         WHERE rolname IN ('business_schema_owner', 'core_schema_owner')
+         WHERE rolname IN ('business_establishment_catalog_schema_owner')
            AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls)
          ORDER BY rolname",
     )
@@ -204,7 +209,7 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     }
 
     let has_database_create: bool = sqlx::query_scalar(
-        "SELECT has_database_privilege('business_schema_owner', current_database(), 'CREATE')",
+        "SELECT has_schema_privilege('business_establishment_catalog_schema_owner', 'business_establishment_catalog', 'CREATE')",
     )
     .fetch_one(pool)
     .await?;
@@ -213,12 +218,13 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             event = "database.business_migrations.preflight_failed",
             component = "backend-business",
             operation = "database.privileges.verify",
-            failure_class = "business_schema_owner_missing_database_create",
+            failure_class = "business_establishment_catalog_schema_owner_missing_schema_create",
             result = "failure"
         );
-        return Err(
-            io::Error::other("business_schema_owner requires CREATE on the database").into(),
-        );
+        return Err(io::Error::other(
+            "business_establishment_catalog_schema_owner requires CREATE on its owned schema",
+        )
+        .into());
     }
 
     Ok(())

@@ -118,3 +118,8 @@ La aceptación de entrega durable se comprueba con el mismo `event_id` y servici
 Los puntos de pausa solo existen en builds de depuración y se habilitan mediante `ENSAMBRIA_ENABLE_FAULT_INJECTION=1` y variables de evento explícitas; los binarios de release no ejecutan estos hooks. En CI el script `scripts/ci/check-core-platform-tenant-onboarding.sh` controla los procesos, provoca los cortes y verifica las invariantes SQL. La configuración de fault injection no se activa en el arranque normal.
 
 **Estado de esta entrega:** **VALIDADO TÉCNICAMENTE**. CI #400 pasó en el HEAD `4c342a350a067889adedc49cc9c274bc0bd17984`; los cinco jobs finalizaron SUCCESS y el step `Verify CORE to PLATFORM redelivery and crash recovery end to end` terminó SUCCESS con el marcador PASS de los escenarios. La entrega está fusionada a `main` mediante `4fa23605f1d6797bf9ae20b47b2f64ca2b8f82dc`. Esto valida la implementación y las pruebas de esta entrega; no constituye por sí solo la aceptación formal ni el cierre de toda la subfase 1.3.
+
+
+## Enmienda de verificación — cadena durable y staging
+
+ADR-0012 establece el gate de verificación para este flujo: Outbox/relay/JetStream/consumer/Inbox/ACK post-commit/recuperación se validan como una cadena, y el recorrido real de staging queda asociado al SHA desplegado. Las pruebas PR con dependencias reales no sustituyen el E2E de staging. La evidencia de CI y runtime se genera automáticamente; no se declara aceptado un flujo solo por compilar o por pasar pruebas con mocks. Véase [ADR-0012](ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md).

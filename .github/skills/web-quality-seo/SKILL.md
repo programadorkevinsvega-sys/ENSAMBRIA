@@ -23,6 +23,8 @@ Frontends web, navegación, formularios, accesibilidad, rendimiento, rutas públ
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — modular boundaries and architecture compliance](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) (consult when changing BFF/API ownership or release acceptance)
+
 - [Website Launch, SEO, Performance and Accessibility](../../../docs/rules/ENSAMBRIA_Website_Launch_SEO_Performance_Accessibility.md) para calidad web general.
 - [Frontend Security, Accessibility, UX/UI, Performance and Observability](../../../docs/rules/ENSAMBRIA_frontend_security_accessibility_ux_ui_performance_observability_rules.md) para seguridad, privacidad de cliente, accesibilidad, UX/UI, rendimiento, observabilidad, pruebas y controles móviles.
 - [k6 Performance, Load, Stress and Capacity Testing](../../../docs/rules/ENSAMBRIA_k6_performance_load_stress_and_capacity_testing_rules.md) para pruebas de carga de frontend, pruebas de navegador y métricas web aplicables.
@@ -69,4 +71,4 @@ Si una ruta mezcla contenido público y privado, divide la superficie o resuelve
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Revisa las guías general y especializada en conjunto cuando cambien rutas o criterios; conserva la autoridad separada de cada una y no inventes versiones.
+Revisada el 2026-11-24. Revisa las guías general y especializada en conjunto cuando cambien rutas o criterios; conserva la autoridad separada de cada una y no inventes versiones.

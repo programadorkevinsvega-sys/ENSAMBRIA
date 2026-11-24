@@ -109,6 +109,28 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
+      - name: Enforce modular architecture and ownership contracts
+        run: cargo xtask architecture
+
+
+  protobuf-contracts:
+    name: protobuf-contracts
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out complete history for compatibility checks
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Lint versioned Protobuf contracts with Buf
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace bufbuild/buf:1.50.0 lint
+      - name: Reject breaking Protobuf changes against main
+        run: >-
+          docker run --rm -v "$PWD:/workspace" -w /workspace bufbuild/buf:1.50.0
+          breaking --against 'https://github.com/programadorkevinsvega-sys/ENSAMBRIA.git#branch=main,subdir=contracts/protobuf'
 
   deployment-contract:
     needs: changes
@@ -183,15 +205,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CORE_TEST_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TEST_DATABASE_URL: postgres://core_identity_auth_runtime@127.0.0.1:5432/ensambria_core_test
+      CORE_TENANCY_DATABASE_URL: postgres://core_tenancy_runtime@127.0.0.1:5432/ensambria_core_test
       CORE_TEST_MIGRATOR_DATABASE_URL: postgres://core_migrator@127.0.0.1:5432/ensambria_core_test
       CORE_EMAIL_WORKER_DATABASE_URL: postgres://core_email_worker@127.0.0.1:5432/ensambria_core_test
       CORE_OUTBOX_DATABASE_URL: postgres://core_outbox_relay@127.0.0.1:5432/ensambria_core_test
-      CORE_TENANT_DATABASE_URL: postgres://core_runtime@127.0.0.1:5432/ensambria_core_test
-      PLATFORM_EVENT_DATABASE_URL: postgres://platform_event_consumer@127.0.0.1:5432/ensambria_core_test
+      CORE_TENANT_DATABASE_URL: postgres://core_tenancy_runtime@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_PRODUCT_CATALOG_DATABASE_URL: postgres://platform_product_catalog_runtime@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_TENANT_ONBOARDING_DATABASE_URL: postgres://platform_tenant_onboarding_runtime@127.0.0.1:5432/ensambria_core_test
       PLATFORM_VERIFY_DATABASE_URL: postgres://core_admin@127.0.0.1:5432/ensambria_core_test
-      PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
-      BUSINESS_DATABASE_URL: postgres://business_runtime@127.0.0.1:5432/ensambria_core_test
+      PLATFORM_TEST_DATABASE_URL: postgres://platform_product_catalog_runtime@127.0.0.1:5432/ensambria_core_test
+      BUSINESS_DATABASE_URL: postgres://business_establishment_catalog_runtime@127.0.0.1:5432/ensambria_core_test
       ENSAMBRIA_TEST_REDIS_URL: redis://127.0.0.1:6379/
       RUSTUP_TOOLCHAIN: 1.99.1
     services:
@@ -229,64 +253,44 @@ jobs:
         run: |
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "REVOKE TEMP ON DATABASE ensambria_core_test FROM PUBLIC;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "GRANT core_schema_owner TO core_migrator;"
+            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
+            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_migrator, core_email_worker, core_outbox_relay;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_runtime, core_migrator, core_email_worker, core_outbox_relay;"
+            -f backend/core/deployment/provision-module-ownership.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE platform_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE platform_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE platform_event_consumer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO platform_runtime, platform_event_consumer;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT platform_schema_owner TO core_migrator;"
+          TEST_DATABASE_URL="postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            bash scripts/ci/check-module-schema-isolation.sh
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/platform/migrations/bootstrap/00000000000000_platform_schema.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_schema_owner" \
+            -c "SET ROLE platform_product_catalog_schema_owner" \
             -f backend/platform/migrations/20261122000001_platform_product_catalog.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_schema_owner" \
+            -c "SET ROLE platform_tenant_onboarding_schema_owner" \
             -f backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_schema_owner" \
-            -f backend/platform/migrations/20261124000003_platform_saas_subscriptions.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE platform_schema_owner;
+          SET ROLE platform_product_catalog_schema_owner;
           BEGIN;
-          INSERT INTO platform.products (id, product_key, display_name, brand_name, status)
+          INSERT INTO platform_product_catalog.products (id, product_key, display_name, brand_name, status)
           VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'ensambria-core', 'ENSAMBRIA Core', 'ENSAMBRIA', 'draft');
-          INSERT INTO platform.product_configurations (product_id, version, schema_version, configuration, status, published_at)
+          INSERT INTO platform_product_catalog.product_configurations (product_id, version, schema_version, configuration, status, published_at)
           VALUES (
               '018f0f2a-7b3c-7abc-8def-0123456789ab',
               1,
@@ -295,47 +299,28 @@ jobs:
               'published',
               clock_timestamp()
           );
-          UPDATE platform.products
+          UPDATE platform_product_catalog.products
              SET status = 'active', published_configuration_version = 1, updated_at = clock_timestamp()
            WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789ab';
-          INSERT INTO platform.product_domains (id, product_id, domain_name, status, verified_at)
+          INSERT INTO platform_product_catalog.product_domains (id, product_id, domain_name, status, verified_at)
           VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ac', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'shop.example.test', 'active', clock_timestamp());
-          INSERT INTO platform.product_markets (product_id, country_code, currency_code, locale, status)
+          INSERT INTO platform_product_catalog.product_markets (product_id, country_code, currency_code, locale, status)
           VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'CO', 'COP', 'es-CO', 'enabled');
-          INSERT INTO platform.product_surfaces (product_id, surface_code, configuration_version, status)
+          INSERT INTO platform_product_catalog.product_surfaces (product_id, surface_code, configuration_version, status)
           VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'operator.web', 1, 'enabled');
-          INSERT INTO platform.capability_catalog (capability_code, contract_version, implementation_status)
+          INSERT INTO platform_product_catalog.capability_catalog (capability_code, contract_version, implementation_status)
           VALUES ('identity.auth', 'v1', 'available');
-          INSERT INTO platform.product_capabilities (product_id, capability_code, configuration_version, status)
+          INSERT INTO platform_product_catalog.product_capabilities (product_id, capability_code, configuration_version, status)
           VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'identity.auth', 1, 'enabled');
-          INSERT INTO platform.commercial_offers (id, product_id, offer_key, display_name, status, created_by)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789b1', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'core-standard', 'Core Standard', 'draft', '018f0f2a-7b3c-7abc-8def-0123456789ad');
-          INSERT INTO platform.commercial_offer_versions (offer_id, version, entitlements, commercial_terms, status, created_by, published_at)
-          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789b1', 1, '{"capabilities":["identity.auth"]}'::jsonb, '{}'::jsonb, 'published', '018f0f2a-7b3c-7abc-8def-0123456789ad', clock_timestamp());
-          UPDATE platform.commercial_offers
-             SET status = 'published', published_version = 1, updated_at = clock_timestamp()
-           WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789b1';
           COMMIT;
           SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
+            -c "SET ROLE platform_product_catalog_runtime; SELECT count(*) FROM platform_product_catalog.active_product_catalog;"
 
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT business_schema_owner TO core_migrator;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CREATE ON DATABASE ensambria_core_test TO business_schema_owner;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
+      - name: Verify PLATFORM product catalog and onboarding runtime isolation
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: bash scripts/ci/check-platform-module-isolation.sh
       - name: Apply CORE migrations twice and verify rollback compatibility
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         env:
@@ -347,15 +332,18 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           DO $body$
           BEGIN
-              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone)') IS NULL THEN
+              IF to_regprocedure('core_identity_auth.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone)') IS NULL THEN
                   RAISE EXCEPTION 'previous CORE release refresh-token function contract is missing';
               END IF;
-              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone,bytea,timestamp with time zone)') IS NULL THEN
+              IF to_regprocedure('core_identity_auth.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone,bytea,timestamp with time zone)') IS NULL THEN
                   RAISE EXCEPTION 'current CORE access-token refresh function contract is missing';
               END IF;
           END
           $body$;
           SQL
+      - name: Verify CORE identity and tenancy runtime isolation after migrations
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: bash scripts/ci/check-core-module-isolation.sh
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
@@ -375,10 +363,10 @@ jobs:
         run: |
           set -euo pipefail
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE core_runtime;
+          SET ROLE core_tenancy_runtime;
           BEGIN;
           SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
-          INSERT INTO core.outbox_events (
+          INSERT INTO core_tenancy.outbox_events (
               event_id, event_type, schema_version, aggregate_type, aggregate_id,
               aggregate_version, product_id, product_config_version, correlation_id,
               payload, occurred_at
@@ -397,7 +385,7 @@ jobs:
           DO $body$
           BEGIN
               IF NOT EXISTS (
-                  SELECT 1 FROM core.outbox_events
+                  SELECT 1 FROM core_tenancy.outbox_events
                    WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789b0'
               ) THEN
                   RAISE EXCEPTION 'CORE outbox relay cannot read the committed event';
@@ -409,32 +397,40 @@ jobs:
           psql "$CORE_TEST_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $body$
           BEGIN
-              IF NOT has_table_privilege('core_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
-                  RAISE EXCEPTION 'core_runtime must append Outbox rows in the tenant transaction';
+              IF NOT has_table_privilege('core_tenancy_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core_tenancy' AND c.relname = 'outbox_events'), 'INSERT') THEN
+                  RAISE EXCEPTION 'core_tenancy_runtime must append Outbox rows in the tenant transaction';
               END IF;
-              IF NOT has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'SELECT,UPDATE') THEN
+              IF NOT has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core_tenancy' AND c.relname = 'outbox_events'), 'SELECT,UPDATE') THEN
                   RAISE EXCEPTION 'core_outbox_relay must claim and publish Outbox rows';
               END IF;
-              IF has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core' AND c.relname = 'outbox_events'), 'INSERT') THEN
+              IF has_table_privilege('core_outbox_relay', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'core_tenancy' AND c.relname = 'outbox_events'), 'INSERT') THEN
                   RAISE EXCEPTION 'core_outbox_relay must not create business events';
               END IF;
-              IF NOT has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'inbox_messages'), 'INSERT,UPDATE,SELECT') THEN
-                  RAISE EXCEPTION 'platform_event_consumer must maintain Inbox records';
+              IF NOT has_table_privilege('platform_tenant_onboarding_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform_tenant_onboarding' AND c.relname = 'inbox_messages'), 'INSERT,UPDATE,SELECT') THEN
+                  RAISE EXCEPTION 'platform_tenant_onboarding_runtime must maintain Inbox records';
               END IF;
-              IF NOT has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'tenant_onboardings'), 'INSERT,SELECT') THEN
-                  RAISE EXCEPTION 'platform_event_consumer must create and inspect onboarding records';
+              IF NOT has_table_privilege('platform_tenant_onboarding_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform_tenant_onboarding' AND c.relname = 'tenant_onboardings'), 'INSERT,SELECT') THEN
+                  RAISE EXCEPTION 'platform_tenant_onboarding_runtime must create and inspect onboarding records';
               END IF;
-              IF has_table_privilege('platform_event_consumer', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform' AND c.relname = 'tenant_onboardings'), 'DELETE') THEN
-                  RAISE EXCEPTION 'platform_event_consumer must not delete onboarding history';
+              IF has_table_privilege('platform_tenant_onboarding_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform_tenant_onboarding' AND c.relname = 'tenant_onboardings'), 'DELETE') THEN
+                  RAISE EXCEPTION 'platform_tenant_onboarding_runtime must not delete onboarding history';
+              END IF;
+              IF has_schema_privilege('platform_product_catalog_runtime', 'platform_tenant_onboarding', 'USAGE')
+                 OR has_schema_privilege('platform_tenant_onboarding_runtime', 'platform_product_catalog', 'USAGE') THEN
+                  RAISE EXCEPTION 'PLATFORM runtime roles must not cross schema ownership boundaries';
+              END IF;
+              IF NOT has_table_privilege('platform_product_catalog_runtime', 'platform_product_catalog.active_product_catalog', 'SELECT')
+                 OR has_table_privilege('platform_product_catalog_runtime', 'platform_product_catalog.products', 'INSERT,UPDATE,DELETE') THEN
+                  RAISE EXCEPTION 'PLATFORM product runtime grants are not read-only';
               END IF;
           END
           $body$;
           SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE platform_event_consumer;
+          SET ROLE platform_tenant_onboarding_runtime;
           BEGIN;
           SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
-          INSERT INTO platform.inbox_messages (
+          INSERT INTO platform_tenant_onboarding.inbox_messages (
               event_id, consumer_name, event_type, schema_version, aggregate_id,
               aggregate_version, product_id, product_config_version, correlation_id, payload_hash
           ) VALUES (
@@ -449,7 +445,7 @@ jobs:
               '018f0f2a-7b3c-7abc-8def-0123456789af',
               decode(repeat('a', 64), 'hex')
           ) ON CONFLICT (event_id) DO NOTHING;
-          INSERT INTO platform.tenant_onboardings (
+          INSERT INTO platform_tenant_onboarding.tenant_onboardings (
               tenant_id, product_id, product_config_version, source_event_id
           ) VALUES (
               '018f0f2a-7b3c-7abc-8def-0123456789ae',
@@ -457,19 +453,19 @@ jobs:
               1,
               '018f0f2a-7b3c-7abc-8def-0123456789ad'
           ) ON CONFLICT (tenant_id, product_id) DO NOTHING;
-          UPDATE platform.inbox_messages
+          UPDATE platform_tenant_onboarding.inbox_messages
              SET status = 'applied', applied_at = clock_timestamp()
            WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789ad'
              AND status = 'received';
           COMMIT;
           SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE platform_event_consumer;
+          SET ROLE platform_tenant_onboarding_runtime;
           BEGIN;
           SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
           DO $body$
           BEGIN
-              IF (SELECT count(*) FROM platform.tenant_onboardings
+              IF (SELECT count(*) FROM platform_tenant_onboarding.tenant_onboardings
                    WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789ae'
                      AND product_id = '018f0f2a-7b3c-7abc-8def-0123456789ab') <> 1 THEN
                   RAISE EXCEPTION 'tenant onboarding was not applied exactly once';
@@ -487,6 +483,12 @@ jobs:
           cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
           cargo run --locked --package ensambria-business --bin business-migrate -- backend/business/migrations
 
+      - name: Verify BUSINESS runtime least-privilege and RLS isolation
+        env:
+          TEST_DATABASE_URL: postgres://core_admin@127.0.0.1:5432/ensambria_core_test
+          BUSINESS_DATABASE_URL: postgres://business_establishment_catalog_runtime@127.0.0.1:5432/ensambria_core_test
+        run: bash scripts/ci/check-business-module-isolation.sh
+
 
   redis-ha-integration:
     name: redis-ha-integration
@@ -500,14 +502,15 @@ jobs:
       PLATFORM_REDIS_PASSWORD: ensambria-ci-only
       PLATFORM_REDIS_POOL_SIZE: 2
       ENSAMBRIA_REDIS_REQUIRED: "true"
-      DATABASE_URL: postgres://core_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      DATABASE_URL: postgres://core_identity_auth_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      CORE_TENANCY_DATABASE_URL: postgres://core_tenancy_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
       CORE_DATABASE_MAX_CONNECTIONS: "4"
       CORE_DATABASE_ACQUIRE_TIMEOUT_MS: "1500"
       CORE_MFA_ENCRYPTION_KEY_VERSION: ci-v1
       CORE_MFA_ENCRYPTION_KEY_HEX: "1111111111111111111111111111111111111111111111111111111111111111"
       CORE_AUTH_RATE_LIMIT_SECRET_HEX: "2222222222222222222222222222222222222222222222222222222222222222"
       CORE_PUBLIC_BASE_URL: https://business.example.test
-      BUSINESS_DATABASE_URL: postgres://business_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      BUSINESS_DATABASE_URL: postgres://business_establishment_catalog_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
       BUSINESS_DATABASE_MAX_CONNECTIONS: "4"
       BUSINESS_HTTP_LISTEN_ADDRESS: 127.0.0.1:22100
     steps:
@@ -569,10 +572,13 @@ jobs:
             -c "CREATE ROLE core_runtime LOGIN PASSWORD 'ensambria-ci-only';"
           docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
             psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_runtime LOGIN PASSWORD 'ensambria-ci-only';"
+            -c "CREATE ROLE core_tenancy_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD 'ensambria-ci-only';"
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
+            psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE business_establishment_catalog_runtime LOGIN PASSWORD 'ensambria-ci-only';"
 
       - name: Build the actual BUSINESS HTTP runtime
-        run: cargo build --locked -p ensambria-business --bin business
+        run: cargo build --locked -p ensambria-business-runtime --bin business
 
       - name: Build shared Redis runtime smoke test
         run: cargo build --locked -p ensambria-shared-cache --example redis_ha_smoke
@@ -725,6 +731,7 @@ jobs:
       - changes
       - rust-workspace-quality
       - deployment-contract
+      - protobuf-contracts
       - postgres-integration
       - redis-ha-integration
       - nats-jetstream-ha-integration
@@ -737,6 +744,7 @@ jobs:
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           RUST_WORKSPACE_RESULT: ${{ needs.rust-workspace-quality.result }}
           DEPLOYMENT_CONTRACT_RESULT: ${{ needs.deployment-contract.result }}
+          PROTOBUF_RESULT: ${{ needs.protobuf-contracts.result }}
           POSTGRES_RESULT: ${{ needs.postgres-integration.result }}
           REDIS_HA_RESULT: ${{ needs.redis-ha-integration.result }}
           NATS_HA_RESULT: ${{ needs.nats-jetstream-ha-integration.result }}
@@ -747,7 +755,7 @@ jobs:
             echo "Documentation-only change: build, tests, integration and security jobs intentionally skipped."
             exit 0
           fi
-          for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
+          for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$PROTOBUF_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
             if [[ "$result" != success ]]; then
               echo "Required CI suite did not pass (result: $result)" >&2
               exit 1

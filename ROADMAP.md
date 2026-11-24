@@ -89,3 +89,12 @@ Los registros históricos no son evidencia suficiente por sí solos. El estado v
 - [ADR-0009](docs/adr/ADR-0009-proveedores-iniciales-y-reventa-factus.md) fija Wompi y Factus como proveedores iniciales no exclusivos y la comercialización de capacidad Factus por PLATFORM, manteniendo el procesamiento de pagos en CORE y la facturación de cada emisor en su backend owner.
 
 Estos ADR tienen estados y pendientes propios. Su referencia aquí no implica implementación ni aprobación formal de Fase 0. El roadmap organiza la secuencia y no establece precedencia global entre ADR, requerimiento, contrato arquitectónico, modelo de dominios o reglas especializadas: todos los documentos aplicables se consultan y aplican en sus respectivos ámbitos. Si una contradicción real entre fuentes no puede resolverse respetando esos ámbitos, se documenta, se detiene únicamente el trabajo afectado, se solicita decisión explícita del propietario y se actualizan coordinadamente las fuentes correspondientes.
+
+
+## Hito transversal — Cumplimiento arquitectónico ejecutable
+
+Antes de continuar ampliando módulos o aceptar nuevas fases funcionales, el repositorio debe formalizar e implementar [ADR-0012](docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y la regla [ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md](docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md).
+
+El trabajo se divide en entregables verificables: (1) inventarios canónicos de módulos/crates/contracts, ownership SQL, Protobuf, superficies BFF, eventos, despliegues y trazabilidad; (2) crates por bounded context funcional y crates `*-contracts`, con composición trait en memoria y Protobuf versionado; (3) roles/grants PostgreSQL por módulo y pruebas negativas con los roles runtime reales; (4) Buf lint/breaking y validación del grafo Cargo; (5) validador único `cargo xtask architecture`; (6) gates PR de arquitectura e integración; (7) gate de release con inventario runtime y E2E de staging asociado al SHA.
+
+Este hito no se considera completado por documentación, scaffolds, compilación ni CI parcialmente verde. Los controles aplicables deben ejecutarse y conservar evidencia. Un incumplimiento existente produce CI rojo hasta corregirse; no se crea una allowlist para ocultarlo. El E2E de staging no se sustituye por mocks ni por pruebas locales.

@@ -20,6 +20,8 @@ Logs, métricas, trazas, propagación de contexto, errores diagnosticables, priv
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — modular boundaries and architecture compliance](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) (consult when the task changes module ownership, data access, or release acceptance)
+
 - [Observability, Monitoring, Alerting and SLO ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Observability_Monitoring_Alerting_SLO.md)
 - [Contrato integrado de arquitectura, políticas y responsabilidades de ENSAMBRIA](../../../ARCHITECTURE_RULES.md)
 - [Privacy Legal Compliance ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Privacy_Legal_Compliance.md) y [Privacy Data Lifecycle Management ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Privacy_Data_Lifecycle_Management.md), para datos de telemetría.
@@ -64,4 +66,4 @@ Si las capacidades existentes no cubren la guía o hay tensión entre diagnósti
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Mantén la Skill alineada con la guía especializada y los estándares de privacidad; no inventes versiones ni umbrales.
+Revisada el 2026-11-24. Mantén la Skill alineada con la guía especializada y los estándares de privacidad; no inventes versiones ni umbrales.

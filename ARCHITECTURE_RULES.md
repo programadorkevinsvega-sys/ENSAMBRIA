@@ -663,3 +663,20 @@ El Domain / Product Owner mantiene alcance y aceptación del roadmap. Architectu
 La matriz de pruebas, los niveles, las particiones positivas/negativas, límites, duplicados/concurrencia, autorización, errores, privacidad, seguridad e integración se detallan en [ENSAMBRIA_prompt_maestro_enterprise_quality_engineering.md](docs/rules/ENSAMBRIA_prompt_maestro_enterprise_quality_engineering.md). Aplicar a cada caso de uso según corresponda; los mocks no sustituyen integración real requerida. Cada N/A requiere justificación técnica previa, responsable y alcance. No se acepta una fase o subfase mientras un criterio requerido carezca de evidencia ejecutada, falle o dependa de una decisión bloqueante sin resolver. Un documento, scaffold, test escrito o build exitoso por sí solos no prueban aceptación.
 
 # FIN DEL CONTRATO DE ARQUITECTURA
+
+
+## Fronteras modulares ejecutables y gates obligatorios
+
+La regla especializada [ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md](docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md) y [ADR-0012](docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) concretan cómo se imponen las fronteras en compilación, PostgreSQL, contratos, CI y staging. Son normativas y aplican desde el primer cambio funcional.
+
+**Crates y contratos:** cada bounded context implementado tiene crate propietario y crate `*-contracts`. Los consumidores solo dependen de contracts; dominio, aplicación interna, adapters, repositorios y modelos SQLx no son API pública. La interfaz síncrona es trait + DTO propios; su implementación inicial puede ejecutarse en memoria mediante inyección en composition root. Protobuf versionado se define desde el inicio. Tonic es adapter de transporte cuando módulos/procesos se separan. El workspace único no autoriza imports cruzados ni compartir structs de dominio.
+
+**Datos:** PostgreSQL impone ownership mediante roles runtime por módulo, schemas/grants mínimos y roles DDL separados. Workers y pruebas funcionales utilizan identidades runtime restringidas. El análisis estático SQL es segunda capa; las pruebas negativas contra PostgreSQL real demuestran que el acceso cruzado está denegado. RLS complementa el aislamiento tenant y no sustituye grants/ownership.
+
+**Contratos y superficies:** Buf lint y breaking son checks obligatorios para Protobuf. Las APIs HTTP de negocio pertenecen exclusivamente a BFF autorizados; backends de dominio no exponen endpoints HTTP de aplicación. Los contratos entre procesos/backends usan gRPC/Tonic conforme a los owners y superficies aprobadas.
+
+**Eventos y operación:** cada hecho durable aplicable recorre mutación+Outbox atómicos, relay recuperable, JetStream durable, consumer e Inbox idempotentes y ACK posterior al commit. Todo binario requerido se empaqueta, configura e instala como unidad operativa independiente. La aceptación de runtime compara servicios declarados, empaquetados, instalados y activos/conectados en staging.
+
+**Aceptación:** el E2E real de staging es gate de release separado de integración PR y queda vinculado al SHA exacto. La matriz de requisitos/casos/pruebas es versionada; CI inyecta SHA, run/job, resultados y artefactos. Un check omitido, fallido o sin evidencia requerida no pasa. El punto de entrada único es `cargo xtask architecture`; no se duplican inventarios en scripts.
+
+Ningún agente puede ignorar estas reglas ni declarar una excepción unilateral. Si existe contradicción documental, se detiene el alcance afectado y se solicita decisión explícita; no se elige silenciosamente la interpretación más cómoda.

@@ -239,3 +239,20 @@ Las Skills operativas de este repositorio están en `.github/skills/<nombre>/SKI
 - Antes de modificar un estándar fuente, inspecciona las Skills que lo citan y actualízalas en el mismo cambio cuando corresponda. Si el estándar tiene versión o fecha, conserva sus datos reales; no inventes versiones. Mantén en cada Skill su fecha de revisión. El historial de PR conserva la trazabilidad; valida referencias y estructura mediante `python3 scripts/validate_engineering_skills.py`, sin tratarlo como gate de aceptación arquitectónica.
 - Las Skills deben identificar aplicabilidad, no imponer tecnologías a proyectos que no las usan ni generalizar obligaciones legales/jurisdiccionales de ENSAMBRIA. Si dos fuentes discrepan, detén solo el alcance afectado, registra las reglas en conflicto y solicita una resolución; no selecciones una por conveniencia.
 - Actualiza documentación y pruebas afectadas antes o junto con la implementación, ejecuta las validaciones aplicables y presenta evidencia verificable, resultados reales, N/A justificados y bloqueos pendientes. La presencia de una Skill, un test escrito o un comando configurado no prueba que la implementación o la validación hayan sido completadas.
+
+
+## Regla obligatoria de fronteras modulares y cumplimiento arquitectónico
+
+Antes de cualquier cambio, lee [ADR-0012](docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y [ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md](docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md), además de todas las fuentes normativas del ámbito. Estas reglas aplican a todos los agentes, personas, automatizaciones y tareas, sin excepción por urgencia o tamaño del cambio.
+
+- Cada bounded context implementado tiene crate propietario y crate `*-contracts`; consumidores dependen solo de contracts. No importar implementación, dominio, adapters, repositorios, modelos SQLx ni structs internos de otro módulo/backend.
+- La llamada interna inicial usa trait + DTO propios inyectados en memoria. Protobuf versionado existe desde el inicio; Tonic es adapter al separar procesos. No imponer servidor gRPC a módulos co-residentes por defecto.
+- PostgreSQL impone ownership con roles/grants mínimos por módulo. Workers y tests funcionales usan roles runtime restringidos; roles DDL/setup no se reutilizan. Las pruebas deben demostrar denegación real de acceso cruzado.
+- HTTP de negocio solo en BFF autorizados. Las APIs de módulos/backends no se exponen directamente a frontends.
+- Eventos durables requieren Outbox, relay, JetStream, consumer durable, Inbox/idempotencia, ACK post-commit y recuperación demostrada.
+- Cada binario requerido debe tener artefacto, configuración y unidad de ejecución. Runtime y E2E de staging se aceptan solo con evidencia del entorno real y SHA exacto.
+- No editar SHA/resultados de trazabilidad a mano: CI los inyecta en el informe de ejecución.
+- Usa exclusivamente `cargo xtask architecture` como punto de entrada del validador, una vez implementado. No añadas scripts Bash con listas duplicadas.
+- Está prohibido saltar, degradar a warning, neutralizar o crear excepciones a los controles obligatorios. Si falta owner, contrato, grant, entorno o evidencia, detén solo el alcance dependiente y solicita decisión/acceso al propietario.
+
+La aprobación de un diseño no prueba su implementación. No afirmes que un control está activo hasta verificar el workflow y su ejecución sobre el SHA correspondiente.

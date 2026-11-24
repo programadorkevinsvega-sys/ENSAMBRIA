@@ -1,54 +1,40 @@
-use ensambria_platform_contract::platform::product_catalog::v1::{
-    GetActiveProductRequest, ProductCatalogClient, ProductCatalogEntry, ResolveActiveDomainRequest,
-};
-use tonic::{
-    Code,
-    transport::{Certificate, Channel, ClientTlsConfig, Identity},
+use std::sync::Arc;
+
+use ensambria_platform_product_catalog_contracts::{
+    ProductCatalog as ProductCatalogPort, ProductCatalogEntry, ProductCatalogFailure,
 };
 use uuid::Uuid;
 
+use crate::platform_product_catalog_grpc::GrpcPlatformProductCatalog;
+
 #[derive(Clone)]
 pub struct PlatformProductPolicy {
-    catalog: ProductCatalogClient<Channel>,
+    catalog: Arc<dyn ProductCatalogPort>,
 }
 
 impl PlatformProductPolicy {
-    pub fn new(catalog: ProductCatalogClient<Channel>) -> Self {
+    pub fn new(catalog: Arc<dyn ProductCatalogPort>) -> Self {
         Self { catalog }
     }
 
-    /// Connects to the PLATFORM-owned gRPC contract; CORE never receives a PLATFORM database pool.
+    /// Builds the transport adapter from deployment-provided mutual-TLS configuration.
     pub async fn from_env() -> Result<Self, PlatformContractError> {
-        let endpoint = std::env::var("PLATFORM_PRODUCT_CATALOG_ENDPOINT")
-            .map_err(|_| PlatformContractError::InvalidConfiguration)?;
-        if !endpoint.starts_with("https://") {
-            return Err(PlatformContractError::InvalidConfiguration);
-        }
-        let ca_certificate = std::fs::read(
-            std::env::var("PLATFORM_PRODUCT_CATALOG_CA_CERT_FILE")
-                .map_err(|_| PlatformContractError::InvalidConfiguration)?,
-        )
-        .map_err(|_| PlatformContractError::InvalidConfiguration)?;
-        let client_certificate = std::fs::read(
-            std::env::var("CORE_PLATFORM_GRPC_CLIENT_CERT_FILE")
-                .map_err(|_| PlatformContractError::InvalidConfiguration)?,
-        )
-        .map_err(|_| PlatformContractError::InvalidConfiguration)?;
-        let client_key = std::fs::read(
-            std::env::var("CORE_PLATFORM_GRPC_CLIENT_KEY_FILE")
-                .map_err(|_| PlatformContractError::InvalidConfiguration)?,
-        )
-        .map_err(|_| PlatformContractError::InvalidConfiguration)?;
-        let tls_config = ClientTlsConfig::new()
-            .ca_certificate(Certificate::from_pem(ca_certificate))
-            .identity(Identity::from_pem(client_certificate, client_key));
-        let catalog = ProductCatalogClient::connect_with_tls(endpoint, tls_config)
-            .await
-            .map_err(|_| PlatformContractError::PlatformUnavailable)?;
-        Ok(Self { catalog })
+        let catalog =
+            GrpcPlatformProductCatalog::from_env()
+                .await
+                .map_err(|error| match error {
+                    ProductCatalogFailure::InvalidRequest => {
+                        PlatformContractError::InvalidConfiguration
+                    }
+                    ProductCatalogFailure::NotFound => PlatformContractError::ProductUnavailable,
+                    ProductCatalogFailure::Unavailable => {
+                        PlatformContractError::PlatformUnavailable
+                    }
+                })?;
+        Ok(Self::new(Arc::new(catalog)))
     }
 
-    /// Resolves an active PLATFORM product and enforces its published capability contract.
+    /// Enforces a published PLATFORM capability through the application contract.
     /// A catalog response is context, never authorization.
     pub async fn require_capability(
         &self,
@@ -57,19 +43,14 @@ impl PlatformProductPolicy {
         contract_version: &str,
         configuration_version: i32,
     ) -> Result<ProductCatalogEntry, PlatformContractError> {
-        let response = self
+        let product = self
             .catalog
-            .clone()
-            .get_active_product(GetActiveProductRequest {
-                product_id: product_id.to_string(),
-            })
+            .get_active_product(product_id)
             .await
-            .map_err(map_platform_status)?;
-        let product = response.into_inner();
-
-        let published_version = i32::try_from(product.configuration_version)
-            .map_err(|_| PlatformContractError::InvalidPlatformResponse)?;
-        if published_version != configuration_version {
+            .map_err(map_catalog_failure)?;
+        let expected_version = u32::try_from(configuration_version)
+            .map_err(|_| PlatformContractError::InvalidPlatformRequest)?;
+        if product.configuration_version != expected_version {
             return Err(PlatformContractError::ConfigurationVersionMismatch);
         }
 
@@ -88,32 +69,22 @@ impl PlatformProductPolicy {
         Ok(product)
     }
 
-    /// Resolves a verified active domain through the PLATFORM-owned gRPC contract.
     pub async fn resolve_domain(
         &self,
         domain: &str,
     ) -> Result<Option<ProductCatalogEntry>, PlatformContractError> {
-        match self
-            .catalog
-            .clone()
-            .resolve_active_domain(ResolveActiveDomainRequest {
-                domain_name: domain.to_owned(),
-            })
+        self.catalog
+            .resolve_active_domain(domain)
             .await
-        {
-            Ok(response) => Ok(Some(response.into_inner())),
-            Err(status) if status.code() == Code::NotFound => Ok(None),
-            Err(status) => Err(map_platform_status(status)),
-        }
+            .map_err(map_catalog_failure)
     }
 }
 
-fn map_platform_status(status: tonic::Status) -> PlatformContractError {
-    match status.code() {
-        Code::NotFound => PlatformContractError::ProductUnavailable,
-        Code::InvalidArgument => PlatformContractError::InvalidPlatformRequest,
-        Code::FailedPrecondition => PlatformContractError::UnsupportedPlatformContract,
-        _ => PlatformContractError::PlatformUnavailable,
+fn map_catalog_failure(error: ProductCatalogFailure) -> PlatformContractError {
+    match error {
+        ProductCatalogFailure::InvalidRequest => PlatformContractError::InvalidPlatformRequest,
+        ProductCatalogFailure::NotFound => PlatformContractError::ProductUnavailable,
+        ProductCatalogFailure::Unavailable => PlatformContractError::PlatformUnavailable,
     }
 }
 

@@ -103,7 +103,7 @@ async fn registration_and_recovery_are_enqueued_then_delivered_by_the_worker() {
     .await
     .expect("registration should enqueue verification");
     let queued: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM core.email_outbox WHERE recipient = $1 AND status = 'pending'",
+        "SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1 AND status = 'pending'",
     )
     .bind(&email)
     .fetch_one(&worker_pool)

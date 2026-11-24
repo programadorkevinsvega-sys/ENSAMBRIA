@@ -1,0 +1,16 @@
+[package]
+name = "ensambria-architecture-e2e"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[dependencies]
+ensambria-core = { path = "../core" }
+ensambria-platform = { path = "../platform" }
+ensambria-platform-contract = { path = "../platform-contract" }
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "json"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.14.9", default-features = false, features = ["router", "tls-ring", "transport"] }
+uuid = { version = "1", features = ["v7", "serde"] }

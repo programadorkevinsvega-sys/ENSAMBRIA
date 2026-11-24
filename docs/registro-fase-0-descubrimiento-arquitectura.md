@@ -750,3 +750,8 @@ Validaciones locales del corte documental: `python3 scripts/validate_engineering
 **Ajuste de secuencia durable — 2026-11-18:** el propietario confirmó que no se debe crear un evento artificial para satisfacer la regla Outbox. El primer flujo real que requiere entrega durable es el alta operativa CORE→PLATFORM de 1.3, ratificada en ADR-0002. Las fuentes afectadas se armonizan para que 1.1 sea fundamento infra-only y 1.2 no habilite altas operativas antes del flujo completo. Cualquier otro caso real durable que aparezca antes debe implementar Outbox/Inbox en el mismo corte.
 
 El estado de todas las fases y sus criterios de aceptación están en [ROADMAP.md](../ROADMAP.md) y [docs/requerimiento.md, §23](requerimiento.md#23-criterios-de-cierre-de-cada-fase). La aceptación requiere evidencia nueva de cada criterio; ni documentos, decisiones arquitectónicas ni resultados históricos sustituyen esa evidencia.
+
+
+## Decisión documental añadida — 2026-11-24
+
+El propietario aprobó ADR-0012, que concreta la imposición ejecutable de las fronteras modulares: crate por bounded context implementado y crate contracts, traits/DTO propios con Protobuf versionado, PostgreSQL roles/grants como barrera primaria de ownership, Buf lint/breaking, validador único `cargo xtask architecture`, gates PR y gate de staging con SHA y evidencia. La aprobación es documental; no acredita que esos crates, roles, workflows, herramientas o pruebas estén implementados. La regla vinculante está en [ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md](rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md). Fase 0 continúa abierta y no aceptada como fase.

@@ -65,12 +65,5 @@ REVOKE ALL ON SCHEMA
     platform_tenant_onboarding
 FROM PUBLIC;
 
-REVOKE ALL ON SCHEMA
-    core_identity_auth,
-    core_tenancy,
-    business_establishment_catalog,
-    platform_product_catalog,
-    platform_tenant_onboarding
-FROM core_runtime, business_runtime, platform_runtime, platform_event_consumer;
 
 -- Runtime roles intentionally receive no USAGE/CREATE until their module cutover.

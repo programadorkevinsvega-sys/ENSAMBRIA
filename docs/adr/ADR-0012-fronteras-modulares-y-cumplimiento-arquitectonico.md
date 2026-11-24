@@ -73,3 +73,7 @@ El mapa de requisitos/casos/pruebas se versiona sin SHA/resultados manuales. CI 
 - [ADR-0001 PostgreSQL](ADR-0001-base-postgresql-compartida.md)
 - [ADR-0002 Outbox CORE→PLATFORM](ADR-0002-outbox-alta-tenant-core-platform.md)
 - [ADR-0003 workspace Cargo](ADR-0003-cargo-workspace.md)
+
+## Implementación PostgreSQL por fases
+
+El inventario canónico es [architecture/data-ownership.yaml](../../architecture/data-ownership.yaml) y el procedimiento de transición está en [module-ownership-cutover.md](../postgres/module-ownership-cutover.md). La primera fase solo provisiona roles/schemas aislados y prueba que no tienen permisos implícitos; no mueve tablas ni revoca todavía los grants legacy. La aceptación del ownership requiere completar las fases de contratos, movimiento de objetos, roles runtime, revocación legacy y pruebas negativas reales descritas en el plan.

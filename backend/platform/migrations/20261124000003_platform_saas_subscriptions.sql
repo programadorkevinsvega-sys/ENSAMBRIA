@@ -31,7 +31,7 @@ ALTER TABLE platform_product_catalog.commercial_offers ADD COLUMN published_vers
     DEFERRABLE INITIALLY DEFERRED;
 
 CREATE FUNCTION platform_product_catalog.prevent_published_offer_version_mutation()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform_product_catalog AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL AND (
         NEW.offer_id IS DISTINCT FROM OLD.offer_id OR NEW.version IS DISTINCT FROM OLD.version
@@ -53,7 +53,7 @@ BEFORE UPDATE ON platform_product_catalog.commercial_offer_versions
 FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.prevent_published_offer_version_mutation();
 
 CREATE FUNCTION platform_product_catalog.validate_published_offer()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform_product_catalog AS $$
 BEGIN
     IF NEW.status = 'published' AND (
         NEW.published_version IS NULL OR NOT EXISTS (
@@ -125,7 +125,7 @@ CREATE TABLE platform_product_catalog.saas_subscription_commands (
     FOREIGN KEY (subscription_id, tenant_id) REFERENCES platform_product_catalog.saas_subscriptions(id, tenant_id)
 );
 CREATE FUNCTION platform_product_catalog.prevent_published_offer_deletion()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform_product_catalog AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL THEN
         RAISE EXCEPTION 'published offer versions cannot be deleted' USING ERRCODE = '55000';
@@ -137,7 +137,7 @@ BEFORE DELETE ON platform_product_catalog.commercial_offer_versions
 FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.prevent_published_offer_deletion();
 
 CREATE FUNCTION platform_product_catalog.protect_published_offer_identity()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform_product_catalog AS $$
 BEGIN
     IF OLD.status <> 'draft' AND (
         NEW.id IS DISTINCT FROM OLD.id OR NEW.product_id IS DISTINCT FROM OLD.product_id
@@ -159,7 +159,7 @@ BEFORE UPDATE ON platform_product_catalog.commercial_offers
 FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.protect_published_offer_identity();
 
 CREATE FUNCTION platform_product_catalog.validate_subscription_transition()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform_product_catalog AS $$
 BEGIN
     IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.product_id IS DISTINCT FROM OLD.product_id
        OR NEW.offer_id IS DISTINCT FROM OLD.offer_id OR NEW.offer_version IS DISTINCT FROM OLD.offer_version

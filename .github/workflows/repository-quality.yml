@@ -111,7 +111,6 @@ jobs:
 
 
   deployment-contract:
-    if: github.event_name != 'push'
     needs: changes
     if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     name: deployment-contract

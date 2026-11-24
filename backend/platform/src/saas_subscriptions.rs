@@ -186,7 +186,7 @@ async fn store_command(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, tenant: U
     Ok(())
 }
 async fn load_snapshot(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, tenant: Uuid, id: Uuid) -> Result<SubscriptionSnapshot, SubscriptionError> {
-    let row = sqlx::query("SELECT id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2")
+    let row = sqlx::query("SELECT id,tenant_id,product_id,offer_id,offer_version,status,extract(epoch from starts_at)::bigint AS starts_at_epoch,extract(epoch from ends_at)::bigint AS ends_at_epoch,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2")
         .bind(id).bind(tenant).fetch_one(&mut **tx).await.map_err(|_| SubscriptionError::Storage)?;
     snapshot_from_row(row)
 }

@@ -1,4 +1,7 @@
 use ensambria_shared_cache::TtlCache;
+use ensambria_platform_product_catalog_contracts::{
+    ContractFuture, ProductCatalog as ProductCatalogPort, ProductCatalogFailure,
+};
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{PgPool, types::Json};
@@ -30,7 +33,7 @@ impl ProductCatalog {
         product_id: Uuid,
     ) -> Result<Option<ProductCatalogEntry>, ProductCatalogError> {
         let product = sqlx::query_as::<_, (Uuid, String, String, String, i32, String, Json<Value>, i64)>(
-            "SELECT product_id, product_key, display_name, brand_name, configuration_version, schema_version, configuration, extract(epoch FROM published_at)::bigint FROM platform.active_product_catalog WHERE product_id = $1",
+            "SELECT product_id, product_key, display_name, brand_name, configuration_version, schema_version, configuration, extract(epoch FROM published_at)::bigint FROM platform_product_catalog.active_product_catalog WHERE product_id = $1",
         )
         .bind(product_id)
         .fetch_optional(&self.pool)
@@ -52,7 +55,7 @@ impl ProductCatalog {
         };
 
         let domains = sqlx::query_as::<_, (String, String)>(
-            "SELECT domain_name, status FROM platform.product_domains WHERE product_id = $1 AND status = 'active' ORDER BY domain_name",
+            "SELECT domain_name, status FROM platform_product_catalog.product_domains WHERE product_id = $1 AND status = 'active' ORDER BY domain_name",
         )
         .bind(product_id)
         .fetch_all(&self.pool)
@@ -63,7 +66,7 @@ impl ProductCatalog {
         .collect();
 
         let markets = sqlx::query_as::<_, (String, String, String, String)>(
-            "SELECT country_code::text, currency_code::text, locale, status FROM platform.product_markets WHERE product_id = $1 AND status = 'enabled' ORDER BY country_code, locale",
+            "SELECT country_code::text, currency_code::text, locale, status FROM platform_product_catalog.product_markets WHERE product_id = $1 AND status = 'enabled' ORDER BY country_code, locale",
         )
         .bind(product_id)
         .fetch_all(&self.pool)
@@ -79,7 +82,7 @@ impl ProductCatalog {
         .collect();
 
         let surfaces = sqlx::query_as::<_, (String, i32, String)>(
-            "SELECT surface_code, configuration_version, status FROM platform.product_surfaces WHERE product_id = $1 AND status = 'enabled' ORDER BY surface_code",
+            "SELECT surface_code, configuration_version, status FROM platform_product_catalog.product_surfaces WHERE product_id = $1 AND status = 'enabled' ORDER BY surface_code",
         )
         .bind(product_id)
         .fetch_all(&self.pool)
@@ -96,7 +99,7 @@ impl ProductCatalog {
         .collect();
 
         let capabilities = sqlx::query_as::<_, (String, String, String, String)>(
-            "SELECT pc.capability_code, cc.contract_version, cc.implementation_status, pc.status FROM platform.product_capabilities pc JOIN platform.capability_catalog cc USING (capability_code) WHERE pc.product_id = $1 AND pc.status = 'enabled' AND cc.implementation_status = 'available' ORDER BY pc.capability_code",
+            "SELECT pc.capability_code, cc.contract_version, cc.implementation_status, pc.status FROM platform_product_catalog.product_capabilities pc JOIN platform_product_catalog.capability_catalog cc USING (capability_code) WHERE pc.product_id = $1 AND pc.status = 'enabled' AND cc.implementation_status = 'available' ORDER BY pc.capability_code",
         )
         .bind(product_id)
         .fetch_all(&self.pool)
@@ -162,7 +165,7 @@ impl ProductCatalog {
         }
 
         let product_id: Option<Uuid> = sqlx::query_scalar(
-            "SELECT p.product_id FROM platform.active_product_catalog p JOIN platform.product_domains d ON d.product_id = p.product_id WHERE d.domain_name = $1 AND d.status = 'active' LIMIT 1",
+            "SELECT p.product_id FROM platform_product_catalog.active_product_catalog p JOIN platform_product_catalog.product_domains d ON d.product_id = p.product_id WHERE d.domain_name = $1 AND d.status = 'active' LIMIT 1",
         )
         .bind(domain)
         .fetch_optional(&self.pool)
@@ -199,7 +202,7 @@ impl ProductCatalog {
         version: i32,
     ) -> Result<Option<ProductConfiguration>, ProductCatalogError> {
         let configuration = sqlx::query_as::<_, (String, Json<Value>, Option<i64>)>(
-            "SELECT c.schema_version, c.configuration, extract(epoch FROM c.published_at)::bigint FROM platform.product_configurations c JOIN platform.products p ON p.id = c.product_id AND p.status = 'active' WHERE c.product_id = $1 AND c.version = $2 AND c.status = 'published'",
+            "SELECT c.schema_version, c.configuration, extract(epoch FROM c.published_at)::bigint FROM platform_product_catalog.product_configurations c JOIN platform_product_catalog.products p ON p.id = c.product_id AND p.status = 'active' WHERE c.product_id = $1 AND c.version = $2 AND c.status = 'published'",
         )
         .bind(product_id)
         .bind(version)
@@ -219,6 +222,120 @@ impl ProductCatalog {
                 .map(|epoch| UNIX_EPOCH + Duration::from_secs(epoch.max(0) as u64)),
         }))
     }
+}
+
+impl ProductCatalogPort for ProductCatalog {
+    fn get_active_product<'a>(
+        &'a self,
+        product_id: Uuid,
+    ) -> ContractFuture<'a, Result<ensambria_platform_product_catalog_contracts::ProductCatalogEntry, ProductCatalogFailure>> {
+        Box::pin(async move {
+            let product = ProductCatalog::get_active_product(self, product_id)
+                .await
+                .map_err(map_contract_error)?
+                .ok_or(ProductCatalogFailure::NotFound)?;
+            to_contract_entry(product)
+        })
+    }
+
+    fn resolve_active_domain<'a>(
+        &'a self,
+        domain_name: &'a str,
+    ) -> ContractFuture<'a, Result<Option<ensambria_platform_product_catalog_contracts::ProductCatalogEntry>, ProductCatalogFailure>> {
+        Box::pin(async move {
+            ProductCatalog::resolve_active_domain(self, domain_name)
+                .await
+                .map_err(map_contract_error)?
+                .map(to_contract_entry)
+                .transpose()
+        })
+    }
+
+    fn get_published_configuration<'a>(
+        &'a self,
+        product_id: Uuid,
+        version: u32,
+    ) -> ContractFuture<'a, Result<Option<ensambria_platform_product_catalog_contracts::ProductConfiguration>, ProductCatalogFailure>> {
+        Box::pin(async move {
+            let version = i32::try_from(version).map_err(|_| ProductCatalogFailure::InvalidRequest)?;
+            ProductCatalog::get_published_configuration(self, product_id, version)
+                .await
+                .map_err(map_contract_error)?
+                .map(|configuration| {
+                    Ok(ensambria_platform_product_catalog_contracts::ProductConfiguration {
+                        product_id: configuration.product_id,
+                        version: u32::try_from(configuration.version)
+                            .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
+                        schema_version: configuration.schema_version,
+                        canonical_json: configuration.canonical_json,
+                        published_at_unix: configuration.published_at.map(system_time_to_unix),
+                    })
+                })
+                .transpose()
+        })
+    }
+}
+
+fn map_contract_error(error: ProductCatalogError) -> ProductCatalogFailure {
+    match error {
+        ProductCatalogError::Storage => ProductCatalogFailure::Unavailable,
+        ProductCatalogError::InvalidDomain
+        | ProductCatalogError::InvalidConfiguration
+        | ProductCatalogError::UnsupportedConfigurationSchema => {
+            ProductCatalogFailure::InvalidRequest
+        }
+    }
+}
+
+fn system_time_to_unix(value: SystemTime) -> i64 {
+    let seconds = value.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    i64::try_from(seconds).unwrap_or(i64::MAX)
+}
+
+fn to_contract_entry(
+    product: ProductCatalogEntry,
+) -> Result<ensambria_platform_product_catalog_contracts::ProductCatalogEntry, ProductCatalogFailure> {
+    Ok(ensambria_platform_product_catalog_contracts::ProductCatalogEntry {
+        product_id: product.product_id,
+        product_key: product.product_key,
+        display_name: product.display_name,
+        brand_name: product.brand_name,
+        configuration_version: u32::try_from(product.configuration_version)
+            .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
+        configuration_schema_version: product.configuration_schema_version,
+        configuration: product.configuration,
+        domains: product.domains.into_iter().map(|domain| {
+            ensambria_platform_product_catalog_contracts::ProductDomain {
+                domain_name: domain.domain_name,
+                status: domain.status,
+            }
+        }).collect(),
+        markets: product.markets.into_iter().map(|market| {
+            ensambria_platform_product_catalog_contracts::ProductMarket {
+                country_code: market.country_code,
+                currency_code: market.currency_code,
+                locale: market.locale,
+                status: market.status,
+            }
+        }).collect(),
+        surfaces: product.surfaces.into_iter().map(|surface| {
+            Ok(ensambria_platform_product_catalog_contracts::ProductSurface {
+                surface_code: surface.surface_code,
+                configuration_version: u32::try_from(surface.configuration_version)
+                    .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
+                status: surface.status,
+            })
+        }).collect::<Result<Vec<_>, ProductCatalogFailure>>()?,
+        capabilities: product.capabilities.into_iter().map(|capability| {
+            ensambria_platform_product_catalog_contracts::ProductCapability {
+                capability_code: capability.capability_code,
+                contract_version: capability.contract_version,
+                implementation_status: capability.implementation_status,
+                product_status: capability.product_status,
+            }
+        }).collect(),
+        published_at_unix: system_time_to_unix(product.published_at),
+    })
 }
 
 #[derive(Deserialize)]

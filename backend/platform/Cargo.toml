@@ -6,6 +6,7 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
+ensambria-platform-product-catalog-contracts = { path = "../platform-product-catalog-contracts" }
 ensambria-shared-cache = { path = "../shared-cache" }
 ensambria-platform-contract = { path = "../platform-contract" }
 ensambria-event-bus = { path = "../event-bus" }

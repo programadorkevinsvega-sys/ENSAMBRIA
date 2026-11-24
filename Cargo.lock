@@ -655,6 +655,7 @@ dependencies = [
 name = "ensambria-platform"
 version = "0.1.0"
 dependencies = [
+ "ensambria-platform-product-catalog-contracts",
  "ensambria-core",
  "ensambria-event-bus",
  "ensambria-platform-contract",

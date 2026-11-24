@@ -8,7 +8,8 @@ CONSUMER_PID=""
 
 : "${CORE_TENANT_DATABASE_URL:?CORE_TENANT_DATABASE_URL is required}"
 : "${CORE_OUTBOX_DATABASE_URL:?CORE_OUTBOX_DATABASE_URL is required}"
-: "${PLATFORM_EVENT_DATABASE_URL:?PLATFORM_EVENT_DATABASE_URL is required}"
+: "${PLATFORM_PRODUCT_CATALOG_DATABASE_URL:?PLATFORM_PRODUCT_CATALOG_DATABASE_URL is required}"
+: "${PLATFORM_TENANT_ONBOARDING_DATABASE_URL:?PLATFORM_TENANT_ONBOARDING_DATABASE_URL is required}"
 : "${PLATFORM_VERIFY_DATABASE_URL:?PLATFORM_VERIFY_DATABASE_URL is required}"
 export ENSAMBRIA_NATS_URL="${ENSAMBRIA_NATS_URL:-nats://127.0.0.1:4222}"
 
@@ -152,8 +153,8 @@ wait_for_log /tmp/ensambria-platform-consumer-before-commit.log \
 stop_process "$CONSUMER_PID"
 CONSUMER_PID=""
 
-inbox_before_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform.inbox_messages WHERE event_id='$event_id'")"
-onboarding_before_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='$tenant_id'")"
+inbox_before_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.inbox_messages WHERE event_id='$event_id'")"
+onboarding_before_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.tenant_onboardings WHERE tenant_id='$tenant_id'")"
 [[ "$inbox_before_commit" == "0" && "$onboarding_before_commit" == "0" ]]
 
 # Redelivery: commit Inbox + onboarding, then kill before ACK. JetStream must redeliver again.
@@ -167,8 +168,8 @@ wait_for_log /tmp/ensambria-platform-consumer-after-commit.log \
 stop_process "$CONSUMER_PID"
 CONSUMER_PID=""
 
-inbox_after_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform.inbox_messages WHERE event_id='$event_id' AND status='applied'")"
-onboarding_after_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='$tenant_id' AND source_event_id='$event_id' AND status='onboarding_pending'")"
+inbox_after_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.inbox_messages WHERE event_id='$event_id' AND status='applied'")"
+onboarding_after_commit="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.tenant_onboardings WHERE tenant_id='$tenant_id' AND source_event_id='$event_id' AND status='onboarding_pending'")"
 [[ "$inbox_after_commit" == "1" && "$onboarding_after_commit" == "1" ]]
 
 # Final redelivery must hit the Inbox duplicate path, preserve one onboarding, and ACK.
@@ -188,8 +189,8 @@ grep -q "Duplicate" /tmp/ensambria-platform-consumer-redelivery.log || {
 }
 grep -q "PLATFORM tenant event committed and ACKed" /tmp/ensambria-platform-consumer-redelivery.log
 
-final_inbox="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform.inbox_messages WHERE event_id='$event_id' AND status='applied'")"
-final_onboarding="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform.tenant_onboardings WHERE tenant_id='$tenant_id' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND source_event_id='$event_id' AND status='onboarding_pending'")"
+final_inbox="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.inbox_messages WHERE event_id='$event_id' AND status='applied'")"
+final_onboarding="$(psql "$PLATFORM_VERIFY_DATABASE_URL" -Atqc "SELECT count(*) FROM platform_tenant_onboarding.tenant_onboardings WHERE tenant_id='$tenant_id' AND product_id='018f0f2a-7b3c-7abc-8def-0123456789ab' AND source_event_id='$event_id' AND status='onboarding_pending'")"
 final_outbox="$(psql "$CORE_OUTBOX_DATABASE_URL" -Atqc "SELECT count(*) FROM core.outbox_events WHERE event_id='$event_id' AND status='published'")"
 [[ "$final_inbox" == "1" && "$final_onboarding" == "1" && "$final_outbox" == "1" ]]
 

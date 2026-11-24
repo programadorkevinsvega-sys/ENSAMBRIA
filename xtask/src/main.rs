@@ -218,6 +218,18 @@ fn architecture() -> Result<(), Vec<String>> {
         errors.push("PLATFORM onboarding implementation queries product catalog tables directly".to_owned());
     }
 
+    let onboarding_consumer = read(
+        root.join("scripts/ci/check-core-platform-tenant-onboarding.sh"),
+        &mut errors,
+    );
+    if onboarding_consumer.contains("platform.inbox_messages")
+        || onboarding_consumer.contains("platform.tenant_onboardings")
+        || !onboarding_consumer.contains("PLATFORM_PRODUCT_CATALOG_DATABASE_URL")
+        || !onboarding_consumer.contains("PLATFORM_TENANT_ONBOARDING_DATABASE_URL")
+    {
+        errors.push("CORE-to-PLATFORM E2E does not use isolated PLATFORM schemas and identities".to_owned());
+    }
+
     let ci = read(
         root.join(".github/workflows/repository-quality.yml"),
         &mut errors,

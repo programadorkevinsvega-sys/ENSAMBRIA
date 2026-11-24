@@ -265,10 +265,10 @@ jobs:
             -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_migrator, core_email_worker, core_outbox_relay;"
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
+            -f backend/core/deployment/provision-module-ownership.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -f backend/core/deployment/provision-module-ownership.sql
+            -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql
           TEST_DATABASE_URL="postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             bash scripts/ci/check-module-schema-isolation.sh
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
@@ -561,6 +561,9 @@ jobs:
           docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
             psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE core_runtime LOGIN PASSWORD 'ensambria-ci-only';"
+          docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
+            psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE core_tenancy_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD 'ensambria-ci-only';"
           docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
             psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE business_establishment_catalog_runtime LOGIN PASSWORD 'ensambria-ci-only';"

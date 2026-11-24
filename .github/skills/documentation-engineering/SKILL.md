@@ -20,6 +20,9 @@ README, documentación de arquitectura/producto, contratos, ADR, guías técnica
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — enforceable modular boundaries](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [Modular boundaries and architecture compliance](../../../docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+
 - [README Documentation Quality and Security Standard](../../../docs/rules/ENSAMBRIA_README_Documentation_Quality_Security_Standard.md)
 - [Estándar de gobierno arquitectónico y documental](../../../docs/rules/ENSAMBRIA_architecture_doc_engineering_governance_standard.md)
 - [Estándar de gobierno del repositorio GitHub](../../../docs/rules/ENSAMBRIA_github_repository_governance_and_engineering_rules.md), para revisión en PR, validaciones y trazabilidad del cambio documental.
@@ -66,4 +69,4 @@ Si fuentes o implementación divergen, no edites para ocultar el conflicto. Regi
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Cuando se actualice una fuente citada, revisa esta Skill en el mismo PR. Usa versiones/fechas existentes y el historial de PR; no inventes metadatos.
+Revisada el 2026-11-24. Cuando se actualice una fuente citada, revisa esta Skill en el mismo PR. Usa versiones/fechas existentes y el historial de PR; no inventes metadatos.

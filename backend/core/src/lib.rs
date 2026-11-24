@@ -8,3 +8,5 @@ pub mod postgres;
 pub mod runtime_config;
 pub mod tenant_lifecycle;
 pub mod tenant_outbox;
+
+pub mod tenancy_access;

@@ -71,6 +71,11 @@ REVOKE ALL ON SCHEMA
     platform_tenant_onboarding
 FROM PUBLIC;
 
+-- CORE identity DDL references the tenancy-owned identity/tenant security
+-- boundary. This grants namespace resolution to the non-login schema owner only;
+-- no tenancy table or function privileges are granted to identity runtime.
+GRANT USAGE ON SCHEMA core_tenancy TO core_identity_auth_schema_owner;
+
 
 -- Runtime roles intentionally receive no USAGE/CREATE here; module migrations grant
 -- only the exact schema/table/function privileges required by each runtime.

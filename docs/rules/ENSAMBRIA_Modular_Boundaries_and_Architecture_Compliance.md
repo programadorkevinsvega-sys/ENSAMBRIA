@@ -139,3 +139,7 @@ Si falta un contrato, owner, grant, evidencia, entorno o decisión, el agente de
 - [ADR-0007 ownership SaaS](../adr/ADR-0007-separacion-contextos-facturacion-saas.md)
 - [Outbox/Inbox](ENSAMBRIA_Transactional_Outbox_Inbox.md)
 - [Pooling PostgreSQL](ENSAMBRIA_Connection_Pooling_PostgreSQL.md)
+
+## Implementación PostgreSQL por fases
+
+El inventario canónico es [architecture/data-ownership.yaml](../../architecture/data-ownership.yaml) y el procedimiento de transición está en [module-ownership-cutover.md](../postgres/module-ownership-cutover.md). La primera fase solo provisiona roles/schemas aislados y prueba que no tienen permisos implícitos; no mueve tablas ni revoca todavía los grants legacy. La aceptación del ownership requiere completar las fases de contratos, movimiento de objetos, roles runtime, revocación legacy y pruebas negativas reales descritas en el plan.

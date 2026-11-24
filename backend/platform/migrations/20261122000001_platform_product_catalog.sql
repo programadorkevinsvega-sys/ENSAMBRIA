@@ -94,7 +94,7 @@ ALTER TABLE platform_product_catalog.products
 CREATE FUNCTION platform_product_catalog.prevent_published_configuration_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
-SET search_path = pg_catalog, platform
+SET search_path = pg_catalog, platform_product_catalog
 AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL
@@ -130,7 +130,7 @@ FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.prevent_published_configu
 CREATE FUNCTION platform_product_catalog.prevent_published_configuration_deletion()
 RETURNS trigger
 LANGUAGE plpgsql
-SET search_path = pg_catalog, platform
+SET search_path = pg_catalog, platform_product_catalog
 AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL THEN
@@ -149,7 +149,7 @@ FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.prevent_published_configu
 CREATE FUNCTION platform_product_catalog.validate_active_product_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
-SET search_path = pg_catalog, platform
+SET search_path = pg_catalog, platform_product_catalog
 AS $$
 BEGIN
     IF NEW.status = 'active' AND NOT EXISTS (
@@ -172,7 +172,7 @@ FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.validate_active_product_c
 CREATE FUNCTION platform_product_catalog.validate_product_surface_configuration()
 RETURNS trigger
 LANGUAGE plpgsql
-SET search_path = pg_catalog, platform
+SET search_path = pg_catalog, platform_product_catalog
 AS $$
 BEGIN
     IF NEW.status = 'enabled' AND NOT EXISTS (
@@ -196,7 +196,7 @@ FOR EACH ROW EXECUTE FUNCTION platform_product_catalog.validate_product_surface_
 CREATE FUNCTION platform_product_catalog.validate_product_capability()
 RETURNS trigger
 LANGUAGE plpgsql
-SET search_path = pg_catalog, platform
+SET search_path = pg_catalog, platform_product_catalog
 AS $$
 DECLARE v_implementation_status text;
 BEGIN

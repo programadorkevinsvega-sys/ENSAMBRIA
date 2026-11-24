@@ -21,6 +21,9 @@ Decisiones arquitectónicas, límites y ownership, contratos, ADR, capacidades t
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — enforceable modular boundaries](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [Modular boundaries and architecture compliance](../../../docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+
 Leer completo el contrato central y los criterios del producto aplicables; en estándares extensos, leer íntegramente las secciones pertinentes antes de decidir:
 
 - [Estándar de gobierno arquitectónico y documental](../../../docs/rules/ENSAMBRIA_architecture_doc_engineering_governance_standard.md)
@@ -70,4 +73,4 @@ Si hay contradicción real entre código, roadmap, contrato, ADR o estándares, 
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Si cambia una fuente enlazada, revisa esta Skill en el mismo PR. Registra la fecha de revisión real; conserva versiones de fuente solo cuando existan.
+Revisada el 2026-11-24. Si cambia una fuente enlazada, revisa esta Skill en el mismo PR. Registra la fecha de revisión real; conserva versiones de fuente solo cuando existan.

@@ -7,6 +7,7 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
+ensambria-business-establishment-catalog-contracts = { path = "../business-establishment-catalog-contracts" }
 ensambria-core-tenancy-contracts = { path = "../core-tenancy-contracts" }
 ensambria-shared-cache = { path = "../shared-cache" }
 serde = { version = "1", features = ["derive"] }

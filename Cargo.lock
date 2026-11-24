@@ -564,21 +564,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ab6bbd053d3cdc62ba3de82aae11530a97bbd5b3a572fbdbcd0f0e545e3ff21"
 
 [[package]]
-name = "ensambria-business"
-version = "0.1.0"
-dependencies = [
- "ensambria-core-tenancy-contracts",
- "ensambria-shared-cache",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "ensambria-architecture-e2e"
 version = "0.1.0"
 dependencies = [
@@ -589,6 +574,22 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
+ "uuid",
+]
+
+[[package]]
+name = "ensambria-business"
+version = "0.1.0"
+dependencies = [
+ "ensambria-business-establishment-catalog-contracts",
+ "ensambria-core-tenancy-contracts",
+ "ensambria-shared-cache",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

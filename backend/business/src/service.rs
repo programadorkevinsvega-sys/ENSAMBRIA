@@ -57,7 +57,7 @@ impl BusinessService {
         }
 
         let rows = sqlx::query_as::<_, Establishment>(
-            "SELECT id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at FROM business.establishments WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT 200"
+            "SELECT id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at FROM business_establishment_catalog.establishments WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT 200"
         )
         .bind(tenant_id)
         .fetch_all(&mut *transaction)
@@ -108,7 +108,7 @@ impl BusinessService {
                 .map_err(map_tenancy_failure)?;
         }
         let row = sqlx::query_as::<_, Establishment>(
-            "INSERT INTO business.establishments (id, tenant_id, organization_id, branch_id, display_name, status) VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at"
+            "INSERT INTO business_establishment_catalog.establishments (id, tenant_id, organization_id, branch_id, display_name, status) VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at"
         )
         .bind(Uuid::now_v7())
         .bind(tenant_id)

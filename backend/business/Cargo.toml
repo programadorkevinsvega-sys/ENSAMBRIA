@@ -12,6 +12,8 @@ ensambria-shared-cache = { path = "../shared-cache" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "json", "migrate"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 
 [[bin]]

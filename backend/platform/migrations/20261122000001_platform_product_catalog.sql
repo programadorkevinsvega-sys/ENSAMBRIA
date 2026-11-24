@@ -249,15 +249,9 @@ REVOKE ALL ON ALL TABLES IN SCHEMA platform_product_catalog FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA platform_product_catalog FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA platform_product_catalog FROM PUBLIC;
 GRANT USAGE ON SCHEMA platform_product_catalog TO platform_product_catalog_runtime;
-GRANT SELECT ON
-    platform_product_catalog.products,
-    platform_product_catalog.product_configurations,
-    platform_product_catalog.product_domains,
-    platform_product_catalog.product_markets,
-    platform_product_catalog.product_surfaces,
-    platform_product_catalog.capability_catalog,
-    platform_product_catalog.product_capabilities,
-    platform_product_catalog.active_product_catalog
+-- Runtime consumers see only the published projection. Base catalogue tables
+-- remain private to the module owner and are not directly queryable.
+GRANT SELECT ON platform_product_catalog.active_product_catalog
 TO platform_product_catalog_runtime;
 
 COMMENT ON TABLE platform_product_catalog.products IS

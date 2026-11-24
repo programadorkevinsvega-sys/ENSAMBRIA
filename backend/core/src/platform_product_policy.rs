@@ -19,13 +19,18 @@ impl PlatformProductPolicy {
 
     /// Builds the transport adapter from deployment-provided mutual-TLS configuration.
     pub async fn from_env() -> Result<Self, PlatformContractError> {
-        let catalog = GrpcPlatformProductCatalog::from_env()
-            .await
-            .map_err(|error| match error {
-                ProductCatalogFailure::InvalidRequest => PlatformContractError::InvalidConfiguration,
-                ProductCatalogFailure::NotFound => PlatformContractError::ProductUnavailable,
-                ProductCatalogFailure::Unavailable => PlatformContractError::PlatformUnavailable,
-            })?;
+        let catalog =
+            GrpcPlatformProductCatalog::from_env()
+                .await
+                .map_err(|error| match error {
+                    ProductCatalogFailure::InvalidRequest => {
+                        PlatformContractError::InvalidConfiguration
+                    }
+                    ProductCatalogFailure::NotFound => PlatformContractError::ProductUnavailable,
+                    ProductCatalogFailure::Unavailable => {
+                        PlatformContractError::PlatformUnavailable
+                    }
+                })?;
         Ok(Self::new(Arc::new(catalog)))
     }
 

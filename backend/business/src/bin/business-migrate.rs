@@ -148,9 +148,9 @@ async fn apply_migrations(
         sqlx::query(
             "INSERT INTO business_establishment_catalog.schema_migrations (version) VALUES ($1)",
         )
-            .bind(version)
-            .execute(&mut *transaction)
-            .await?;
+        .bind(version)
+        .execute(&mut *transaction)
+        .await?;
     }
 
     transaction.commit().await?;

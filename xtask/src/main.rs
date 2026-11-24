@@ -165,7 +165,9 @@ fn architecture() -> Result<(), Vec<String>> {
 
     let business_service = read(root.join("backend/business/src/service.rs"), &mut errors);
     if business_service.contains("core.") || business_service.contains("platform.") {
-        errors.push("BUSINESS implementation contains a direct cross-owner schema reference".to_owned());
+        errors.push(
+            "BUSINESS implementation contains a direct cross-owner schema reference".to_owned(),
+        );
     }
     let business_bootstrap = read(
         root.join("backend/business/migrations/bootstrap/00000000000000_business_schema.sql"),
@@ -183,7 +185,11 @@ fn architecture() -> Result<(), Vec<String>> {
     {
         errors.push("BUSINESS establishments are not migrated to the owned schema".to_owned());
     }
-    require_file(root, "scripts/ci/check-business-module-isolation.sh", &mut errors);
+    require_file(
+        root,
+        "scripts/ci/check-business-module-isolation.sh",
+        &mut errors,
+    );
 
     let ci = read(
         root.join(".github/workflows/repository-quality.yml"),

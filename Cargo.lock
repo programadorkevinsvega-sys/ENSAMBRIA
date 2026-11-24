@@ -605,7 +605,6 @@ dependencies = [
  "base64 0.23.1",
  "ensambria-core-tenancy-contracts",
  "ensambria-event-bus",
- "ensambria-platform",
  "ensambria-platform-contract",
  "ensambria-shared-cache",
  "http",
@@ -654,6 +653,7 @@ dependencies = [
 name = "ensambria-platform"
 version = "0.1.0"
 dependencies = [
+ "ensambria-core",
  "ensambria-event-bus",
  "ensambria-platform-contract",
  "ensambria-shared-cache",

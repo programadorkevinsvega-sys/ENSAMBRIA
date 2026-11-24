@@ -66,7 +66,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
 
     let core_migrator_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("CORE_TEST_MIGRATOR_DATABASE_URL must be configured");
-    let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/migrations");
     run_core_migrations_from_path(&core_migrator_url, &migrations)
         .await
         .expect("CORE migrations must apply");

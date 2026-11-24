@@ -23,4 +23,5 @@ sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio
 uuid = { version = "1", features = ["v7", "serde"] }
 
 [dev-dependencies]
+ensambria-core = { path = "../core" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

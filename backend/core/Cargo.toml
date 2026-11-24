@@ -30,5 +30,3 @@ tonic-health = "0.14.9"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 
-[dev-dependencies]
-ensambria-platform = { path = "../platform" }

@@ -92,6 +92,10 @@ fn architecture() -> Result<(), Vec<String>> {
             "ensambria-core-tenancy-contracts =",
         ),
         (
+            "backend/core/Cargo.toml",
+            "ensambria-platform-product-catalog-contracts =",
+        ),
+        (
             "backend/business/Cargo.toml",
             "ensambria-business-establishment-catalog-contracts =",
         ),
@@ -130,6 +134,10 @@ fn architecture() -> Result<(), Vec<String>> {
             "impl TenancyAccess for CoreTenancyAccess",
         ),
         (
+            "backend/core/src/platform_product_catalog_grpc.rs",
+            "impl ProductCatalogPort for GrpcPlatformProductCatalog",
+        ),
+        (
             "backend/business/src/service.rs",
             "impl EstablishmentCatalog for BusinessService",
         ),
@@ -163,6 +171,26 @@ fn architecture() -> Result<(), Vec<String>> {
                 "architecture E2E harness must compose {dependency}"
             ));
         }
+    }
+
+    let core_policy = read(root.join("backend/core/src/platform_product_policy.rs"), &mut errors);
+    if core_policy.contains("ensambria_platform_contract") || core_policy.contains("tonic::") {
+        errors.push(
+            "CORE application policy must depend on the application contract, not Protobuf/Tonic"
+                .to_owned(),
+        );
+    }
+    let core_transport_adapter = read(
+        root.join("backend/core/src/platform_product_catalog_grpc.rs"),
+        &mut errors,
+    );
+    if !core_transport_adapter.contains("ensambria_platform_contract")
+        || !core_transport_adapter.contains("ProductCatalogPort for GrpcPlatformProductCatalog")
+    {
+        errors.push(
+            "CORE gRPC transport adapter must implement the PLATFORM application contract"
+                .to_owned(),
+        );
     }
 
     let business_forbidden = ["ensambria_core::", "ensambria_platform::"];

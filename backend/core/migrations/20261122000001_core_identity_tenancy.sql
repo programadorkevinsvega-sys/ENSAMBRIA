@@ -273,18 +273,17 @@ GRANT USAGE ON SCHEMA core_identity_auth TO core_identity_auth_runtime;
 GRANT SELECT, INSERT, UPDATE ON core_identity_auth.identities TO core_identity_auth_runtime;
 GRANT SELECT, INSERT ON core_identity_auth.security_audit_events TO core_identity_auth_runtime;
 
--- SQLx records this migration in core_tenancy._sqlx_migrations after executing it.
--- Leave the transaction under that schema owner for the migration bookkeeping write.
+COMMENT ON TABLE core_identity_auth.identities IS
+    'Global human identity owned by CORE; never grants tenant or product access by itself.';
+COMMENT ON TABLE core_identity_auth.security_audit_events IS
+    'Append-only security audit evidence; sensitive values and raw credentials are prohibited in metadata.';
+
 RESET ROLE;
 SET LOCAL ROLE core_tenancy_schema_owner;
 
-COMMENT ON TABLE core_identity_auth.identities IS
-    'Global human identity owned by CORE; never grants tenant or product access by itself.';
 COMMENT ON TABLE core_tenancy.tenant_memberships IS
     'Tenant-scoped relationship between a global identity and one tenant; authorization is evaluated per request.';
 COMMENT ON TABLE core_tenancy.tenant_products IS
     'CORE-owned technical tenant/product association; product_id and version are validated through PLATFORM contracts, never SQL joins.';
 COMMENT ON TABLE core_tenancy.permissions IS
     'Global, non-tenant permission vocabulary. Tenant roles bind these codes to scoped memberships.';
-COMMENT ON TABLE core_identity_auth.security_audit_events IS
-    'Append-only security audit evidence; sensitive values and raw credentials are prohibited in metadata.';

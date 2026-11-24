@@ -134,7 +134,9 @@ fn architecture() -> Result<(), Vec<String>> {
         &mut errors,
     );
     let inbox = read(
-        root.join("backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql"),
+        root.join(
+            "backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql",
+        ),
         &mut errors,
     );
     for field in [

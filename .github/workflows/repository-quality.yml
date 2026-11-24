@@ -129,10 +129,8 @@ jobs:
         run: docker run --rm -v "$PWD:/workspace" -w /workspace bufbuild/buf:1.50.0 lint
       - name: Reject breaking Protobuf changes against main
         run: >-
-          docker run --rm -v "$PWD:/workspace" -w /workspace
-          --entrypoint /bin/sh bufbuild/buf:1.50.0 -c
-          "git config --global --add safe.directory /workspace/.git &&
-          buf breaking --against '.git#branch=main,subdir=contracts/protobuf'"
+          docker run --rm -v "$PWD:/workspace" -w /workspace bufbuild/buf:1.50.0
+          breaking --against 'https://github.com/programadorkevinsvega-sys/ENSAMBRIA.git#branch=main,subdir=contracts/protobuf'
 
   deployment-contract:
     needs: changes

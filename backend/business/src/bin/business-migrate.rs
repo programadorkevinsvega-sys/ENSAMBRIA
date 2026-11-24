@@ -145,7 +145,9 @@ async fn apply_migrations(
         sqlx::raw_sql(sqlx::AssertSqlSafe(&*migration))
             .execute(&mut *transaction)
             .await?;
-        sqlx::query("INSERT INTO business_establishment_catalog.schema_migrations (version) VALUES ($1)")
+        sqlx::query(
+            "INSERT INTO business_establishment_catalog.schema_migrations (version) VALUES ($1)",
+        )
             .bind(version)
             .execute(&mut *transaction)
             .await?;
@@ -218,9 +220,10 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             failure_class = "business_establishment_catalog_schema_owner_missing_database_create",
             result = "failure"
         );
-        return Err(
-            io::Error::other("business_establishment_catalog_schema_owner requires CREATE on the database").into(),
-        );
+        return Err(io::Error::other(
+            "business_establishment_catalog_schema_owner requires CREATE on the database",
+        )
+        .into());
     }
 
     Ok(())

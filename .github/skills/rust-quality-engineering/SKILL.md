@@ -20,6 +20,9 @@ Inspección de cambios Rust, diseño de pruebas, errores, seguridad, concurrenci
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — enforceable modular boundaries](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [Modular boundaries and architecture compliance](../../../docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+
 - [Prompt de calidad empresarial para Rust](../../../docs/rules/ENSAMBRIA_prompt_maestro_enterprise_quality_engineering.md)
 - [k6 performance, load, stress and capacity testing](../../../docs/rules/ENSAMBRIA_k6_performance_load_stress_and_capacity_testing_rules.md) para diseño, ejecución segura y evidencia de pruebas de rendimiento.
 - [Estándar de gobierno del repositorio GitHub](../../../docs/rules/ENSAMBRIA_github_repository_governance_and_engineering_rules.md), para protección de ramas, PR, CI, seguridad de workflows y evidencia de integración.
@@ -67,4 +70,4 @@ Ante criterios incompatibles entre el requisito, arquitectura, prompts, código 
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Cuando cambie el prompt o el contrato citado, revisa la Skill y ejecuta el validador del repositorio. No inventes versiones.
+Revisada el 2026-11-24. Cuando cambie el prompt o el contrato citado, revisa la Skill y ejecuta el validador del repositorio. No inventes versiones.

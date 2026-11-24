@@ -14,7 +14,13 @@ fi
 # SQLx keeps its migration ledger in core_tenancy._sqlx_migrations. Every
 # migration must return to that schema owner before SQLx records its version.
 for migration in backend/core/migrations/*.sql; do
-    if ! tail -n 3 "$migration" | grep -Eq '^[[:space:]]*SET LOCAL ROLE core_tenancy_schema_owner;[[:space:]]*psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+    if ! tail -n 3 "$migration" | grep -Eq "^[[:space:]]*SET LOCAL ROLE core_tenancy_schema_owner;[[:space:]]*$"; then
+        echo "CORE migration must finish as core_tenancy_schema_owner for SQLx metadata: $migration" >&2
+        exit 1
+    fi
+done
+
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$
 DECLARE
     pair record;

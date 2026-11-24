@@ -2002,3 +2002,12 @@ Una plataforma:
 **ENSAMBRIA no debe ser un conjunto de aplicaciones independientes. Debe ser un ecosistema unificado cuyo núcleo común permita activar módulos especializados según las necesidades de cada negocio.**
 
 Cada decisión técnica debe acercar el producto a esa visión sin sacrificar la calidad, la seguridad ni la integridad de las operaciones.
+
+
+## 26. Fronteras modulares y aceptación arquitectónica obligatoria
+
+La implementación de cada bounded context funcional se materializa en un crate Rust propietario y un crate `*-contracts` independiente. Los consumidores solo dependen del crate de contratos; dominio, casos de uso internos, adapters, repositorios y modelos de persistencia no se comparten. Las operaciones síncronas internas usan trait + DTO propios e inyección en memoria mientras los módulos co-residen. Cada contrato Protobuf versionado existe desde el inicio; Tonic es adapter cuando se separen procesos. La decisión y los controles obligatorios están en [ADR-0012](adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y la [regla especializada](rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md).
+
+El ownership SQL se impone con roles PostgreSQL por módulo, grants mínimos y pruebas negativas con los mismos roles runtime que usan workers y pruebas funcionales. El inventario schema/tabla→backend→bounded context es obligatorio; el análisis estático SQL es defensa secundaria. Buf lint/breaking valida los contratos Protobuf. HTTP de negocio solo se expone mediante BFF autorizados. Eventos durables exigen la cadena Outbox/relay/JetStream/consumer/Inbox/ACK post-commit y recuperación.
+
+La topología de despliegue se verifica desde artefacto hasta proceso activo y conectado. El E2E de staging es gate de release, separado de integración PR y vinculado al SHA exacto desplegado. La matriz requisito→caso→prueba se versiona; CI inyecta SHA, run/job, resultados y evidencias. Ningún agente puede saltar, rebajar o exceptuar unilateralmente estos controles.

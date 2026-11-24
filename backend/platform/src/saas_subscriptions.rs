@@ -70,7 +70,7 @@ impl SaaSSubscriptions {
         if command.offer_version <= 0 || command.ends_at_epoch.is_some_and(|end| end <= now_epoch()) {
             return Err(SubscriptionError::InvalidInput);
         }
-        let request = json!({"action":"create","tenant_id":command.tenant_id,"product_id":command.product_id,
+        let request = json!({"action":"create","tenant_id":command.tenant_id,"actor_id":command.actor_id,"product_id":command.product_id,
             "offer_id":command.offer_id,"offer_version":command.offer_version,"ends_at_epoch":command.ends_at_epoch});
         let hash = request_hash(&request)?;
         let mut tx = self.pool.begin().await.map_err(|_| SubscriptionError::Storage)?;
@@ -108,7 +108,7 @@ impl SaaSSubscriptions {
             || (!matches!(command.action, SubscriptionAction::Renew) && command.new_ends_at_epoch.is_some()) {
             return Err(SubscriptionError::InvalidInput);
         }
-        let request = json!({"action":command.action,"subscription_id":command.subscription_id,
+        let request = json!({"action":command.action,"tenant_id":command.tenant_id,"actor_id":command.actor_id,"subscription_id":command.subscription_id,
             "expected_version":command.expected_version,"new_ends_at_epoch":command.new_ends_at_epoch,"reason_code":command.reason_code});
         let hash = request_hash(&request)?;
         let mut tx = self.pool.begin().await.map_err(|_| SubscriptionError::Storage)?;
@@ -125,7 +125,7 @@ impl SaaSSubscriptions {
         let status: String = row.get("status");
         let next = match command.action {
             SubscriptionAction::Suspend if status == "active" => "suspended",
-            SubscriptionAction::Reactivate if status == "suspended" => "active",
+            SubscriptionAction::Reactivate if status == "suspended" && row.get::<Option<i64>,_>("ends_at_epoch").is_none_or(|end| end > now_epoch()) => "active",
             SubscriptionAction::Renew if status == "active" || status == "suspended" => "active",
             SubscriptionAction::Cancel if status == "active" || status == "suspended" => "cancelled",
             SubscriptionAction::Expire if (status == "active" || status == "suspended") && row.get::<Option<i64>,_>("ends_at_epoch").is_some_and(|end| end <= now_epoch()) => "expired",

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use std::time::{SystemTime, UNIX_EPOCH};
 use ring::digest::{digest, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -23,19 +23,19 @@ impl SubscriptionAction {
 pub struct SubscriptionSnapshot {
     pub subscription_id: Uuid, pub tenant_id: Uuid, pub product_id: Uuid,
     pub offer_id: Uuid, pub offer_version: i32, pub status: String,
-    pub starts_at: DateTime<Utc>, pub ends_at: Option<DateTime<Utc>>, pub version: i64,
+    pub starts_at_epoch: i64, pub ends_at_epoch: Option<i64>, pub version: i64,
 }
 
 #[derive(Debug, Clone)]
 pub struct CreateSubscription {
     pub tenant_id: Uuid, pub product_id: Uuid, pub offer_id: Uuid, pub offer_version: i32,
-    pub actor_id: Uuid, pub idempotency_key: String, pub ends_at: Option<DateTime<Utc>>,
+    pub actor_id: Uuid, pub idempotency_key: String, pub ends_at_epoch: Option<i64>,
 }
 #[derive(Debug, Clone)]
 pub struct ChangeSubscription {
     pub tenant_id: Uuid, pub subscription_id: Uuid, pub actor_id: Uuid,
     pub idempotency_key: String, pub expected_version: i64, pub action: SubscriptionAction,
-    pub new_ends_at: Option<DateTime<Utc>>, pub reason_code: Option<String>,
+    pub new_ends_at_epoch: Option<i64>, pub reason_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -67,11 +67,11 @@ impl SaaSSubscriptions {
     /// This method sets transaction-local RLS scope but is not itself an authentication layer.
     pub async fn create(&self, command: CreateSubscription) -> Result<SubscriptionSnapshot, SubscriptionError> {
         validate_key(&command.idempotency_key)?;
-        if command.offer_version <= 0 || command.ends_at.is_some_and(|end| end <= Utc::now()) {
+        if command.offer_version <= 0 || command.ends_at_epoch.is_some_and(|end| end <= now_epoch()) {
             return Err(SubscriptionError::InvalidInput);
         }
         let request = json!({"action":"create","tenant_id":command.tenant_id,"product_id":command.product_id,
-            "offer_id":command.offer_id,"offer_version":command.offer_version,"ends_at":command.ends_at});
+            "offer_id":command.offer_id,"offer_version":command.offer_version,"ends_at_epoch":command.ends_at_epoch});
         let hash = request_hash(&request)?;
         let mut tx = self.pool.begin().await.map_err(|_| SubscriptionError::Storage)?;
         set_tenant(&mut tx, command.tenant_id).await?;
@@ -88,9 +88,9 @@ impl SaaSSubscriptions {
             return Err(SubscriptionError::OfferUnavailable);
         }
         let id = Uuid::now_v7();
-        let inserted = sqlx::query("INSERT INTO platform.saas_subscriptions (id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,created_by) VALUES ($1,$2,$3,$4,$5,'active',clock_timestamp(),$6,$7) ON CONFLICT DO NOTHING RETURNING id")
+        let inserted = sqlx::query("INSERT INTO platform.saas_subscriptions (id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,created_by) VALUES ($1,$2,$3,$4,$5,'active',clock_timestamp(),to_timestamp($6),$7) ON CONFLICT DO NOTHING RETURNING id")
             .bind(id).bind(command.tenant_id).bind(command.product_id).bind(command.offer_id)
-            .bind(command.offer_version).bind(command.ends_at).bind(command.actor_id)
+            .bind(command.offer_version).bind(command.ends_at_epoch).bind(command.actor_id)
             .fetch_optional(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
         if inserted.is_none() { return Err(SubscriptionError::AlreadyExists); }
         let snapshot = load_snapshot(&mut tx, command.tenant_id, id).await?;
@@ -104,12 +104,12 @@ impl SaaSSubscriptions {
     pub async fn change(&self, command: ChangeSubscription) -> Result<SubscriptionSnapshot, SubscriptionError> {
         validate_key(&command.idempotency_key)?;
         if command.expected_version <= 0 || command.reason_code.as_ref().is_some_and(|v| v.trim().is_empty() || v.len() > 80)
-            || (matches!(command.action, SubscriptionAction::Renew) && !command.new_ends_at.is_some_and(|end| end > Utc::now()))
-            || (!matches!(command.action, SubscriptionAction::Renew) && command.new_ends_at.is_some()) {
+            || (matches!(command.action, SubscriptionAction::Renew) && !command.new_ends_at_epoch.is_some_and(|end| end > now_epoch()))
+            || (!matches!(command.action, SubscriptionAction::Renew) && command.new_ends_at_epoch.is_some()) {
             return Err(SubscriptionError::InvalidInput);
         }
         let request = json!({"action":command.action,"subscription_id":command.subscription_id,
-            "expected_version":command.expected_version,"new_ends_at":command.new_ends_at,"reason_code":command.reason_code});
+            "expected_version":command.expected_version,"new_ends_at_epoch":command.new_ends_at_epoch,"reason_code":command.reason_code});
         let hash = request_hash(&request)?;
         let mut tx = self.pool.begin().await.map_err(|_| SubscriptionError::Storage)?;
         set_tenant(&mut tx, command.tenant_id).await?;
@@ -117,7 +117,7 @@ impl SaaSSubscriptions {
             tx.commit().await.map_err(|_| SubscriptionError::Storage)?;
             return decode_snapshot(value);
         }
-        let row = sqlx::query("SELECT status,ends_at,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2 FOR UPDATE")
+        let row = sqlx::query("SELECT status,extract(epoch from ends_at)::bigint AS ends_at_epoch,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2 FOR UPDATE")
             .bind(command.subscription_id).bind(command.tenant_id).fetch_optional(&mut *tx).await
             .map_err(|_| SubscriptionError::Storage)?.ok_or(SubscriptionError::NotFound)?;
         let current_version: i64 = row.get("version");
@@ -128,15 +128,13 @@ impl SaaSSubscriptions {
             SubscriptionAction::Reactivate if status == "suspended" => "active",
             SubscriptionAction::Renew if status == "active" || status == "suspended" => "active",
             SubscriptionAction::Cancel if status == "active" || status == "suspended" => "cancelled",
-            SubscriptionAction::Expire if status == "active" && row.get::<Option<DateTime<Utc>>,_>("ends_at").is_some_and(|end| end <= Utc::now()) => "expired",
+            SubscriptionAction::Expire if (status == "active" || status == "suspended") && row.get::<Option<i64>,_>("ends_at_epoch").is_some_and(|end| end <= now_epoch()) => "expired",
             _ => return Err(SubscriptionError::InvalidTransition),
         };
-        let new_end = if matches!(command.action, SubscriptionAction::Renew) { command.new_ends_at } else { row.get("ends_at") };
-        let suspended_at = if next == "suspended" { Some(Utc::now()) } else { None };
-        let cancelled_at = if next == "cancelled" { Some(Utc::now()) } else { None };
-        sqlx::query("UPDATE platform.saas_subscriptions SET status=$3,ends_at=$4,suspended_at=$5,cancelled_at=$6,version=$7,updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2 AND version=$8")
+        let new_end = if matches!(command.action, SubscriptionAction::Renew) { command.new_ends_at_epoch } else { row.get("ends_at_epoch") };
+        sqlx::query("UPDATE platform.saas_subscriptions SET status=$3,ends_at=to_timestamp($4),suspended_at=CASE WHEN $3='suspended' THEN clock_timestamp() ELSE NULL END,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE NULL END,version=$5,updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2 AND version=$6")
             .bind(command.subscription_id).bind(command.tenant_id).bind(next).bind(new_end)
-            .bind(suspended_at).bind(cancelled_at).bind(current_version + 1).bind(current_version)
+            .bind(current_version + 1).bind(current_version)
             .execute(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
         let snapshot = load_snapshot(&mut tx, command.tenant_id, command.subscription_id).await?;
         write_effects(&mut tx, &snapshot, command.actor_id, command.action.as_str(), Some(status), command.reason_code.as_deref()).await?;
@@ -148,12 +146,13 @@ impl SaaSSubscriptions {
     pub async fn get(&self, tenant_id: Uuid, subscription_id: Uuid) -> Result<Option<SubscriptionSnapshot>, SubscriptionError> {
         let mut tx = self.pool.begin().await.map_err(|_| SubscriptionError::Storage)?;
         set_tenant(&mut tx, tenant_id).await?;
-        let row = sqlx::query("SELECT id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2")
+        let row = sqlx::query("SELECT id,tenant_id,product_id,offer_id,offer_version,status,extract(epoch from starts_at)::bigint AS starts_at_epoch,extract(epoch from ends_at)::bigint AS ends_at_epoch,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2")
             .bind(subscription_id).bind(tenant_id).fetch_optional(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
         tx.commit().await.map_err(|_| SubscriptionError::Storage)?;
         row.map(snapshot_from_row).transpose()
     }
 }
+fn now_epoch() -> i64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64 }
 fn validate_key(key: &str) -> Result<(), SubscriptionError> {
     if !(16..=128).contains(&key.len()) || !key.bytes().all(|b| b.is_ascii_graphic()) { return Err(SubscriptionError::InvalidInput); }
     Ok(())
@@ -199,8 +198,8 @@ fn snapshot_from_row(row: sqlx::postgres::PgRow) -> Result<SubscriptionSnapshot,
         offer_id: row.try_get("offer_id").map_err(|_| SubscriptionError::Storage)?,
         offer_version: row.try_get("offer_version").map_err(|_| SubscriptionError::Storage)?,
         status: row.try_get("status").map_err(|_| SubscriptionError::Storage)?,
-        starts_at: row.try_get("starts_at").map_err(|_| SubscriptionError::Storage)?,
-        ends_at: row.try_get("ends_at").map_err(|_| SubscriptionError::Storage)?,
+        starts_at_epoch: row.try_get("starts_at_epoch").map_err(|_| SubscriptionError::Storage)?,
+        ends_at_epoch: row.try_get("ends_at_epoch").map_err(|_| SubscriptionError::Storage)?,
         version: row.try_get("version").map_err(|_| SubscriptionError::Storage)?,
     })
 }
@@ -209,7 +208,7 @@ async fn write_effects(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, s: &Subsc
     let kind = if action == "created" { "platform.saas-subscription.created.v1" } else { "platform.saas-subscription.changed.v1" };
     let payload = json!({"eventId":event_id,"tenantId":s.tenant_id,"subscriptionId":s.subscription_id,
         "productId":s.product_id,"offerId":s.offer_id,"offerVersion":s.offer_version,
-        "status":s.status,"startsAt":s.starts_at,"endsAt":s.ends_at,"aggregateVersion":s.version});
+        "status":s.status,"startsAtEpoch":s.starts_at_epoch,"endsAtEpoch":s.ends_at_epoch,"aggregateVersion":s.version});
     sqlx::query("INSERT INTO platform.saas_subscription_audit (audit_id,subscription_id,tenant_id,actor_id,action,previous_status,new_status,previous_version,new_version,reason_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
         .bind(Uuid::now_v7()).bind(s.subscription_id).bind(s.tenant_id).bind(actor).bind(action)
         .bind(previous).bind(&s.status).bind(if s.version > 1 { Some(s.version - 1) } else { None })

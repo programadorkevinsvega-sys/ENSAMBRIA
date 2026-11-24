@@ -119,8 +119,66 @@ CREATE TABLE platform.saas_subscription_commands (
     subscription_id uuid,
     response jsonb,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    PRIMARY KEY (tenant_id, idempotency_key)
+    PRIMARY KEY (tenant_id, idempotency_key),
+    FOREIGN KEY (subscription_id, tenant_id) REFERENCES platform.saas_subscriptions(id, tenant_id)
 );
+CREATE FUNCTION platform.prevent_published_offer_deletion()
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
+BEGIN
+    IF OLD.published_at IS NOT NULL THEN
+        RAISE EXCEPTION 'published offer versions cannot be deleted' USING ERRCODE = '55000';
+    END IF;
+    RETURN OLD;
+END $;
+CREATE TRIGGER commercial_offer_version_no_delete
+BEFORE DELETE ON platform.commercial_offer_versions
+FOR EACH ROW EXECUTE FUNCTION platform.prevent_published_offer_deletion();
+
+CREATE FUNCTION platform.protect_published_offer_identity()
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
+BEGIN
+    IF OLD.status <> 'draft' AND (
+        NEW.id IS DISTINCT FROM OLD.id OR NEW.product_id IS DISTINCT FROM OLD.product_id
+        OR NEW.offer_key IS DISTINCT FROM OLD.offer_key OR NEW.display_name IS DISTINCT FROM OLD.display_name
+        OR NEW.created_by IS DISTINCT FROM OLD.created_by
+    ) THEN
+        RAISE EXCEPTION 'published offer identity is immutable' USING ERRCODE = '55000';
+    END IF;
+    IF OLD.status = 'published' AND NEW.status NOT IN ('published','retired') THEN
+        RAISE EXCEPTION 'published offers can only remain published or be retired' USING ERRCODE = '55000';
+    END IF;
+    IF OLD.status = 'retired' AND NEW.status <> 'retired' THEN
+        RAISE EXCEPTION 'retired offers cannot be reactivated' USING ERRCODE = '55000';
+    END IF;
+    RETURN NEW;
+END $;
+CREATE TRIGGER commercial_offer_identity_immutable
+BEFORE UPDATE ON platform.commercial_offers
+FOR EACH ROW EXECUTE FUNCTION platform.protect_published_offer_identity();
+
+CREATE FUNCTION platform.validate_subscription_transition()
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
+BEGIN
+    IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.product_id IS DISTINCT FROM OLD.product_id
+       OR NEW.offer_id IS DISTINCT FROM OLD.offer_id OR NEW.offer_version IS DISTINCT FROM OLD.offer_version
+       OR NEW.created_by IS DISTINCT FROM OLD.created_by OR NEW.starts_at IS DISTINCT FROM OLD.starts_at THEN
+        RAISE EXCEPTION 'subscription contract identity is immutable' USING ERRCODE = '55000';
+    END IF;
+    IF NEW.version <> OLD.version + 1 THEN
+        RAISE EXCEPTION 'subscription version must increase exactly once' USING ERRCODE = '40001';
+    END IF;
+    IF NOT (
+        (OLD.status = 'active' AND NEW.status IN ('suspended','cancelled','expired'))
+        OR (OLD.status = 'suspended' AND NEW.status IN ('active','cancelled','expired'))
+    ) THEN
+        RAISE EXCEPTION 'invalid subscription lifecycle transition' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $;
+CREATE TRIGGER saas_subscription_transition_guard
+BEFORE UPDATE ON platform.saas_subscriptions
+FOR EACH ROW EXECUTE FUNCTION platform.validate_subscription_transition();
+
 CREATE TABLE platform.saas_subscription_outbox (
     event_id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
@@ -155,10 +213,8 @@ BEGIN
     END LOOP;
 END $$;
 ALTER TABLE platform.commercial_offers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform.commercial_offers FORCE ROW LEVEL SECURITY;
 CREATE POLICY commercial_offers_read_published ON platform.commercial_offers FOR SELECT USING (status = 'published');
 ALTER TABLE platform.commercial_offer_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform.commercial_offer_versions FORCE ROW LEVEL SECURITY;
 CREATE POLICY commercial_offer_versions_read_published ON platform.commercial_offer_versions FOR SELECT USING (status = 'published');
 
 REVOKE ALL ON platform.commercial_offers, platform.commercial_offer_versions,

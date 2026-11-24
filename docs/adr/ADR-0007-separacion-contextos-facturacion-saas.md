@@ -72,3 +72,8 @@ Estas pendientes no bloquean la separación arquitectónica ni las actividades i
 - [ADR-0002: onboarding CORE→PLATFORM](ADR-0002-outbox-alta-tenant-core-platform.md)
 - [Guía de Outbox/Inbox](../rules/ENSAMBRIA_Transactional_Outbox_Inbox.md)
 - [Guía de pooling PostgreSQL](../rules/ENSAMBRIA_Connection_Pooling_PostgreSQL.md)
+
+
+## Enforcement del ownership comercial
+
+La separación de catálogo/políticas comerciales y suscripciones se aplica también en PostgreSQL: cada bounded context posee sus tablas y su rol runtime. Suscripciones no consulta directamente tablas internas del contexto de políticas/ofertas; utiliza el contrato público trait/DTO en memoria mientras co-residen y Protobuf/Tonic cuando se separen. El crate consumidor depende solo del crate `*-contracts` del owner. Las pruebas negativas de grants y el validador de arquitectura verifican la frontera. Véase [ADR-0012](ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md).

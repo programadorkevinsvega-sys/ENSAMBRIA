@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .json()
-        .try_init()?;
+        .try_init().map_err(io::Error::other)?;
     let mut arguments = std::env::args_os().skip(1);
     let migrations_directory = arguments
         .next()

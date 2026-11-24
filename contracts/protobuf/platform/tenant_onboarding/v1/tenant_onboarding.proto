@@ -1,0 +1,8 @@
+syntax = "proto3";
+package ensambria.platform.tenantonboarding.v1;
+
+service TenantOnboarding {
+  rpc ApplyTenantCreated(TenantCreated) returns (ApplyTenantCreatedResponse);
+}
+message TenantCreated { string event_id = 1; string tenant_id = 2; string product_id = 3; uint32 product_config_version = 4; int64 aggregate_version = 5; string correlation_id = 6; bytes payload_sha256 = 7; }
+message ApplyTenantCreatedResponse { enum Outcome { OUTCOME_UNSPECIFIED = 0; APPLIED = 1; DUPLICATE = 2; QUARANTINED = 3; } Outcome outcome = 1; }

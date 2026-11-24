@@ -57,6 +57,12 @@ CREATE SCHEMA IF NOT EXISTS business_establishment_catalog AUTHORIZATION busines
 CREATE SCHEMA IF NOT EXISTS platform_product_catalog AUTHORIZATION platform_product_catalog_schema_owner;
 CREATE SCHEMA IF NOT EXISTS platform_tenant_onboarding AUTHORIZATION platform_tenant_onboarding_schema_owner;
 
+ALTER SCHEMA core_identity_auth OWNER TO core_identity_auth_schema_owner;
+ALTER SCHEMA core_tenancy OWNER TO core_tenancy_schema_owner;
+ALTER SCHEMA business_establishment_catalog OWNER TO business_establishment_catalog_schema_owner;
+ALTER SCHEMA platform_product_catalog OWNER TO platform_product_catalog_schema_owner;
+ALTER SCHEMA platform_tenant_onboarding OWNER TO platform_tenant_onboarding_schema_owner;
+
 REVOKE ALL ON SCHEMA
     core_identity_auth,
     core_tenancy,

@@ -3,6 +3,8 @@
 -- CORE application boundary; this schema stores only encoded Argon2id hashes,
 -- one-way token digests and encrypted MFA material.
 
+SET LOCAL ROLE core_identity_auth_schema_owner;
+
 CREATE TABLE core_identity_auth.identity_credentials (
     identity_id uuid PRIMARY KEY REFERENCES core_identity_auth.identities(id) ON DELETE CASCADE,
     password_hash text NOT NULL,

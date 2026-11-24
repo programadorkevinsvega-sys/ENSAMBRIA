@@ -17,7 +17,9 @@ BEGIN
     FOR pair IN
         SELECT * FROM (VALUES
             ('core_identity_auth_runtime', 'core_identity_auth', 'core_identity_auth_schema_owner'),
-            ('core_tenancy_runtime', 'core_tenancy', 'core_tenancy_schema_owner')
+            ('core_tenancy_runtime', 'core_tenancy', 'core_tenancy_schema_owner'),
+            ('core_email_worker', 'core_identity_auth', 'core_identity_auth_schema_owner'),
+            ('core_outbox_relay', 'core_tenancy', 'core_tenancy_schema_owner')
         ) AS expected(runtime_role, schema_name, owner_role)
     LOOP
         IF NOT has_schema_privilege(pair.runtime_role, pair.schema_name, 'USAGE') THEN
@@ -156,17 +158,27 @@ BEGIN
         RAISE EXCEPTION 'PUBLIC has USAGE or CREATE on a module schema';
     END IF;
 
-    IF NOT has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.identities', 'SELECT,INSERT,UPDATE')
+    IF NOT has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.identities', 'SELECT')
+       OR NOT has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.identities', 'INSERT')
+       OR NOT has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.identities', 'UPDATE')
        OR has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.identities', 'DELETE')
        OR NOT has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.email_outbox', 'INSERT')
        OR has_table_privilege('core_identity_auth_runtime', 'core_identity_auth.email_outbox', 'SELECT')
-       OR NOT has_table_privilege('core_tenancy_runtime', 'core_tenancy.tenants', 'SELECT,INSERT,UPDATE')
+       OR NOT has_table_privilege('core_tenancy_runtime', 'core_tenancy.tenants', 'SELECT')
+       OR NOT has_table_privilege('core_tenancy_runtime', 'core_tenancy.tenants', 'INSERT')
+       OR NOT has_table_privilege('core_tenancy_runtime', 'core_tenancy.tenants', 'UPDATE')
        OR NOT has_table_privilege('core_tenancy_runtime', 'core_tenancy.outbox_events', 'INSERT')
-       OR has_table_privilege('core_tenancy_runtime', 'core_tenancy.outbox_events', 'SELECT,UPDATE,DELETE')
-       OR NOT has_table_privilege('core_email_worker', 'core_identity_auth.email_outbox', 'SELECT,UPDATE')
-       OR has_table_privilege('core_email_worker', 'core_identity_auth.email_outbox', 'INSERT,DELETE')
-       OR NOT has_table_privilege('core_outbox_relay', 'core_tenancy.outbox_events', 'SELECT,UPDATE')
-       OR has_table_privilege('core_outbox_relay', 'core_tenancy.outbox_events', 'INSERT,DELETE') THEN
+       OR has_table_privilege('core_tenancy_runtime', 'core_tenancy.outbox_events', 'SELECT')
+       OR has_table_privilege('core_tenancy_runtime', 'core_tenancy.outbox_events', 'UPDATE')
+       OR has_table_privilege('core_tenancy_runtime', 'core_tenancy.outbox_events', 'DELETE')
+       OR NOT has_table_privilege('core_email_worker', 'core_identity_auth.email_outbox', 'SELECT')
+       OR NOT has_table_privilege('core_email_worker', 'core_identity_auth.email_outbox', 'UPDATE')
+       OR has_table_privilege('core_email_worker', 'core_identity_auth.email_outbox', 'INSERT')
+       OR has_table_privilege('core_email_worker', 'core_identity_auth.email_outbox', 'DELETE')
+       OR NOT has_table_privilege('core_outbox_relay', 'core_tenancy.outbox_events', 'SELECT')
+       OR NOT has_table_privilege('core_outbox_relay', 'core_tenancy.outbox_events', 'UPDATE')
+       OR has_table_privilege('core_outbox_relay', 'core_tenancy.outbox_events', 'INSERT')
+       OR has_table_privilege('core_outbox_relay', 'core_tenancy.outbox_events', 'DELETE') THEN
         RAISE EXCEPTION 'CORE runtime/worker object grants do not match least-privilege contract';
     END IF;
 

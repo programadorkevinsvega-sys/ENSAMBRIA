@@ -164,6 +164,27 @@ fn architecture() -> Result<(), Vec<String>> {
         "backend/architecture-e2e/tests/core_product_catalog_contract.rs",
         &mut errors,
     );
+    require_file(
+        root,
+        "scripts/ci/check-core-module-isolation.sh",
+        &mut errors,
+    );
+    let quality_workflow = read(
+        root.join(".github/workflows/repository-quality.yml"),
+        &mut errors,
+    );
+    if !quality_workflow.contains("bash scripts/ci/check-core-module-isolation.sh") {
+        errors.push(
+            "PostgreSQL CI must execute the CORE runtime and worker isolation proof".to_owned(),
+        );
+    }
+    if quality_workflow.contains("core.outbox_events")
+        || quality_workflow.contains("core.auth_rotate_refresh_token")
+    {
+        errors.push(
+            "PostgreSQL CI must not reference the removed legacy CORE schema".to_owned(),
+        );
+    }
     let e2e_manifest = read(root.join("backend/architecture-e2e/Cargo.toml"), &mut errors);
     for dependency in ["ensambria-core =", "ensambria-platform ="] {
         if !e2e_manifest.contains(dependency) {

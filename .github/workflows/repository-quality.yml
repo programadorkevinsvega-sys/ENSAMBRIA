@@ -589,7 +589,7 @@ jobs:
             -c "CREATE ROLE business_runtime LOGIN PASSWORD 'ensambria-ci-only';"
 
       - name: Build the actual BUSINESS HTTP runtime
-        run: cargo build --locked -p ensambria-business --bin business
+        run: cargo build --locked -p ensambria-business-runtime --bin business
 
       - name: Build shared Redis runtime smoke test
         run: cargo build --locked -p ensambria-shared-cache --example redis_ha_smoke

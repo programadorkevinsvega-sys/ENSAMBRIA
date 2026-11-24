@@ -109,6 +109,9 @@ jobs:
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
+      - name: Enforce modular architecture and ownership contracts
+        run: cargo xtask architecture
+
 
   protobuf-contracts:
     name: protobuf-contracts

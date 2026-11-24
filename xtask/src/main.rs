@@ -109,7 +109,7 @@ fn architecture() -> Result<(), Vec<String>> {
 
     let outbox = read(root.join("backend/core/migrations/20261122000011_core_tenant_created_outbox.sql"), &mut errors);
     let inbox = read(root.join("backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql"), &mut errors);
-    for field in ["event_id", "aggregate_version", "correlation_id", "payload_hash", "published_at"] {
+    for field in ["event_id", "aggregate_version", "correlation_id", "payload", "published_at"] {
         if !outbox.contains(field) {
             errors.push(format!("CORE Outbox contract is missing {field}"));
         }

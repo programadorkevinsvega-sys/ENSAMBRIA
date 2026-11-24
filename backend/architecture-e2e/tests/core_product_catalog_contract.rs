@@ -165,7 +165,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
         .await
         .expect("PLATFORM domain resolver must be reachable")
         .expect("published verified domain must resolve");
-    assert_eq!(resolved.product_id, product_id.to_string());
+    assert_eq!(resolved.product_id, product_id);
 
     let _ = shutdown_sender.send(());
     server

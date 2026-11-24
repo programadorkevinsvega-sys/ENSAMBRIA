@@ -21,6 +21,9 @@ Protección de ramas, estrategia de ramas y commits, Pull Requests, revisiones, 
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — enforceable modular boundaries](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [Modular boundaries and architecture compliance](../../../docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+
 - [GitHub Repository Governance and Engineering Rules](../../../docs/rules/ENSAMBRIA_github_repository_governance_and_engineering_rules.md)
 - [Contrato integrado de arquitectura, políticas y responsabilidades de ENSAMBRIA](../../../ARCHITECTURE_RULES.md)
 - [Requisitos y roadmap ENSAMBRIA](../../../docs/requerimiento.md), solo para alcance y fase específicos del producto.
@@ -69,4 +72,4 @@ Si una regla general contradice una decisión de arquitectura o una política es
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Cuando cambie el estándar de gobierno GitHub o las obligaciones aplicables de ENSAMBRIA, revisa esta Skill y su registro en el mismo cambio. Conserva únicamente fechas y decisiones verificables.
+Revisada el 2026-11-24. Cuando cambie el estándar de gobierno GitHub o las obligaciones aplicables de ENSAMBRIA, revisa esta Skill y su registro en el mismo cambio. Conserva únicamente fechas y decisiones verificables.

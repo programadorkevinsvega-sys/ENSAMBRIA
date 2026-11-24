@@ -93,6 +93,8 @@ modules:
       - product_surfaces
       - capability_catalog
       - product_capabilities
+    views:
+      - active_product_catalog
     contract_dependencies: []
   - id: platform.tenant-onboarding
     backend: PLATFORM

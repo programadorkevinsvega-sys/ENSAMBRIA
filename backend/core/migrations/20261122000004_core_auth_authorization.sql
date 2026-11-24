@@ -3,7 +3,7 @@
 -- CORE application boundary; this schema stores only encoded Argon2id hashes,
 -- one-way token digests and encrypted MFA material.
 
-SET LOCAL ROLE core_identity_auth_schema_owner;
+SET ROLE core_identity_auth_schema_owner;
 
 CREATE TABLE core_identity_auth.identity_credentials (
     identity_id uuid PRIMARY KEY REFERENCES core_identity_auth.identities(id) ON DELETE CASCADE,
@@ -130,7 +130,7 @@ $$;
 
 -- Authorization is evaluated from the authenticated actor context + active membership +
 -- explicit scoped role assignment. No default role or implicit membership.
-SET LOCAL ROLE core_tenancy_schema_owner;
+SET ROLE core_tenancy_schema_owner;
 
 CREATE OR REPLACE FUNCTION core_tenancy.has_permission(
     p_actor_id uuid,
@@ -236,7 +236,7 @@ AS $$
        AND (b.id IS NULL OR b.status = 'active')
 $$;
 
-SET LOCAL ROLE core_identity_auth_schema_owner;
+SET ROLE core_identity_auth_schema_owner;
 
 -- All auth records are actor-scoped after authentication. Pre-authentication
 -- access is available only through the narrow functions above.
@@ -299,4 +299,4 @@ COMMENT ON TABLE core_identity_auth.auth_rate_limits IS
     'Pre-authentication throttling state keyed by a keyed digest; direct reads are denied.';
 
 -- SQLx stores migration history in core_tenancy; finish as its schema owner.
-SET LOCAL ROLE core_tenancy_schema_owner;
+SET ROLE core_tenancy_schema_owner;

@@ -2,6 +2,14 @@
 set -euo pipefail
 
 : "${TEST_DATABASE_URL:?TEST_DATABASE_URL is required}"
+
+# core-migrate keeps the SQLx migration ledger under core_tenancy_schema_owner.
+# RESET ROLE would silently drop that owner context back to core_migrator before
+# SQLx writes its migration record, causing permission failures and partial runs.
+if grep -RInE '^[[:space:]]*RESET[[:space:]]+ROLE[[:space:]]*;' backend/core/migrations; then
+    echo "CORE migrations must switch owners with SET LOCAL ROLE; RESET ROLE breaks SQLx metadata ownership." >&2
+    exit 1
+fi
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$
 DECLARE

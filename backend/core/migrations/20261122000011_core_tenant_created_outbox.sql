@@ -1,8 +1,11 @@
+RESET ROLE;
+SET LOCAL ROLE core_tenancy_schema_owner;
+
 -- Durable CORE -> PLATFORM tenant-created event delivery (subphase 1.3).
 -- The business mutation and this row must be inserted in the same CORE transaction.
-CREATE TABLE core.outbox_events (
+CREATE TABLE core_tenancy.outbox_events (
     event_id uuid PRIMARY KEY,
-    event_type text NOT NULL CHECK (event_type = 'core.tenant.created.v1'),
+    event_type text NOT NULL CHECK (event_type = 'core_tenancy.tenant.created.v1'),
     schema_version integer NOT NULL CHECK (schema_version = 1),
     aggregate_type text NOT NULL CHECK (aggregate_type = 'tenant'),
     aggregate_id uuid NOT NULL,
@@ -40,32 +43,34 @@ CREATE TABLE core.outbox_events (
 );
 
 CREATE INDEX outbox_events_claim_idx
-    ON core.outbox_events (available_at, occurred_at, event_id)
+    ON core_tenancy.outbox_events (available_at, occurred_at, event_id)
     WHERE status IN ('pending', 'retry_wait');
 
 CREATE INDEX outbox_events_expired_lease_idx
-    ON core.outbox_events (lease_until, occurred_at, event_id)
+    ON core_tenancy.outbox_events (lease_until, occurred_at, event_id)
     WHERE status = 'leased';
 
-ALTER TABLE core.outbox_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE core.outbox_events FORCE ROW LEVEL SECURITY;
-CREATE POLICY outbox_tenant_insert ON core.outbox_events
-    FOR INSERT TO core_runtime
+ALTER TABLE core_tenancy.outbox_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE core_tenancy.outbox_events FORCE ROW LEVEL SECURITY;
+CREATE POLICY outbox_tenant_insert ON core_tenancy.outbox_events
+    FOR INSERT TO core_tenancy_runtime
     WITH CHECK (
         aggregate_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid
     );
-CREATE POLICY outbox_relay_read ON core.outbox_events
+CREATE POLICY outbox_relay_read ON core_tenancy.outbox_events
     FOR SELECT TO core_outbox_relay
     USING (true);
-CREATE POLICY outbox_relay_update ON core.outbox_events
+CREATE POLICY outbox_relay_update ON core_tenancy.outbox_events
     FOR UPDATE TO core_outbox_relay
     USING (true)
     WITH CHECK (true);
 
-REVOKE ALL ON core.outbox_events FROM PUBLIC;
+REVOKE ALL ON core_tenancy.outbox_events FROM PUBLIC;
 GRANT USAGE ON SCHEMA core TO core_outbox_relay;
-GRANT INSERT ON core.outbox_events TO core_runtime;
-GRANT SELECT, UPDATE ON core.outbox_events TO core_outbox_relay;
+GRANT INSERT ON core_tenancy.outbox_events TO core_tenancy_runtime;
+GRANT SELECT, UPDATE ON core_tenancy.outbox_events TO core_outbox_relay;
 
-COMMENT ON TABLE core.outbox_events IS
+COMMENT ON TABLE core_tenancy.outbox_events IS
     'Durable CORE-owned facts awaiting confirmed JetStream publication; inserted atomically with the tenant aggregate.';
+
+GRANT USAGE ON SCHEMA core_tenancy TO core_outbox_relay;

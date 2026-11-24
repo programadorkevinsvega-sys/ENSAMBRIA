@@ -102,9 +102,9 @@ impl PlatformTenantOnboarding {
             match existing.6.as_str() {
                 "applied" => {
                     transaction
-                        .commit()
-                        .await
-                        .map_err(|_| OnboardingFailure::Unavailable)?;
+                .commit()
+                .await
+                .map_err(|_| OnboardingFailure::Unavailable)?;
                     return Ok(OnboardingOutcome::Duplicate);
                 }
                 "quarantined" => {

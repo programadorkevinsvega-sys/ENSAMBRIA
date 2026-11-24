@@ -27,10 +27,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         .acquire_timeout(Duration::from_secs(5))
         .connect(&env::var("PLATFORM_TENANT_ONBOARDING_DATABASE_URL")?)
         .await?;
-    let product_catalog: Arc<dyn ProductCatalogPort> =
-        Arc::new(ProductCatalog::new(product_pool));
-    let onboarding: Arc<dyn TenantOnboarding> =
-        Arc::new(PlatformTenantOnboarding::new(onboarding_pool, product_catalog));
+    let product_catalog: Arc<dyn ProductCatalogPort> = Arc::new(ProductCatalog::new(product_pool));
+    let onboarding: Arc<dyn TenantOnboarding> = Arc::new(PlatformTenantOnboarding::new(
+        onboarding_pool,
+        product_catalog,
+    ));
     let jetstream = connect_jetstream(&env::var("ENSAMBRIA_NATS_URL")?).await?;
     tenant_onboarding_consumer::run(onboarding, jetstream).await
 }

@@ -86,6 +86,7 @@ CREATE TABLE platform.saas_subscriptions (
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     FOREIGN KEY (offer_id, offer_version) REFERENCES platform.commercial_offer_versions(offer_id, version),
+    FOREIGN KEY (offer_id, product_id) REFERENCES platform.commercial_offers(id, product_id),
     UNIQUE (id, tenant_id),
     CHECK (ends_at IS NULL OR ends_at > starts_at),
     CHECK ((status = 'suspended') = (suspended_at IS NOT NULL)),
@@ -168,7 +169,7 @@ BEGIN
         RAISE EXCEPTION 'subscription version must increase exactly once' USING ERRCODE = '40001';
     END IF;
     IF NOT (
-        (OLD.status = 'active' AND NEW.status IN ('suspended','cancelled','expired'))
+        (OLD.status = 'active' AND NEW.status IN ('active','suspended','cancelled','expired'))
         OR (OLD.status = 'suspended' AND NEW.status IN ('active','cancelled','expired'))
     ) THEN
         RAISE EXCEPTION 'invalid subscription lifecycle transition' USING ERRCODE = '23514';

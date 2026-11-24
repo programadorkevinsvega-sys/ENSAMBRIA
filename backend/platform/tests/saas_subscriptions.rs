@@ -4,13 +4,14 @@ use uuid::Uuid;
 
 const PRODUCT_ID: &str = "018f0f2a-7b3c-7abc-8def-0123456789ab";
 const OFFER_ID: &str = "018f0f2a-7b3c-7abc-8def-0123456789b1";
+const TENANT_ID: &str = "018f0f2a-7b3c-7abc-8def-0123456789ae";
 
 #[tokio::test]
 async fn subscription_lifecycle_is_idempotent_versioned_and_tenant_scoped() {
     let url = std::env::var("PLATFORM_TEST_DATABASE_URL").expect("CI configures PLATFORM_TEST_DATABASE_URL");
     let pool = PgPool::connect(&url).await.unwrap();
     let service = SaaSSubscriptions::new(pool.clone());
-    let tenant = Uuid::now_v7();
+    let tenant = Uuid::parse_str(TENANT_ID).unwrap();
     let actor = Uuid::now_v7();
     let create = CreateSubscription { tenant_id: tenant, product_id: Uuid::parse_str(PRODUCT_ID).unwrap(),
         offer_id: Uuid::parse_str(OFFER_ID).unwrap(), offer_version: 1, actor_id: actor,

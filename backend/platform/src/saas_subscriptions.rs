@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ring::digest::{digest, SHA256};
+use ring::digest::{SHA256, digest};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{PgPool, Row, types::Json};
@@ -112,10 +112,7 @@ impl SaaSSubscriptions {
         command: CreateSubscription,
     ) -> Result<SubscriptionSnapshot, SubscriptionError> {
         validate_key(&command.idempotency_key)?;
-        if command.offer_version <= 0
-            || command
-                .ends_at_epoch
-                .is_some_and(|end| end <= now_epoch())
+        if command.offer_version <= 0 || command.ends_at_epoch.is_some_and(|end| end <= now_epoch())
         {
             return Err(SubscriptionError::InvalidInput);
         }
@@ -298,8 +295,7 @@ impl SaaSSubscriptions {
         let next_status = match command.action {
             SubscriptionAction::Suspend if status == "active" => "suspended",
             SubscriptionAction::Reactivate
-                if status == "suspended"
-                    && previous_end.is_none_or(|end| end > now_epoch()) =>
+                if status == "suspended" && previous_end.is_none_or(|end| end > now_epoch()) =>
             {
                 "active"
             }
@@ -523,23 +519,33 @@ fn snapshot_from_row(
 ) -> Result<SubscriptionSnapshot, SubscriptionError> {
     Ok(SubscriptionSnapshot {
         subscription_id: row.try_get("id").map_err(|_| SubscriptionError::Storage)?,
-        tenant_id: row.try_get("tenant_id").map_err(|_| SubscriptionError::Storage)?,
-        product_id: row.try_get("product_id").map_err(|_| SubscriptionError::Storage)?,
-        offer_id: row.try_get("offer_id").map_err(|_| SubscriptionError::Storage)?,
+        tenant_id: row
+            .try_get("tenant_id")
+            .map_err(|_| SubscriptionError::Storage)?,
+        product_id: row
+            .try_get("product_id")
+            .map_err(|_| SubscriptionError::Storage)?,
+        offer_id: row
+            .try_get("offer_id")
+            .map_err(|_| SubscriptionError::Storage)?,
         offer_version: row
             .try_get("offer_version")
             .map_err(|_| SubscriptionError::Storage)?,
         entitlements: row
             .try_get("entitlements_snapshot")
             .map_err(|_| SubscriptionError::Storage)?,
-        status: row.try_get("status").map_err(|_| SubscriptionError::Storage)?,
+        status: row
+            .try_get("status")
+            .map_err(|_| SubscriptionError::Storage)?,
         starts_at_epoch: row
             .try_get("starts_at_epoch")
             .map_err(|_| SubscriptionError::Storage)?,
         ends_at_epoch: row
             .try_get("ends_at_epoch")
             .map_err(|_| SubscriptionError::Storage)?,
-        version: row.try_get("version").map_err(|_| SubscriptionError::Storage)?,
+        version: row
+            .try_get("version")
+            .map_err(|_| SubscriptionError::Storage)?,
     })
 }
 
@@ -618,10 +624,7 @@ mod tests {
 
     #[test]
     fn idempotency_key_is_bounded_and_printable() {
-        assert_eq!(
-            validate_key("short"),
-            Err(SubscriptionError::InvalidInput)
-        );
+        assert_eq!(validate_key("short"), Err(SubscriptionError::InvalidInput));
         assert_eq!(validate_key("request-key-000001"), Ok(()));
         assert_eq!(
             validate_key("contains space 123"),

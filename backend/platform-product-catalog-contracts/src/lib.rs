@@ -15,7 +15,6 @@ pub struct ProductCatalogEntry {
     pub brand_name: String,
     pub configuration_version: u32,
     pub configuration_schema_version: String,
-    pub configuration: Value,
     pub domains: Vec<ProductDomain>,
     pub markets: Vec<ProductMarket>,
     pub surfaces: Vec<ProductSurface>,

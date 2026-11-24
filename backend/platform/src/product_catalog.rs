@@ -329,7 +329,6 @@ fn to_contract_entry(
             configuration_version: u32::try_from(product.configuration_version)
                 .map_err(|_| ProductCatalogFailure::InvalidRequest)?,
             configuration_schema_version: product.configuration_schema_version,
-            configuration: product.configuration,
             domains: product
                 .domains
                 .into_iter()

@@ -623,7 +623,9 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "base64 0.23.1",
+ "ensambria-core-identity-auth-contracts",
  "ensambria-core-tenancy-contracts",
+ "ensambria-platform-product-catalog-contracts",
  "ensambria-event-bus",
  "ensambria-platform-contract",
  "ensambria-shared-cache",

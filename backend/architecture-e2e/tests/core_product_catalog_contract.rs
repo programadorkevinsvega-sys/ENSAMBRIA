@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
+    platform_product_catalog_grpc::GrpcPlatformProductCatalog,
     platform_product_policy::{PlatformContractError, PlatformProductPolicy},
     postgres::{ActorContext, ActorId, TenantContext, TenantId},
 };
@@ -57,7 +60,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     assert_eq!(configuration.version, 1);
     assert!(!configuration.canonical_json.is_empty());
 
-    let policy = PlatformProductPolicy::new(client);
+    let policy = PlatformProductPolicy::new(Arc::new(GrpcPlatformProductCatalog::new(client)));
     let product = policy
         .require_capability(product_id, "identity.auth", "v1", 1)
         .await

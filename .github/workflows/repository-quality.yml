@@ -21,12 +21,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: classify changed files
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify documentation-only changes
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docs_only=true
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+            git cat-file -e "$base^{commit}"
+            mapfile -t changed < <(git diff --name-only "$base"...HEAD)
+          elif [[ "$EVENT_NAME" == "merge_group" ]]; then
+            base="$MERGE_BASE_SHA"
+            git cat-file -e "$base^{commit}"
+            mapfile -t changed < <(git diff --name-only "$base"...HEAD)
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
+              docs_only=false
+              changed=(initial-push)
+            else
+              mapfile -t changed < <(git diff --name-only "$PUSH_BEFORE_SHA" "$EXPECTED_SHA")
+            fi
+          else
+            docs_only=false
+            changed=(manual-or-unsupported-event)
+          fi
+          if (( ${#changed[@]} == 0 )); then docs_only=false; fi
+          for path in "${changed[@]}"; do
+            if [[ "$path" != *.md && "$path" != *.mdx && "$path" != docs/* && "$path" != documentation/* ]]; then
+              docs_only=false
+              break
+            fi
+          done
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          printf 'Documentation-only change: %s\n' "$docs_only"
+          printf '%s\n' "${changed[@]}"
   # The full suite runs before integration (PR / merge queue / manual runs).
   # A push to main only gets a cheap SHA gate; the protected PR already ran
   # the full suite, so do not execute the same expensive matrix a second time.
   rust-workspace-quality:
     name: rust-workspace-quality
-    if: github.event_name != 'push'
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -58,7 +111,8 @@ jobs:
 
 
   deployment-contract:
-    if: github.event_name != 'push'
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     name: deployment-contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -114,13 +168,18 @@ jobs:
           grep -Fq 'core-staging.tar.gz' backend/core/deployment/deploy-staging.sh
           # Keep the main push path cheap while preserving the PR aggregate gate.
           grep -Fq 'main-push-gate:' .github/workflows/repository-quality.yml
+          grep -Fq 'classify changed files' .github/workflows/repository-quality.yml
+          grep -Fq "needs.changes.outputs.docs_only != 'true'" .github/workflows/repository-quality.yml
+          grep -Fq 'change-classification' .github/workflows/repository-quality.yml
+          grep -Fq 'needs.change-classification.outputs.docs_only !=' .github/workflows/core-staging-deploy.yml
           grep -Fq "if: github.event_name == 'push'" .github/workflows/repository-quality.yml
           grep -Fq 'needs:' .github/workflows/repository-quality.yml
           grep -Fq 'ref: ${{ github.event.workflow_run.head_sha }}' .github/workflows/core-staging-deploy.yml
 
   postgres-integration:
-    if: github.event_name != 'push'
     name: postgres-integration
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -419,8 +478,9 @@ jobs:
 
 
   redis-ha-integration:
-    if: github.event_name != 'push'
     name: redis-ha-integration
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -619,8 +679,9 @@ jobs:
         run: docker compose -f infra/redis-ha/compose.ci.yml down --volumes --remove-orphans
 
   nats-jetstream-ha-integration:
-    if: github.event_name != 'push'
     name: nats-jetstream-ha-integration
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -648,8 +709,9 @@ jobs:
   # to execute concurrently.
   repository-quality:
     name: repository-quality
-    if: always() && github.event_name != 'push'
+    if: always() && github.event_name != 'push' && needs.changes.result == 'success'
     needs:
+      - changes
       - rust-workspace-quality
       - deployment-contract
       - postgres-integration
@@ -661,6 +723,7 @@ jobs:
     steps:
       - name: Require every CI suite to pass
         env:
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           RUST_WORKSPACE_RESULT: ${{ needs.rust-workspace-quality.result }}
           DEPLOYMENT_CONTRACT_RESULT: ${{ needs.deployment-contract.result }}
           POSTGRES_RESULT: ${{ needs.postgres-integration.result }}
@@ -669,6 +732,10 @@ jobs:
           SECURITY_RESULT: ${{ needs.security-dependencies.result }}
         run: |
           set -euo pipefail
+          if [[ "$DOCS_ONLY" == true ]]; then
+            echo "Documentation-only change: build, tests, integration and security jobs intentionally skipped."
+            exit 0
+          fi
           for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
             if [[ "$result" != success ]]; then
               echo "Required CI suite did not pass (result: $result)" >&2
@@ -684,10 +751,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Check out the exact pushed main commit
+      - name: Check out the exact pushed main commit and history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify pushed branch and commit identity
         env:
@@ -697,10 +765,43 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test "$(git cat-file -t "$EXPECTED_SHA")" = "commit"
+      - name: Classify pushed main changes for staging deployment
+        shell: bash
+        env:
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docs_only=true
+          if [[ "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
+            docs_only=false
+            changed=(initial-push)
+          else
+            mapfile -t changed < <(git diff --name-only "$PUSH_BEFORE_SHA" "$EXPECTED_SHA")
+          fi
+          if (( ${#changed[@]} == 0 )); then docs_only=false; fi
+          for path in "${changed[@]}"; do
+            if [[ "$path" != *.md && "$path" != *.mdx && "$path" != docs/* && "$path" != documentation/* ]]; then
+              docs_only=false
+              break
+            fi
+          done
+          mkdir -p "$RUNNER_TEMP/change-classification"
+          printf '%s\n' "$docs_only" > "$RUNNER_TEMP/change-classification/docs_only"
+          echo "Documentation-only change: $docs_only"
+          printf '%s\n' "${changed[@]}"
+      - name: Publish change classification for the deployment workflow
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: change-classification
+          path: ${{ runner.temp }}/change-classification/docs_only
+          if-no-files-found: error
+          retention-days: 2
 
   security-dependencies:
-    if: github.event_name != 'push'
     name: security-dependencies
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

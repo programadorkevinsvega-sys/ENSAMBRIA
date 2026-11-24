@@ -16,11 +16,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  change-classification:
+    name: check whether staging deployment is needed
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+    outputs:
+      docs_only: ${{ steps.read.outputs.docs_only }}
+    steps:
+      - name: Download classification from the exact source workflow run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/change-classification"
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name change-classification --dir "$RUNNER_TEMP/change-classification"
+      - name: Read documentation-only classification
+        id: read
+        run: |
+          set -euo pipefail
+          value="$(cat "$RUNNER_TEMP/change-classification/docs_only")"
+          [[ "$value" == true || "$value" == false ]]
+          echo "docs_only=$value" >> "$GITHUB_OUTPUT"
+          echo "Documentation-only push: $value"
+
+  deploy:
+    needs: change-classification
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      needs.change-classification.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: core-staging

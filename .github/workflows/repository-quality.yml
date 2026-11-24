@@ -318,7 +318,7 @@ jobs:
           SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
-            -c "SET ROLE platform_runtime; SELECT count(*) FROM platform_product_catalog.active_product_catalog;"
+            -c "SET ROLE platform_product_catalog_runtime; SELECT count(*) FROM platform_product_catalog.active_product_catalog;"
 
       - name: Provision isolated PostgreSQL module schemas and roles
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
@@ -420,6 +420,14 @@ jobs:
               END IF;
               IF has_table_privilege('platform_tenant_onboarding_runtime', (SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'platform_tenant_onboarding' AND c.relname = 'tenant_onboardings'), 'DELETE') THEN
                   RAISE EXCEPTION 'platform_tenant_onboarding_runtime must not delete onboarding history';
+              END IF;
+              IF has_schema_privilege('platform_product_catalog_runtime', 'platform_tenant_onboarding', 'USAGE')
+                 OR has_schema_privilege('platform_tenant_onboarding_runtime', 'platform_product_catalog', 'USAGE') THEN
+                  RAISE EXCEPTION 'PLATFORM runtime roles must not cross schema ownership boundaries';
+              END IF;
+              IF NOT has_table_privilege('platform_product_catalog_runtime', 'platform_product_catalog.active_product_catalog', 'SELECT')
+                 OR has_table_privilege('platform_product_catalog_runtime', 'platform_product_catalog.products', 'INSERT,UPDATE,DELETE') THEN
+                  RAISE EXCEPTION 'PLATFORM product runtime grants are not read-only';
               END IF;
           END
           $body$;

@@ -65,11 +65,6 @@ FROM PUBLIC;
 GRANT USAGE ON SCHEMA platform_tenant_onboarding TO platform_tenant_onboarding_runtime;
 GRANT SELECT, INSERT, UPDATE ON platform_tenant_onboarding.inbox_messages TO platform_tenant_onboarding_runtime;
 GRANT SELECT, INSERT, UPDATE ON platform_tenant_onboarding.tenant_onboardings TO platform_tenant_onboarding_runtime;
-GRANT SELECT ON
-    platform.products,
-    platform_product_catalog.product_configurations,
-    platform_product_catalog.active_product_catalog
-TO platform_tenant_onboarding_runtime;
 
 COMMENT ON TABLE platform_tenant_onboarding.inbox_messages IS
     'Idempotency ledger for durable CORE events; applied only in the same transaction as the consumer effect.';

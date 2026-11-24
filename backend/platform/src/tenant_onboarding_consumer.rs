@@ -50,7 +50,7 @@ impl TenantCreatedEnvelope {
             .ok_or("invalid product ID in tenant-created payload")?;
         let product_id_string = product_id.to_string();
         let product_config_version = payload_config_version
-            .and_then(|value| i32::try_from(value).ok())
+            .and_then(|value| u32::try_from(value).ok())
             .filter(|value| *value > 0)
             .ok_or("invalid product configuration version in payload")?;
 
@@ -88,7 +88,7 @@ impl TenantCreatedEnvelope {
 pub async fn consume_one(
     service: &dyn TenantOnboarding,
     jetstream: &Context,
-) -> Result<TenantOnboardingOutcome, Box<dyn Error + Send + Sync>> {
+) -> Result<OnboardingOutcome, Box<dyn Error + Send + Sync>> {
     let stream = jetstream.get_stream(STREAM).await?;
     let durable_name = env::var("PLATFORM_TENANT_ONBOARDING_DURABLE")
         .unwrap_or_else(|_| DEFAULT_DURABLE.to_owned());
@@ -125,7 +125,8 @@ pub async fn consume_one(
     let event = envelope
         .into_event(&message.payload)
         .map_err(std::io::Error::other)?;
-    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event.event_id) {
+    let event_id = event.event_id;
+    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event_id) {
         tracing::error!(
             event_id = %event.event_id,
             "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction"
@@ -136,7 +137,7 @@ pub async fn consume_one(
         .apply_tenant_created(event)
         .await
         .map_err(|error| std::io::Error::other(format!("{error:?}")))?;
-    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event.event_id) {
+    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event_id) {
         tracing::error!(
             event_id = %event.event_id,
             "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK"

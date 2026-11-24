@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 
 -- One-time verification/recovery issuance and MFA challenge lifecycle.

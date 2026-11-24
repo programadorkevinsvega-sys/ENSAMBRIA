@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 
 -- Atomic state transitions for authentication, recovery, throttling and MFA.

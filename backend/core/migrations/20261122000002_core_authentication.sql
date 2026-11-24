@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 
 -- Pre-authentication one-time tokens. Password verifiers, sessions and MFA

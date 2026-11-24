@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 
 -- Durable transactional email outbox. Delivery is performed by a separately run CORE worker.

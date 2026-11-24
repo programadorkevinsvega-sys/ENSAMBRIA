@@ -128,7 +128,6 @@ $$;
 
 -- Authorization is evaluated from the authenticated actor context + active membership +
 -- explicit scoped role assignment. No default role or implicit membership.
-RESET ROLE;
 SET LOCAL ROLE core_tenancy_schema_owner;
 
 CREATE OR REPLACE FUNCTION core_tenancy.has_permission(
@@ -235,7 +234,6 @@ AS $$
        AND (b.id IS NULL OR b.status = 'active')
 $$;
 
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 
 -- All auth records are actor-scoped after authentication. Pre-authentication

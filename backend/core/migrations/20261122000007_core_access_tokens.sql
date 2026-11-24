@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 
 -- Short-lived opaque access tokens and complete session lifecycle.

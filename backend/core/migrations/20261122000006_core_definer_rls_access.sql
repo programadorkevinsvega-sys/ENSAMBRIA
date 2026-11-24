@@ -1,6 +1,5 @@
 -- SECURITY DEFINER functions execute only as the non-login owner of the
 -- corresponding bounded module schema. FORCE RLS remains enabled.
-RESET ROLE;
 SET LOCAL ROLE core_identity_auth_schema_owner;
 DO $$
 DECLARE
@@ -26,7 +25,6 @@ BEGIN
 END
 $$;
 
-RESET ROLE;
 SET LOCAL ROLE core_tenancy_schema_owner;
 DO $$
 DECLARE

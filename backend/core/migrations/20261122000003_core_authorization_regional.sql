@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_tenancy_schema_owner;
 
 -- Explicit authorization evaluation and inherited regional context.

@@ -1,4 +1,3 @@
-RESET ROLE;
 SET LOCAL ROLE core_tenancy_schema_owner;
 
 -- Durable CORE -> PLATFORM tenant-created event delivery (subphase 1.3).

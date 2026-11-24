@@ -168,6 +168,10 @@ jobs:
           grep -Fq 'core-staging.tar.gz' backend/core/deployment/deploy-staging.sh
           # Keep the main push path cheap while preserving the PR aggregate gate.
           grep -Fq 'main-push-gate:' .github/workflows/repository-quality.yml
+          grep -Fq 'classify changed files' .github/workflows/repository-quality.yml
+          grep -Fq "needs.changes.outputs.docs_only != 'true'" .github/workflows/repository-quality.yml
+          grep -Fq 'change-classification' .github/workflows/repository-quality.yml
+          grep -Fq 'needs.change-classification.outputs.docs_only !=' .github/workflows/core-staging-deploy.yml
           grep -Fq "if: github.event_name == 'push'" .github/workflows/repository-quality.yml
           grep -Fq 'needs:' .github/workflows/repository-quality.yml
           grep -Fq 'ref: ${{ github.event.workflow_run.head_sha }}' .github/workflows/core-staging-deploy.yml

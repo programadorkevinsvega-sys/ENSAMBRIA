@@ -116,8 +116,8 @@ async fn subscription_lifecycle_is_idempotent_versioned_and_tenant_scoped() {
 
 #[tokio::test]
 async fn stale_versions_and_reused_idempotency_keys_are_rejected() {
-    let url =
-        std::env::var("PLATFORM_TEST_DATABASE_URL").expect("CI configures PLATFORM_TEST_DATABASE_URL");
+    let url = std::env::var("PLATFORM_TEST_DATABASE_URL")
+        .expect("CI configures PLATFORM_TEST_DATABASE_URL");
     let pool = PgPool::connect(&url).await.unwrap();
     let service = SaaSSubscriptions::new(pool.clone());
     let tenant = Uuid::parse_str(TENANT_ID).unwrap();

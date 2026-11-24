@@ -248,6 +248,7 @@ WHERE p.status = 'active';
 REVOKE ALL ON ALL TABLES IN SCHEMA platform FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA platform FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA platform FROM PUBLIC;
+GRANT USAGE ON SCHEMA platform_product_catalog TO platform_product_catalog_runtime;
 GRANT SELECT ON
     platform_product_catalog.products,
     platform_product_catalog.product_configurations,

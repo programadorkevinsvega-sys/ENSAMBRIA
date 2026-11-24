@@ -197,6 +197,7 @@ fn architecture() -> Result<(), Vec<String>> {
     );
     if !product_catalog_migration.contains("platform_product_catalog.products")
         || !product_catalog_migration.contains("platform_product_catalog_runtime")
+        || !product_catalog_migration.contains("GRANT USAGE ON SCHEMA platform_product_catalog TO platform_product_catalog_runtime")
     {
         errors.push("PLATFORM product catalog is not owned by its isolated schema/runtime".to_owned());
     }

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ensambria.platform.productcatalog.v1;
+package ensambria.platform.product_catalog.v1;
 
 import "google/protobuf/timestamp.proto";
 

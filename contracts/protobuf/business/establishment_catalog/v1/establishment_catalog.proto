@@ -1,10 +1,6 @@
 syntax = "proto3";
 package ensambria.business.establishmentcatalog.v1;
-
-service EstablishmentCatalog {
-  rpc ListForTenant(ListEstablishmentsRequest) returns (ListEstablishmentsResponse);
-  rpc Create(CreateEstablishmentRequest) returns (Establishment);
-}
+service EstablishmentCatalog { rpc ListForTenant(ListEstablishmentsRequest) returns (ListEstablishmentsResponse); rpc Create(CreateEstablishmentRequest) returns (Establishment); }
 message ListEstablishmentsRequest { string tenant_id = 1; }
 message ListEstablishmentsResponse { repeated Establishment establishments = 1; }
 message CreateEstablishmentRequest { string tenant_id = 1; string organization_id = 2; optional string branch_id = 3; string display_name = 4; }

@@ -1,8 +1,5 @@
 syntax = "proto3";
 package ensambria.core.identityauth.v1;
-
-service IdentityAuthentication {
-  rpc AuthenticateBearer(AuthenticateBearerRequest) returns (AuthenticatedIdentity);
-}
+service IdentityAuthentication { rpc AuthenticateBearer(AuthenticateBearerRequest) returns (AuthenticatedIdentity); }
 message AuthenticateBearerRequest { string bearer_token = 1; }
 message AuthenticatedIdentity { string identity_id = 1; string session_id = 2; int64 authenticated_at_unix = 3; }

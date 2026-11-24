@@ -1,0 +1,11 @@
+[package]
+name = "ensambria-platform-contract"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[dependencies]
+prost = "0.14.6"
+tonic = { version = "0.14.9", default-features = false, features = ["codegen", "router", "tls-ring", "transport"] }
+tonic-prost = "0.14.9"

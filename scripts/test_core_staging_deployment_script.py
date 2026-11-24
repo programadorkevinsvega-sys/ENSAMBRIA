@@ -1,0 +1,88 @@
+import subprocess
+import unittest
+from pathlib import Path
+
+
+class CoreStagingDeploymentScriptTests(unittest.TestCase):
+    def setUp(self):
+        repository_root = Path(__file__).resolve().parents[1]
+        self.script_path = repository_root / "backend/core/deployment/deploy-staging.sh"
+        self.script_source = self.script_path.read_text(encoding="utf-8")
+
+    def test_bash_syntax(self):
+        result = subprocess.run(
+            ["bash", "-n", str(self.script_path)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_all_core_units_share_env_and_isolate_database_credentials(self):
+        deployment = Path(__file__).resolve().parents[1] / "backend/core/deployment"
+        api = (deployment / "ensambria-core.service").read_text(encoding="utf-8")
+        migrator = (deployment / "ensambria-core-migrate.service").read_text(encoding="utf-8")
+        worker = (deployment / "ensambria-core-email-worker.service").read_text(encoding="utf-8")
+
+        self.assertIn("ensambria-core-email-worker.service", self.script_source)
+        self.assertIn("core-email-worker", self.script_source)
+        for service in (api, migrator, worker):
+            self.assertIn("EnvironmentFile=/etc/apps/ensambria/core/.env", service)
+
+        self.assertIn("UnsetEnvironment=MIGRATIONS_DATABASE_URL", api)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", api)
+        self.assertIn("CORE_SMTP_PASSWORD", api)
+
+        self.assertIn("UnsetEnvironment=DATABASE_URL", migrator)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", migrator)
+        self.assertIn("CORE_SMTP_PASSWORD", migrator)
+
+        self.assertIn("UnsetEnvironment=DATABASE_URL MIGRATIONS_DATABASE_URL", worker)
+        self.assertIn("CORE_EMAIL_WORKER_DATABASE_URL", self.script_source)
+        self.assertNotIn("email-worker.env", self.script_source)
+        self.assertNotIn('systemctl enable "$email_worker_service_name"', self.script_source)
+
+    def test_business_health_uses_configured_non_conflicting_listener(self):
+        self.assertIn('BUSINESS_HTTP_LISTEN_ADDRESS', self.script_source)
+        self.assertIn('business_health_url', self.script_source)
+        self.assertIn('report_business_migration_failure', self.script_source)
+        self.assertNotIn('127.0.0.1:8080/health', self.script_source)
+        self.assertIn('127.0.0.1:${business_address##*:}', self.script_source)
+
+    def test_deployment_normalizes_all_runtime_listeners(self):
+        self.assertIn('CORE_HEALTH_LISTEN_ADDRESS": "127.0.0.1:22080', self.script_source)
+        self.assertIn('CORE_METRICS_LISTEN_ADDRESS": "127.0.0.1:22090', self.script_source)
+        self.assertIn('BUSINESS_HTTP_LISTEN_ADDRESS": "127.0.0.1:22100', self.script_source)
+        for occupied_port in ("8080", "18080", "19090", "3000", "3001", "3002", "3003", "3005", "3006", "50051", "50052", "50053", "50054", "50055", "50056", "50059"):
+            self.assertNotIn(f'127.0.0.1:{occupied_port}', self.script_source)
+
+    def test_release_validation_lock_immutability_and_rollback_guards(self):
+        self.assertIn("flock -n 9", self.script_source)
+        self.assertIn('temporary_link="${install_root}/.current-$"', self.script_source)
+        self.assertIn('rollback_available=false', self.script_source)
+        self.assertIn('No rollback-compatible previous release exists', self.script_source)
+        self.assertIn('[[ -x "$previous_release/core" && -x "$previous_release/core-email-worker" && -x "$previous_release/business" ]]', self.script_source)
+        self.assertIn("validate_staging_package.py", self.script_source)
+        self.assertIn("deployment artifact validation failed before host changes", self.script_source)
+        self.assertIn("sha256sum --check --strict SHA256SUMS", self.script_source)
+        self.assertIn('[[ -s "$payload/$binary" && -x "$payload/$binary" ]]', self.script_source)
+        self.assertIn('chmod 0550 "$release_directory"', self.script_source)
+        self.assertIn('systemctl is-active --quiet "$business_service_name" || return 1', self.script_source)
+        self.assertIn('ExecStart=/opt/apps/ensambria/current/business', self.script_source)
+
+    def test_embedded_python_syntax(self):
+        start_marker = "| python3 -c '\n"
+        end_marker = "\n'; then"
+        start = self.script_source.index(start_marker) + len(start_marker)
+        end = self.script_source.index(end_marker, start)
+        python_source = self.script_source[start:end]
+
+        try:
+            compile(python_source, str(self.script_path), "exec")
+        except SyntaxError as error:
+            self.fail(f"embedded migration diagnostic Python is invalid: {error}")
+
+
+if __name__ == "__main__":
+    unittest.main()

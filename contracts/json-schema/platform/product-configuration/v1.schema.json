@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ensambria.dev/contracts/platform/product-configuration/v1.schema.json",
+  "title": "ENSAMBRIA PLATFORM Product Configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "brandName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "logoUri": { "type": "string", "format": "uri", "maxLength": 2048 }
+      }
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 4,
+        "maxLength": 253,
+        "pattern": "^[a-z0-9.-]+$"
+      },
+      "uniqueItems": true
+    },
+    "markets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["countryCode", "currencyCode", "locale"],
+        "properties": {
+          "countryCode": { "type": "string", "pattern": "^[A-Z]{2}$" },
+          "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "locale": { "type": "string", "minLength": 2, "maxLength": 35 }
+        }
+      },
+      "uniqueItems": true
+    },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "configurationVersion"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$" },
+          "configurationVersion": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "contractVersion"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,119}$" },
+          "contractVersion": { "type": "string", "minLength": 1, "maxLength": 64 }
+        }
+      },
+      "uniqueItems": true
+    }
+  }
+}

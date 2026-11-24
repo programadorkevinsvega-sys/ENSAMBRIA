@@ -579,6 +579,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ensambria-business-establishment-catalog-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "ensambria-core"
 version = "0.1.0"
 dependencies = [
@@ -605,6 +613,21 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "ensambria-core-identity-auth-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uuid",
+]
+[[package]]
+name = "ensambria-core-tenancy-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uuid",
 ]
 
 [[package]]
@@ -643,6 +666,22 @@ dependencies = [
  "prost",
  "tonic",
  "tonic-prost",
+]
+
+[[package]]
+name = "ensambria-platform-product-catalog-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "uuid",
+]
+[[package]]
+name = "ensambria-platform-tenant-onboarding-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uuid",
 ]
 
 [[package]]

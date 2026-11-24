@@ -733,7 +733,7 @@ jobs:
           cargo +1.99.1 fmt --all
           cargo +1.99.1 metadata --format-version 1 > /dev/null
           printf '%s\\n' 'RUSTFMT_PATCH_BEGIN'
-          git diff --binary -- Cargo.lock backend/core/src/identity_authentication/service.rs backend/core/tests/email_outbox.rs backend/core/tests/identity_authentication.rs backend/core/tests/identity_authorization.rs | base64 -w0
+          git diff --binary | base64 -w0
           printf '%s\\n' 'RUSTFMT_PATCH_END'
 
   repository-quality:

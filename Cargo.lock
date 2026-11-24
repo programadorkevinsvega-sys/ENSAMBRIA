@@ -567,11 +567,22 @@ checksum = "5ab6bbd053d3cdc62ba3de82aae11530a97bbd5b3a572fbdbcd0f0e545e3ff21"
 name = "ensambria-business"
 version = "0.1.0"
 dependencies = [
- "axum",
- "ensambria-core",
+ "ensambria-core-tenancy-contracts",
  "ensambria-shared-cache",
  "serde",
  "serde_json",
+ "sqlx",
+ "uuid",
+]
+
+[[package]]
+name = "ensambria-business-runtime"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "ensambria-business",
+ "ensambria-core",
+ "ensambria-shared-cache",
  "sqlx",
  "tokio",
  "tracing",
@@ -592,6 +603,7 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "base64 0.23.1",
+ "ensambria-core-tenancy-contracts",
  "ensambria-event-bus",
  "ensambria-platform",
  "ensambria-platform-contract",

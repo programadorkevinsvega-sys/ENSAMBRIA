@@ -1,6 +1,10 @@
 //! Public PLATFORM tenant-onboarding command and result contract.
+use std::{future::Future, pin::Pin};
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub type ContractFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TenantCreated {
@@ -29,8 +33,8 @@ pub enum OnboardingFailure {
 
 /// Implemented by PLATFORM. The adapter commits Inbox and onboarding atomically.
 pub trait TenantOnboarding: Send + Sync {
-    async fn apply_tenant_created(
-        &self,
+    fn apply_tenant_created<'a>(
+        &'a self,
         event: TenantCreated,
-    ) -> Result<OnboardingOutcome, OnboardingFailure>;
+    ) -> ContractFuture<'a, Result<OnboardingOutcome, OnboardingFailure>>;
 }

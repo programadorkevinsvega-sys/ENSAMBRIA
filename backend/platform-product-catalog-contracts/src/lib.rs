@@ -1,7 +1,11 @@
 //! Public PLATFORM product catalog contract shared by in-process and Tonic adapters.
+use std::{future::Future, pin::Pin};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+
+pub type ContractFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProductCatalogEntry {
@@ -65,19 +69,19 @@ pub enum ProductCatalogFailure {
 }
 
 pub trait ProductCatalog: Send + Sync {
-    async fn get_active_product(
-        &self,
+    fn get_active_product<'a>(
+        &'a self,
         product_id: Uuid,
-    ) -> Result<ProductCatalogEntry, ProductCatalogFailure>;
+    ) -> ContractFuture<'a, Result<ProductCatalogEntry, ProductCatalogFailure>>;
 
-    async fn resolve_active_domain(
-        &self,
-        domain_name: &str,
-    ) -> Result<Option<ProductCatalogEntry>, ProductCatalogFailure>;
+    fn resolve_active_domain<'a>(
+        &'a self,
+        domain_name: &'a str,
+    ) -> ContractFuture<'a, Result<Option<ProductCatalogEntry>, ProductCatalogFailure>>;
 
-    async fn get_published_configuration(
-        &self,
+    fn get_published_configuration<'a>(
+        &'a self,
         product_id: Uuid,
         version: u32,
-    ) -> Result<Option<ProductConfiguration>, ProductCatalogFailure>;
+    ) -> ContractFuture<'a, Result<Option<ProductConfiguration>, ProductCatalogFailure>>;
 }

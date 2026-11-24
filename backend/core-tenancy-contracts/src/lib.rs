@@ -1,6 +1,10 @@
 //! Public CORE tenancy boundary. IDs are opaque references owned by CORE.
+use std::{future::Future, pin::Pin};
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub type ContractFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ActiveTenantMembership {
@@ -32,22 +36,22 @@ pub enum TenancyFailure {
 
 /// Implemented by CORE. BUSINESS must not query CORE tables or receive its pool.
 pub trait TenancyAccess: Send + Sync {
-    async fn require_active_membership(
-        &self,
+    fn require_active_membership<'a>(
+        &'a self,
         identity_id: Uuid,
         tenant_id: Uuid,
-    ) -> Result<ActiveTenantMembership, TenancyFailure>;
+    ) -> ContractFuture<'a, Result<ActiveTenantMembership, TenancyFailure>>;
 
-    async fn require_active_organization(
-        &self,
+    fn require_active_organization<'a>(
+        &'a self,
         tenant_id: Uuid,
         organization_id: Uuid,
-    ) -> Result<ActiveOrganization, TenancyFailure>;
+    ) -> ContractFuture<'a, Result<ActiveOrganization, TenancyFailure>>;
 
-    async fn require_active_branch(
-        &self,
+    fn require_active_branch<'a>(
+        &'a self,
         tenant_id: Uuid,
         organization_id: Uuid,
         branch_id: Uuid,
-    ) -> Result<ActiveBranch, TenancyFailure>;
+    ) -> ContractFuture<'a, Result<ActiveBranch, TenancyFailure>>;
 }

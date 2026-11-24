@@ -1,6 +1,10 @@
 //! Public BUSINESS establishment catalog boundary; contains no SQLx or storage models.
+use std::{future::Future, pin::Pin};
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub type ContractFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Establishment {
@@ -29,13 +33,13 @@ pub enum EstablishmentFailure {
 }
 
 pub trait EstablishmentCatalog: Send + Sync {
-    async fn list_for_tenant(
-        &self,
+    fn list_for_tenant<'a>(
+        &'a self,
         tenant_id: Uuid,
-    ) -> Result<Vec<Establishment>, EstablishmentFailure>;
+    ) -> ContractFuture<'a, Result<Vec<Establishment>, EstablishmentFailure>>;
 
-    async fn create(
-        &self,
+    fn create<'a>(
+        &'a self,
         input: CreateEstablishment,
-    ) -> Result<Establishment, EstablishmentFailure>;
+    ) -> ContractFuture<'a, Result<Establishment, EstablishmentFailure>>;
 }

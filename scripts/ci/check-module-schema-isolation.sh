@@ -7,11 +7,11 @@ DO $$
 DECLARE
     pair record;
     usage_allowed boolean;
-    owner_name text;
     actual_owner text;
     login_allowed boolean;
     inherit_allowed boolean;
     bypass_rls boolean;
+    owner_login boolean;
 BEGIN
     FOR pair IN
         SELECT * FROM (VALUES
@@ -36,6 +36,14 @@ BEGIN
         IF actual_owner IS DISTINCT FROM pair.owner_role THEN
             RAISE EXCEPTION 'schema % owner is %, expected %',
                 pair.schema_name, actual_owner, pair.owner_role;
+        END IF;
+
+        SELECT rolcanlogin
+          INTO owner_login
+          FROM pg_roles
+         WHERE rolname = pair.owner_role;
+        IF owner_login IS DISTINCT FROM false THEN
+            RAISE EXCEPTION 'schema owner role % must be NOLOGIN', pair.owner_role;
         END IF;
 
         SELECT rolcanlogin, rolinherit, rolbypassrls

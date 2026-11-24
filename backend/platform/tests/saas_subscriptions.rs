@@ -120,7 +120,8 @@ async fn stale_versions_and_reused_idempotency_keys_are_rejected() {
         .expect("CI configures PLATFORM_TEST_DATABASE_URL");
     let pool = PgPool::connect(&url).await.unwrap();
     let service = SaaSSubscriptions::new(pool.clone());
-    let tenant = Uuid::parse_str(TENANT_ID).unwrap();
+    // Keep this test isolated from the lifecycle test and parallel CI execution.
+    let tenant = Uuid::now_v7();
     let create = CreateSubscription {
         tenant_id: tenant,
         product_id: Uuid::parse_str(PRODUCT_ID).unwrap(),

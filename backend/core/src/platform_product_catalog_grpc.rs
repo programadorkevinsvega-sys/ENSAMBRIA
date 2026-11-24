@@ -3,9 +3,8 @@ use ensambria_platform_contract::platform::product_catalog::v1::{
     ProductCatalogEntry as ProtoEntry, ResolveActiveDomainRequest,
 };
 use ensambria_platform_product_catalog_contracts::{
-    ContractFuture, ProductCapability, ProductCatalog as ProductCatalogPort,
-    ProductCatalogEntry, ProductCatalogFailure, ProductConfiguration, ProductDomain, ProductMarket,
-    ProductSurface,
+    ContractFuture, ProductCapability, ProductCatalog as ProductCatalogPort, ProductCatalogEntry,
+    ProductCatalogFailure, ProductConfiguration, ProductDomain, ProductMarket, ProductSurface,
 };
 use tonic::{
     Code,

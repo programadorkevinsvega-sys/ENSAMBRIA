@@ -66,7 +66,6 @@ CREATE POLICY outbox_relay_update ON core_tenancy.outbox_events
     WITH CHECK (true);
 
 REVOKE ALL ON core_tenancy.outbox_events FROM PUBLIC;
-GRANT USAGE ON SCHEMA core TO core_outbox_relay;
 GRANT INSERT ON core_tenancy.outbox_events TO core_tenancy_runtime;
 GRANT SELECT, UPDATE ON core_tenancy.outbox_events TO core_outbox_relay;
 

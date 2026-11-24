@@ -23,10 +23,9 @@ CREATE TABLE core_identity_auth.email_outbox (
 CREATE INDEX email_outbox_pending_idx
     ON core_identity_auth.email_outbox (available_at, created_at)
     WHERE status IN ('pending', 'processing');
-GRANT USAGE ON SCHEMA core TO core_identity_auth_runtime, core_email_worker;
+GRANT USAGE ON SCHEMA core_identity_auth TO core_identity_auth_runtime, core_email_worker;
 GRANT INSERT ON core_identity_auth.email_outbox TO core_identity_auth_runtime;
 GRANT SELECT, UPDATE ON core_identity_auth.email_outbox TO core_email_worker;
 COMMENT ON TABLE core_identity_auth.email_outbox IS
     'Durable transactional email queue. Payloads contain one-time links; access is restricted to CORE runtime workers.';
 
-GRANT USAGE ON SCHEMA core_identity_auth TO core_email_worker;

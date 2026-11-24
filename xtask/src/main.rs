@@ -273,6 +273,23 @@ fn architecture() -> Result<(), Vec<String>> {
         }
     }
 
+    let email_outbox_migration = read(
+        root.join("backend/core/migrations/20261122000010_core_email_outbox.sql"),
+        &mut errors,
+    );
+    let tenant_outbox_migration = read(
+        root.join("backend/core/migrations/20261122000011_core_tenant_created_outbox.sql"),
+        &mut errors,
+    );
+    if email_outbox_migration.contains("GRANT USAGE ON SCHEMA core ")
+        || tenant_outbox_migration.contains("GRANT USAGE ON SCHEMA core ")
+    {
+        errors.push(
+            "CORE migrations reference the removed legacy core schema instead of one of the five owned schemas"
+                .to_owned(),
+        );
+    }
+
     let business_service = read(root.join("backend/business/src/service.rs"), &mut errors);
     if business_service.contains("core.") || business_service.contains("platform.") {
         errors.push(

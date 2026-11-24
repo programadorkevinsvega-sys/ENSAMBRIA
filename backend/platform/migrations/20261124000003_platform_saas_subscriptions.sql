@@ -124,19 +124,19 @@ CREATE TABLE platform.saas_subscription_commands (
     FOREIGN KEY (subscription_id, tenant_id) REFERENCES platform.saas_subscriptions(id, tenant_id)
 );
 CREATE FUNCTION platform.prevent_published_offer_deletion()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
 BEGIN
     IF OLD.published_at IS NOT NULL THEN
         RAISE EXCEPTION 'published offer versions cannot be deleted' USING ERRCODE = '55000';
     END IF;
     RETURN OLD;
-END $;
+END $$;
 CREATE TRIGGER commercial_offer_version_no_delete
 BEFORE DELETE ON platform.commercial_offer_versions
 FOR EACH ROW EXECUTE FUNCTION platform.prevent_published_offer_deletion();
 
 CREATE FUNCTION platform.protect_published_offer_identity()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
 BEGIN
     IF OLD.status <> 'draft' AND (
         NEW.id IS DISTINCT FROM OLD.id OR NEW.product_id IS DISTINCT FROM OLD.product_id
@@ -152,13 +152,13 @@ BEGIN
         RAISE EXCEPTION 'retired offers cannot be reactivated' USING ERRCODE = '55000';
     END IF;
     RETURN NEW;
-END $;
+END $$;
 CREATE TRIGGER commercial_offer_identity_immutable
 BEFORE UPDATE ON platform.commercial_offers
 FOR EACH ROW EXECUTE FUNCTION platform.protect_published_offer_identity();
 
 CREATE FUNCTION platform.validate_subscription_transition()
-RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $$
 BEGIN
     IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.product_id IS DISTINCT FROM OLD.product_id
        OR NEW.offer_id IS DISTINCT FROM OLD.offer_id OR NEW.offer_version IS DISTINCT FROM OLD.offer_version
@@ -175,7 +175,7 @@ BEGIN
         RAISE EXCEPTION 'invalid subscription lifecycle transition' USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
-END $;
+END $$;
 CREATE TRIGGER saas_subscription_transition_guard
 BEFORE UPDATE ON platform.saas_subscriptions
 FOR EACH ROW EXECUTE FUNCTION platform.validate_subscription_transition();

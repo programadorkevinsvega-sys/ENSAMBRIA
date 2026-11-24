@@ -184,8 +184,7 @@ fn dependency_section(manifest: &str) -> String {
             active = line == "[dependencies]";
         } else if active {
             result.push_str(line);
-            result.push('
-');
+            result.push(char::from(10));
         }
     }
     result

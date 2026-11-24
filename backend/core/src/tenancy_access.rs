@@ -157,13 +157,11 @@ impl TenancyAccess for CoreTenancyAccess {
                 .commit()
                 .await
                 .map_err(|_| TenancyFailure::Unavailable)?;
-            row.map(
-                |(branch_id, tenant_id, organization_id)| ActiveBranch {
-                    branch_id,
-                    tenant_id,
-                    organization_id,
-                },
-            )
+            row.map(|(branch_id, tenant_id, organization_id)| ActiveBranch {
+                branch_id,
+                tenant_id,
+                organization_id,
+            })
             .ok_or(TenancyFailure::NotFound)
         })
     }

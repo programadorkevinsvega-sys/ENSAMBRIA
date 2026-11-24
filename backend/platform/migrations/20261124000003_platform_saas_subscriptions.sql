@@ -41,10 +41,8 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'published commercial offer versions are immutable' USING ERRCODE = '55000';
     END IF;
-    IF OLD.published_at IS NOT NULL AND NEW.status = 'retired'
-       AND EXISTS (SELECT 1 FROM platform.commercial_offers o
-                   WHERE o.id = OLD.offer_id AND o.published_version = OLD.version) THEN
-        RAISE EXCEPTION 'current published offer version cannot be retired' USING ERRCODE = '55000';
+    IF OLD.published_at IS NOT NULL AND NEW.status IS DISTINCT FROM OLD.status THEN
+        RAISE EXCEPTION 'published offer version status is immutable' USING ERRCODE = '55000';
     END IF;
     RETURN NEW;
 END $$;
@@ -76,6 +74,7 @@ CREATE TABLE platform.saas_subscriptions (
     product_id uuid NOT NULL REFERENCES platform.products(id),
     offer_id uuid NOT NULL,
     offer_version integer NOT NULL,
+    entitlements_snapshot jsonb NOT NULL CHECK (jsonb_typeof(entitlements_snapshot) = 'object'),
     status text NOT NULL CHECK (status IN ('active', 'suspended', 'cancelled', 'expired')),
     starts_at timestamptz NOT NULL,
     ends_at timestamptz,
@@ -162,7 +161,7 @@ RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, platform AS $
 BEGIN
     IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.product_id IS DISTINCT FROM OLD.product_id
        OR NEW.offer_id IS DISTINCT FROM OLD.offer_id OR NEW.offer_version IS DISTINCT FROM OLD.offer_version
-       OR NEW.created_by IS DISTINCT FROM OLD.created_by OR NEW.starts_at IS DISTINCT FROM OLD.starts_at THEN
+       OR NEW.entitlements_snapshot IS DISTINCT FROM OLD.entitlements_snapshot OR NEW.created_by IS DISTINCT FROM OLD.created_by OR NEW.starts_at IS DISTINCT FROM OLD.starts_at THEN
         RAISE EXCEPTION 'subscription contract identity is immutable' USING ERRCODE = '55000';
     END IF;
     IF NEW.version <> OLD.version + 1 THEN

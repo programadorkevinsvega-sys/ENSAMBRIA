@@ -18,6 +18,7 @@ async fn subscription_lifecycle_is_idempotent_versioned_and_tenant_scoped() {
     let created = service.create(create.clone()).await.expect("explicit contract creation");
     assert_eq!(created.status, "active");
     assert_eq!(created.version, 1);
+    assert_eq!(created.entitlements["capabilities"][0], "identity.auth");
     assert_eq!(service.create(create).await.unwrap().subscription_id, created.subscription_id);
     let suspend = |expected_version, action, label: &str| ChangeSubscription {
         tenant_id: tenant, subscription_id: created.subscription_id, actor_id: actor,
@@ -51,7 +52,7 @@ async fn stale_versions_and_reused_idempotency_keys_are_rejected() {
     let url = std::env::var("PLATFORM_TEST_DATABASE_URL").expect("CI configures PLATFORM_TEST_DATABASE_URL");
     let pool = PgPool::connect(&url).await.unwrap();
     let service = SaaSSubscriptions::new(pool.clone());
-    let tenant = Uuid::parse_str(TENANT_ID).unwrap();
+    let tenant = Uuid::now_v7();
     let create = CreateSubscription { tenant_id: tenant, product_id: Uuid::parse_str(PRODUCT_ID).unwrap(),
         offer_id: Uuid::parse_str(OFFER_ID).unwrap(), offer_version: 1, actor_id: Uuid::now_v7(),
         idempotency_key: format!("create-{}", Uuid::now_v7()), ends_at_epoch: None };

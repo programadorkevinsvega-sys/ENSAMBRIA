@@ -22,7 +22,7 @@ impl SubscriptionAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionSnapshot {
     pub subscription_id: Uuid, pub tenant_id: Uuid, pub product_id: Uuid,
-    pub offer_id: Uuid, pub offer_version: i32, pub status: String,
+    pub offer_id: Uuid, pub offer_version: i32, pub entitlements: Value, pub status: String,
     pub starts_at_epoch: i64, pub ends_at_epoch: Option<i64>, pub version: i64,
 }
 
@@ -79,7 +79,7 @@ impl SaaSSubscriptions {
             tx.commit().await.map_err(|_| SubscriptionError::Storage)?;
             return decode_snapshot(value);
         }
-        let offer = sqlx::query("SELECT o.product_id, o.status AS offer_status, v.status AS version_status FROM platform.commercial_offers o JOIN platform.commercial_offer_versions v ON v.offer_id=o.id WHERE o.id=$1 AND v.version=$2")
+        let offer = sqlx::query("SELECT o.product_id, o.status AS offer_status, v.status AS version_status, v.entitlements FROM platform.commercial_offers o JOIN platform.commercial_offer_versions v ON v.offer_id=o.id WHERE o.id=$1 AND v.version=$2")
             .bind(command.offer_id).bind(command.offer_version).fetch_optional(&mut *tx).await
             .map_err(|_| SubscriptionError::Storage)?.ok_or(SubscriptionError::OfferUnavailable)?;
         if offer.get::<Uuid,_>("product_id") != command.product_id
@@ -88,9 +88,9 @@ impl SaaSSubscriptions {
             return Err(SubscriptionError::OfferUnavailable);
         }
         let id = Uuid::now_v7();
-        let inserted = sqlx::query("INSERT INTO platform.saas_subscriptions (id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,created_by) VALUES ($1,$2,$3,$4,$5,'active',clock_timestamp(),to_timestamp($6::double precision),$7) ON CONFLICT DO NOTHING RETURNING id")
+        let inserted = sqlx::query("INSERT INTO platform.saas_subscriptions (id,tenant_id,product_id,offer_id,offer_version,status,starts_at,ends_at,created_by) VALUES ($1,$2,$3,$4,$5,'active',clock_timestamp(),to_timestamp($6::bigint::double precision),$7) ON CONFLICT DO NOTHING RETURNING id")
             .bind(id).bind(command.tenant_id).bind(command.product_id).bind(command.offer_id)
-            .bind(command.offer_version).bind(command.ends_at_epoch).bind(command.actor_id)
+            .bind(command.offer_version).bind(offer.get::<Value,_>("entitlements")).bind(command.ends_at_epoch).bind(command.actor_id)
             .fetch_optional(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
         if inserted.is_none() { return Err(SubscriptionError::AlreadyExists); }
         let snapshot = load_snapshot(&mut tx, command.tenant_id, id).await?;
@@ -132,7 +132,7 @@ impl SaaSSubscriptions {
             _ => return Err(SubscriptionError::InvalidTransition),
         };
         let new_end = if matches!(command.action, SubscriptionAction::Renew) { command.new_ends_at_epoch } else { row.get("ends_at_epoch") };
-        sqlx::query("UPDATE platform.saas_subscriptions SET status=$3,ends_at=to_timestamp($4::double precision),suspended_at=CASE WHEN $3='suspended' THEN clock_timestamp() ELSE NULL END,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE NULL END,version=$5,updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2 AND version=$6")
+        sqlx::query("UPDATE platform.saas_subscriptions SET status=$3,ends_at=to_timestamp($4::bigint::double precision),suspended_at=CASE WHEN $3='suspended' THEN clock_timestamp() ELSE NULL END,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE NULL END,version=$5,updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2 AND version=$6")
             .bind(command.subscription_id).bind(command.tenant_id).bind(next).bind(new_end)
             .bind(current_version + 1).bind(current_version)
             .execute(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
@@ -146,7 +146,7 @@ impl SaaSSubscriptions {
     pub async fn get(&self, tenant_id: Uuid, subscription_id: Uuid) -> Result<Option<SubscriptionSnapshot>, SubscriptionError> {
         let mut tx = self.pool.begin().await.map_err(|_| SubscriptionError::Storage)?;
         set_tenant(&mut tx, tenant_id).await?;
-        let row = sqlx::query("SELECT id,tenant_id,product_id,offer_id,offer_version,status,extract(epoch from starts_at)::bigint AS starts_at_epoch,extract(epoch from ends_at)::bigint AS ends_at_epoch,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2")
+        let row = sqlx::query("SELECT id,tenant_id,product_id,offer_id,offer_version,entitlements_snapshot,status,extract(epoch from starts_at)::bigint AS starts_at_epoch,extract(epoch from ends_at)::bigint AS ends_at_epoch,version FROM platform.saas_subscriptions WHERE id=$1 AND tenant_id=$2")
             .bind(subscription_id).bind(tenant_id).fetch_optional(&mut *tx).await.map_err(|_| SubscriptionError::Storage)?;
         tx.commit().await.map_err(|_| SubscriptionError::Storage)?;
         row.map(snapshot_from_row).transpose()
@@ -197,6 +197,7 @@ fn snapshot_from_row(row: sqlx::postgres::PgRow) -> Result<SubscriptionSnapshot,
         product_id: row.try_get("product_id").map_err(|_| SubscriptionError::Storage)?,
         offer_id: row.try_get("offer_id").map_err(|_| SubscriptionError::Storage)?,
         offer_version: row.try_get("offer_version").map_err(|_| SubscriptionError::Storage)?,
+        entitlements: row.try_get("entitlements_snapshot").map_err(|_| SubscriptionError::Storage)?,
         status: row.try_get("status").map_err(|_| SubscriptionError::Storage)?,
         starts_at_epoch: row.try_get("starts_at_epoch").map_err(|_| SubscriptionError::Storage)?,
         ends_at_epoch: row.try_get("ends_at_epoch").map_err(|_| SubscriptionError::Storage)?,
@@ -207,7 +208,7 @@ async fn write_effects(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, s: &Subsc
     let event_id = Uuid::now_v7();
     let kind = if action == "created" { "platform.saas-subscription.created.v1" } else { "platform.saas-subscription.changed.v1" };
     let payload = json!({"eventId":event_id,"tenantId":s.tenant_id,"subscriptionId":s.subscription_id,
-        "productId":s.product_id,"offerId":s.offer_id,"offerVersion":s.offer_version,
+        "productId":s.product_id,"offerId":s.offer_id,"offerVersion":s.offer_version,"entitlements":s.entitlements,
         "status":s.status,"startsAtEpoch":s.starts_at_epoch,"endsAtEpoch":s.ends_at_epoch,"aggregateVersion":s.version});
     sqlx::query("INSERT INTO platform.saas_subscription_audit (audit_id,subscription_id,tenant_id,actor_id,action,previous_status,new_status,previous_version,new_version,reason_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
         .bind(Uuid::now_v7()).bind(s.subscription_id).bind(s.tenant_id).bind(actor).bind(action)

@@ -5,6 +5,17 @@
 
 SET ROLE core_identity_auth_schema_owner;
 
+DO $
+BEGIN
+    IF current_user <> 'core_identity_auth_schema_owner'
+       OR NOT has_schema_privilege(current_user, 'core_identity_auth', 'CREATE') THEN
+        RAISE EXCEPTION 'CORE auth migration owner context is invalid: current_user=%, identity_schema_create=%',
+            current_user,
+            has_schema_privilege(current_user, 'core_identity_auth', 'CREATE');
+    END IF;
+END
+$;
+
 CREATE TABLE core_identity_auth.identity_credentials (
     identity_id uuid PRIMARY KEY REFERENCES core_identity_auth.identities(id) ON DELETE CASCADE,
     password_hash text NOT NULL,

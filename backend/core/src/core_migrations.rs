@@ -417,6 +417,7 @@ pub async fn run_core_migrations_from_path(
                 failure_class = error.failure_kind().as_str(),
                 error_code = "CORE_MIGRATION_FAILED",
                 sqlstate = error.sqlstate().as_deref().unwrap_or(""),
+                source_error = error.source().map(ToString::to_string).unwrap_or_default(),
                 missing_roles = error.missing_roles.as_deref().unwrap_or(""),
                 duration_ms
             ),

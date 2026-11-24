@@ -168,17 +168,6 @@ BEGIN
     IF NEW.version <> OLD.version + 1 THEN
         RAISE EXCEPTION 'subscription version must increase exactly once' USING ERRCODE = '40001';
     END IF;
-    IF OLD.status = 'active' AND NEW.status = 'active' AND (
-        NEW.ends_at IS NULL OR
-        (OLD.ends_at IS NOT NULL AND NEW.ends_at <= OLD.ends_at) OR
-        (OLD.ends_at IS NULL AND NEW.ends_at <= OLD.starts_at)
-    ) THEN
-        RAISE EXCEPTION 'renewal must extend the contractual end date' USING ERRCODE = '23514';
-    END IF;
-    IF OLD.status = 'suspended' AND NEW.status = 'active'
-       AND NEW.ends_at IS NOT NULL AND NEW.ends_at <= clock_timestamp() THEN
-        RAISE EXCEPTION 'expired suspended subscriptions cannot be reactivated' USING ERRCODE = '23514';
-    END IF;
     IF NOT (
         (OLD.status = 'active' AND NEW.status IN ('active','suspended','cancelled','expired'))
         OR (OLD.status = 'suspended' AND NEW.status IN ('active','cancelled','expired'))

@@ -1,0 +1,7 @@
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/community/neoeinstein-prost:v0.4.0
+    out: backend/platform-contract/src/generated
+    opt:
+      - compile_well_known_types

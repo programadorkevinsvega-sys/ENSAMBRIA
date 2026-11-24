@@ -1,7 +1,0 @@
-[Unit]
-Description=Restart ENSAMBRIA services after shared environment changes
-After=ensambria-core.service ensambria-core-email-worker.service ensambria-business.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/systemctl restart ensambria-core.service ensambria-core-email-worker.service ensambria-business.service

@@ -24,27 +24,56 @@ impl TenancyAccess for CoreTenancyAccess {
         tenant_id: Uuid,
     ) -> ContractFuture<'a, Result<ActiveTenantMembership, TenancyFailure>> {
         Box::pin(async move {
-            let mut transaction = self.pool.begin().await.map_err(|_| TenancyFailure::Unavailable)?;
+            let mut transaction = self
+                .pool
+                .begin()
+                .await
+                .map_err(|_| TenancyFailure::Unavailable)?;
             sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
                 .bind(tenant_id.to_string())
                 .execute(&mut *transaction)
                 .await
                 .map_err(|_| TenancyFailure::Unavailable)?;
             let row = sqlx::query_as::<_, (Uuid, Uuid, Uuid, Vec<String>)>(
-                "SELECT m.id, m.tenant_id, m.identity_id,                         COALESCE(array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL), ARRAY[]::text[])                    FROM core.tenant_memberships m                    LEFT JOIN core.membership_role_assignments a                      ON a.tenant_id = m.tenant_id AND a.membership_id = m.id                    LEFT JOIN core.tenant_roles r                      ON r.tenant_id = a.tenant_id AND r.id = a.role_id                   WHERE m.tenant_id = $1 AND m.identity_id = $2 AND m.status = 'active'                   GROUP BY m.id, m.tenant_id, m.identity_id",
+                r#"
+                SELECT
+                    m.id,
+                    m.tenant_id,
+                    m.identity_id,
+                    COALESCE(
+                        array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL),
+                        ARRAY[]::text[]
+                    )
+                FROM core.tenant_memberships m
+                LEFT JOIN core.membership_role_assignments a
+                    ON a.tenant_id = m.tenant_id
+                   AND a.membership_id = m.id
+                LEFT JOIN core.tenant_roles r
+                    ON r.tenant_id = a.tenant_id
+                   AND r.id = a.role_id
+                WHERE m.tenant_id = $1
+                  AND m.identity_id = $2
+                  AND m.status = 'active'
+                GROUP BY m.id, m.tenant_id, m.identity_id
+                "#,
             )
             .bind(tenant_id)
             .bind(identity_id)
             .fetch_optional(&mut *transaction)
             .await
             .map_err(|_| TenancyFailure::Unavailable)?;
-            transaction.commit().await.map_err(|_| TenancyFailure::Unavailable)?;
-            row.map(|(membership_id, tenant_id, identity_id, role_codes)| ActiveTenantMembership {
-                membership_id,
-                tenant_id,
-                identity_id,
-                role_codes,
-            })
+            transaction
+                .commit()
+                .await
+                .map_err(|_| TenancyFailure::Unavailable)?;
+            row.map(
+                |(membership_id, tenant_id, identity_id, role_codes)| ActiveTenantMembership {
+                    membership_id,
+                    tenant_id,
+                    identity_id,
+                    role_codes,
+                },
+            )
             .ok_or(TenancyFailure::Forbidden)
         })
     }
@@ -55,21 +84,34 @@ impl TenancyAccess for CoreTenancyAccess {
         organization_id: Uuid,
     ) -> ContractFuture<'a, Result<ActiveOrganization, TenancyFailure>> {
         Box::pin(async move {
-            let mut transaction = self.pool.begin().await.map_err(|_| TenancyFailure::Unavailable)?;
+            let mut transaction = self
+                .pool
+                .begin()
+                .await
+                .map_err(|_| TenancyFailure::Unavailable)?;
             sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
                 .bind(tenant_id.to_string())
                 .execute(&mut *transaction)
                 .await
                 .map_err(|_| TenancyFailure::Unavailable)?;
             let row = sqlx::query_as::<_, (Uuid, Uuid)>(
-                "SELECT id, tenant_id FROM core.organizations                   WHERE tenant_id = $1 AND id = $2 AND status = 'active'",
+                r#"
+                SELECT id, tenant_id
+                FROM core.organizations
+                WHERE tenant_id = $1
+                  AND id = $2
+                  AND status = 'active'
+                "#,
             )
             .bind(tenant_id)
             .bind(organization_id)
             .fetch_optional(&mut *transaction)
             .await
             .map_err(|_| TenancyFailure::Unavailable)?;
-            transaction.commit().await.map_err(|_| TenancyFailure::Unavailable)?;
+            transaction
+                .commit()
+                .await
+                .map_err(|_| TenancyFailure::Unavailable)?;
             row.map(|(organization_id, tenant_id)| ActiveOrganization {
                 organization_id,
                 tenant_id,
@@ -85,14 +127,25 @@ impl TenancyAccess for CoreTenancyAccess {
         branch_id: Uuid,
     ) -> ContractFuture<'a, Result<ActiveBranch, TenancyFailure>> {
         Box::pin(async move {
-            let mut transaction = self.pool.begin().await.map_err(|_| TenancyFailure::Unavailable)?;
+            let mut transaction = self
+                .pool
+                .begin()
+                .await
+                .map_err(|_| TenancyFailure::Unavailable)?;
             sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
                 .bind(tenant_id.to_string())
                 .execute(&mut *transaction)
                 .await
                 .map_err(|_| TenancyFailure::Unavailable)?;
             let row = sqlx::query_as::<_, (Uuid, Uuid, Uuid)>(
-                "SELECT id, tenant_id, organization_id FROM core.branches                   WHERE tenant_id = $1 AND organization_id = $2 AND id = $3 AND status = 'active'",
+                r#"
+                SELECT id, tenant_id, organization_id
+                FROM core.branches
+                WHERE tenant_id = $1
+                  AND organization_id = $2
+                  AND id = $3
+                  AND status = 'active'
+                "#,
             )
             .bind(tenant_id)
             .bind(organization_id)
@@ -100,12 +153,17 @@ impl TenancyAccess for CoreTenancyAccess {
             .fetch_optional(&mut *transaction)
             .await
             .map_err(|_| TenancyFailure::Unavailable)?;
-            transaction.commit().await.map_err(|_| TenancyFailure::Unavailable)?;
-            row.map(|(branch_id, tenant_id, organization_id)| ActiveBranch {
-                branch_id,
-                tenant_id,
-                organization_id,
-            })
+            transaction
+                .commit()
+                .await
+                .map_err(|_| TenancyFailure::Unavailable)?;
+            row.map(
+                |(branch_id, tenant_id, organization_id)| ActiveBranch {
+                    branch_id,
+                    tenant_id,
+                    organization_id,
+                },
+            )
             .ok_or(TenancyFailure::NotFound)
         })
     }

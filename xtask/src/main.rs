@@ -98,11 +98,11 @@ fn architecture() -> Result<(), Vec<String>> {
     require_file(root, "buf.yaml", &mut errors);
     require_file(root, "buf.gen.yaml", &mut errors);
     for proto in [
-        "contracts/protobuf/core/identity_authentication/v1/identity_authentication.proto",
-        "contracts/protobuf/core/tenancy/v1/tenancy.proto",
-        "contracts/protobuf/business/establishment_catalog/v1/establishment_catalog.proto",
-        "contracts/protobuf/platform/product_catalog/v1/product_catalog.proto",
-        "contracts/protobuf/platform/tenant_onboarding/v1/tenant_onboarding.proto",
+        "contracts/protobuf/ensambria/core/identity_authentication/v1/identity_authentication.proto",
+        "contracts/protobuf/ensambria/core/tenancy/v1/tenancy.proto",
+        "contracts/protobuf/ensambria/business/establishment_catalog/v1/establishment_catalog.proto",
+        "contracts/protobuf/ensambria/platform/product_catalog/v1/product_catalog.proto",
+        "contracts/protobuf/ensambria/platform/tenant_onboarding/v1/tenant_onboarding.proto",
     ] {
         require_file(root, proto, &mut errors);
     }

@@ -174,15 +174,13 @@ fn architecture() -> Result<(), Vec<String>> {
         "scripts/ci/check-platform-module-isolation.sh",
         &mut errors,
     );
-    if !quality_workflow.contains("bash scripts/ci/check-platform-module-isolation.sh") {
-        errors.push(
-            "PostgreSQL CI must execute the PLATFORM runtime isolation proof".to_owned(),
-        );
-    }
     let quality_workflow = read(
         root.join(".github/workflows/repository-quality.yml"),
         &mut errors,
     );
+    if !quality_workflow.contains("bash scripts/ci/check-platform-module-isolation.sh") {
+        errors.push("PostgreSQL CI must execute the PLATFORM runtime isolation proof".to_owned());
+    }
     if !quality_workflow.contains("bash scripts/ci/check-core-module-isolation.sh") {
         errors.push(
             "PostgreSQL CI must execute the CORE runtime and worker isolation proof".to_owned(),
@@ -191,11 +189,12 @@ fn architecture() -> Result<(), Vec<String>> {
     if quality_workflow.contains("core.outbox_events")
         || quality_workflow.contains("core.auth_rotate_refresh_token")
     {
-        errors.push(
-            "PostgreSQL CI must not reference the removed legacy CORE schema".to_owned(),
-        );
+        errors.push("PostgreSQL CI must not reference the removed legacy CORE schema".to_owned());
     }
-    let e2e_manifest = read(root.join("backend/architecture-e2e/Cargo.toml"), &mut errors);
+    let e2e_manifest = read(
+        root.join("backend/architecture-e2e/Cargo.toml"),
+        &mut errors,
+    );
     for dependency in ["ensambria-core =", "ensambria-platform ="] {
         if !e2e_manifest.contains(dependency) {
             errors.push(format!(
@@ -204,7 +203,10 @@ fn architecture() -> Result<(), Vec<String>> {
         }
     }
 
-    let core_policy = read(root.join("backend/core/src/platform_product_policy.rs"), &mut errors);
+    let core_policy = read(
+        root.join("backend/core/src/platform_product_policy.rs"),
+        &mut errors,
+    );
     if core_policy.contains("ensambria_platform_contract") || core_policy.contains("tonic::") {
         errors.push(
             "CORE application policy must depend on the application contract, not Protobuf/Tonic"

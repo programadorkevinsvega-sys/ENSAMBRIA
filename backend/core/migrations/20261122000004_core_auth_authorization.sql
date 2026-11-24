@@ -5,7 +5,7 @@
 
 SET ROLE core_identity_auth_schema_owner;
 
-DO $
+DO $owner_check$
 BEGIN
     IF current_user <> 'core_identity_auth_schema_owner'
        OR NOT has_schema_privilege(current_user, 'core_identity_auth', 'CREATE') THEN
@@ -14,7 +14,7 @@ BEGIN
             has_schema_privilege(current_user, 'core_identity_auth', 'CREATE');
     END IF;
 END
-$;
+$owner_check$;
 
 CREATE TABLE core_identity_auth.identity_credentials (
     identity_id uuid PRIMARY KEY REFERENCES core_identity_auth.identities(id) ON DELETE CASCADE,

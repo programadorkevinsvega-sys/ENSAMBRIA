@@ -1,7 +1,7 @@
 -- Provision isolated PostgreSQL module identities and destination schemas.
--- Run as a database administrator after core_migrator and the legacy backend roles exist.
--- This prepares the ownership cutover; it deliberately grants no runtime access to
--- the new schemas until each module's tables/functions have been moved and tested.
+-- Run as a database administrator after core_migrator exists.
+-- This bootstraps the five canonical schemas from an empty database. Module migrations
+-- create objects and grant only the runtime privileges required by their owner.
 DO $roles$
 DECLARE
     role_name text;
@@ -72,4 +72,5 @@ REVOKE ALL ON SCHEMA
 FROM PUBLIC;
 
 
--- Runtime roles intentionally receive no USAGE/CREATE until their module cutover.
+-- Runtime roles intentionally receive no USAGE/CREATE here; module migrations grant
+-- only the exact schema/table/function privileges required by each runtime.

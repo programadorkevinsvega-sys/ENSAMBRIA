@@ -326,15 +326,18 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
           DO $body$
           BEGIN
-              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone)') IS NULL THEN
+              IF to_regprocedure('core_identity_auth.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone)') IS NULL THEN
                   RAISE EXCEPTION 'previous CORE release refresh-token function contract is missing';
               END IF;
-              IF to_regprocedure('core.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone,bytea,timestamp with time zone)') IS NULL THEN
+              IF to_regprocedure('core_identity_auth.auth_rotate_refresh_token(bytea,uuid,bytea,timestamp with time zone,bytea,timestamp with time zone)') IS NULL THEN
                   RAISE EXCEPTION 'current CORE access-token refresh function contract is missing';
               END IF;
           END
           $body$;
           SQL
+      - name: Verify CORE identity and tenancy runtime isolation after migrations
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: bash scripts/ci/check-core-module-isolation.sh
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
@@ -357,7 +360,7 @@ jobs:
           SET ROLE core_tenancy_runtime;
           BEGIN;
           SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
-          INSERT INTO core.outbox_events (
+          INSERT INTO core_tenancy.outbox_events (
               event_id, event_type, schema_version, aggregate_type, aggregate_id,
               aggregate_version, product_id, product_config_version, correlation_id,
               payload, occurred_at
@@ -376,7 +379,7 @@ jobs:
           DO $body$
           BEGIN
               IF NOT EXISTS (
-                  SELECT 1 FROM core.outbox_events
+                  SELECT 1 FROM core_tenancy.outbox_events
                    WHERE event_id = '018f0f2a-7b3c-7abc-8def-0123456789b0'
               ) THEN
                   RAISE EXCEPTION 'CORE outbox relay cannot read the committed event';

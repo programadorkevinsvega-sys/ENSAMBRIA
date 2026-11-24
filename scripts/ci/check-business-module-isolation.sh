@@ -52,8 +52,7 @@ BEGIN
         RAISE EXCEPTION 'BUSINESS runtime table grants are not least-privilege';
     END IF;
 
-    IF has_schema_privilege('business_establishment_catalog_runtime', 'core', 'USAGE')
-       OR has_schema_privilege('business_establishment_catalog_runtime', 'core_identity_auth', 'USAGE')
+    IF has_schema_privilege('business_establishment_catalog_runtime', 'core_identity_auth', 'USAGE')
        OR has_schema_privilege('business_establishment_catalog_runtime', 'core_tenancy', 'USAGE')
        OR has_schema_privilege('business_establishment_catalog_runtime', 'platform_product_catalog', 'USAGE')
        OR has_schema_privilege('business_establishment_catalog_runtime', 'platform_tenant_onboarding', 'USAGE')

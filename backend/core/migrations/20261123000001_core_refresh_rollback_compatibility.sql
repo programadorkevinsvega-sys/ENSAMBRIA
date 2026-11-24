@@ -15,7 +15,7 @@ CREATE OR REPLACE FUNCTION core_identity_auth.auth_rotate_refresh_token(
 RETURNS TABLE(identity_id uuid, rotation_succeeded boolean, reuse_detected boolean)
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, core
+SET search_path = pg_catalog, core_identity_auth
 AS $$
 DECLARE
     v_session core_identity_auth.auth_sessions%ROWTYPE;

@@ -1,5 +1,5 @@
 version: 1
-description: "Canonical PostgreSQL module ownership target. Runtime grants are activated only by the corresponding module cutover migration."
+description: "Canonical PostgreSQL module ownership target. A fresh bootstrap provisions five schemas; owner migrations activate minimal runtime grants."
 modules:
   - id: core.identity-authentication
     backend: CORE
@@ -111,5 +111,5 @@ modules:
 notes:
   - "IDs crossing module boundaries are opaque references; no cross-module foreign keys."
   - "No runtime role receives access to another module schema."
-  - "The current legacy schemas remain in place until all application SQL, functions, workers, tests and deploy configuration are migrated."
+  - "The fresh bootstrap provisions only the five canonical module schemas; no legacy schema or compatibility grants are created."
   - "No compatibility view may bypass module ownership."

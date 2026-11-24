@@ -96,7 +96,7 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
         0
     );
     let state: (String, i32) =
-        sqlx::query_as("SELECT status, attempts FROM core.email_outbox WHERE recipient = $1")
+        sqlx::query_as("SELECT status, attempts FROM core_identity_auth.email_outbox WHERE recipient = $1")
             .bind(format!("{id}@example.test"))
             .fetch_one(&worker_pool)
             .await
@@ -105,7 +105,7 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
     assert_eq!(state.1, 1);
 
     sqlx::query(
-        "UPDATE core.email_outbox SET available_at = clock_timestamp() WHERE recipient = $1",
+        "UPDATE core_identity_auth.email_outbox SET available_at = clock_timestamp() WHERE recipient = $1",
     )
     .bind(format!("{id}@example.test"))
     .execute(&worker_pool)
@@ -125,14 +125,14 @@ async fn email_outbox_persists_messages_and_worker_marks_success_or_schedules_re
     );
     assert_eq!(successful.sent.load(Ordering::SeqCst), 1);
     let final_state: String =
-        sqlx::query_scalar("SELECT status FROM core.email_outbox WHERE recipient = $1")
+        sqlx::query_scalar("SELECT status FROM core_identity_auth.email_outbox WHERE recipient = $1")
             .bind(format!("{id}@example.test"))
             .fetch_one(&worker_pool)
             .await
             .expect("sent state must persist");
     assert_eq!(final_state, "sent");
     let retained_body: String =
-        sqlx::query_scalar("SELECT text_body FROM core.email_outbox WHERE recipient = $1")
+        sqlx::query_scalar("SELECT text_body FROM core_identity_auth.email_outbox WHERE recipient = $1")
             .bind(format!("{id}@example.test"))
             .fetch_one(&worker_pool)
             .await
@@ -174,7 +174,7 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
         .expect("transaction must roll back");
 
     let after_rollback: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core.email_outbox WHERE recipient = $1")
+        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1")
             .bind(&recipient)
             .fetch_one(&worker_pool)
             .await
@@ -199,7 +199,7 @@ async fn outbox_enqueue_obeys_the_callers_transaction_boundary() {
     committed.commit().await.expect("transaction must commit");
 
     let after_commit: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM core.email_outbox WHERE recipient = $1")
+        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.email_outbox WHERE recipient = $1")
             .bind(&recipient)
             .fetch_one(&worker_pool)
             .await

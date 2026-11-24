@@ -114,7 +114,7 @@ expect_denied() {
     fi
 }
 
-expect_denied "read CORE memberships" "SELECT * FROM core.tenant_memberships LIMIT 1"
-expect_denied "read CORE identities" "SELECT * FROM core.identities LIMIT 1"
+expect_denied "read CORE memberships" "SELECT * FROM core_tenancy.tenant_memberships LIMIT 1"
+expect_denied "read CORE identities" "SELECT * FROM core_identity_auth.identities LIMIT 1"
 expect_denied "create a table in its own schema" "CREATE TABLE business_establishment_catalog.privilege_probe(id integer)"
 expect_denied "assume the schema owner" "SET ROLE business_establishment_catalog_schema_owner"

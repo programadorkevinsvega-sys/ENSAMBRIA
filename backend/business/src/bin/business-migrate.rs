@@ -111,8 +111,8 @@ async fn apply_migrations(
 
     let mut transaction = pool.begin().await?;
 
-    // The dedicated migrator is a member of both schema-owner roles. The
-    // bootstrap switches roles explicitly so CORE grants remain owned by CORE.
+    // The dedicated migrator is a member of the BUSINESS schema-owner role.
+    // CORE access is performed through CORE's public tenancy contract.
     sqlx::raw_sql(sqlx::AssertSqlSafe(bootstrap))
         .execute(&mut *transaction)
         .await?;
@@ -158,7 +158,7 @@ async fn apply_migrations(
 async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     let missing_roles: Vec<String> = sqlx::query_scalar(
         "SELECT required.role_name
-         FROM (VALUES ('business_establishment_catalog_schema_owner'), ('core_tenancy_schema_owner')) AS required(role_name)
+         FROM (VALUES ('business_establishment_catalog_schema_owner')) AS required(role_name)
          LEFT JOIN pg_roles role ON role.rolname = required.role_name
          WHERE role.oid IS NULL OR NOT pg_has_role(current_user, role.oid, 'MEMBER')
          ORDER BY required.role_name",
@@ -184,7 +184,7 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     let unsafe_owner_roles: Vec<String> = sqlx::query_scalar(
         "SELECT rolname
          FROM pg_roles
-         WHERE rolname IN ('business_establishment_catalog_schema_owner', 'core_tenancy_schema_owner')
+         WHERE rolname IN ('business_establishment_catalog_schema_owner')
            AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls)
          ORDER BY rolname",
     )

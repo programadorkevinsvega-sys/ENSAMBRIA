@@ -6,7 +6,7 @@ The BUSINESS bounded context now has a runnable HTTP process and a first tenant-
 
 Required:
 - `DATABASE_URL`: CORE pool URL (role with CORE runtime permissions).
-- `BUSINESS_DATABASE_URL`: BUSINESS pool URL (least-privilege `business_runtime` role).
+- `BUSINESS_DATABASE_URL`: BUSINESS pool URL (least-privilege `business_establishment_catalog_runtime` role).
 - `CORE_MFA_ENCRYPTION_KEY_VERSION`, `CORE_MFA_ENCRYPTION_KEY_HEX`.
 - `CORE_AUTH_RATE_LIMIT_SECRET_HEX`.
 - `CORE_PUBLIC_BASE_URL`.
@@ -23,7 +23,7 @@ Build and run:
 cargo run -p ensambria-business-runtime --bin business
 ```
 
-Apply CORE migrations first. As a PostgreSQL database administrator, run `psql "$BUSINESS_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/business/deployment/provision-business-roles.sql` after setting `BUSINESS_ADMIN_DATABASE_URL` to the target database. This idempotently provisions `business_schema_owner` and `business_runtime`, grants the required owner membership and database privileges, and does not create or rotate LOGIN passwords. Then run the BUSINESS migrator with `MIGRATIONS_DATABASE_URL` authenticated as `core_migrator`; it preflights owner roles and permissions before applying `migrations/bootstrap/00000000000000_business_schema.sql` and the ordered migrations. The bootstrap explicitly switches to `core_schema_owner` to grant `USAGE`/`SELECT` on CORE tables. Runtime roles must not own tables or have BYPASSRLS.
+Apply CORE migrations first. As a PostgreSQL database administrator, run `psql "$BUSINESS_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/business/deployment/provision-business-roles.sql` after setting `BUSINESS_ADMIN_DATABASE_URL` to the target database. This idempotently provisions `business_establishment_catalog_schema_owner` and `business_establishment_catalog_runtime`, grants the required owner membership and database privileges, and does not create or rotate LOGIN passwords. Then run the BUSINESS migrator with `MIGRATIONS_DATABASE_URL` authenticated as `core_migrator`; it preflights owner roles and permissions before applying `migrations/bootstrap/00000000000000_business_schema.sql` and the ordered migrations. The BUSINESS schema has no direct CORE table grants; membership, organization and branch validation is performed through CORE's public Tenancy contract. Runtime roles must not own tables or have BYPASSRLS.
 
 ## HTTP contract
 

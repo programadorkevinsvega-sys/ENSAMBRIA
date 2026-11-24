@@ -215,7 +215,7 @@ jobs:
       PLATFORM_EVENT_DATABASE_URL: postgres://platform_event_consumer@127.0.0.1:5432/ensambria_core_test
       PLATFORM_VERIFY_DATABASE_URL: postgres://core_admin@127.0.0.1:5432/ensambria_core_test
       PLATFORM_TEST_DATABASE_URL: postgres://platform_runtime@127.0.0.1:5432/ensambria_core_test
-      BUSINESS_DATABASE_URL: postgres://business_runtime@127.0.0.1:5432/ensambria_core_test
+      BUSINESS_DATABASE_URL: postgres://business_establishment_catalog_runtime@127.0.0.1:5432/ensambria_core_test
       ENSAMBRIA_TEST_REDIS_URL: redis://127.0.0.1:6379/
       RUSTUP_TOOLCHAIN: 1.99.1
     services:
@@ -333,22 +333,6 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_runtime; SELECT count(*) FROM platform.active_product_catalog;"
-
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_schema_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT business_schema_owner TO core_migrator;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CREATE ON DATABASE ensambria_core_test TO business_schema_owner;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO business_runtime;"
 
       - name: Provision isolated PostgreSQL module schemas and roles
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
@@ -531,7 +515,7 @@ jobs:
       CORE_MFA_ENCRYPTION_KEY_HEX: "1111111111111111111111111111111111111111111111111111111111111111"
       CORE_AUTH_RATE_LIMIT_SECRET_HEX: "2222222222222222222222222222222222222222222222222222222222222222"
       CORE_PUBLIC_BASE_URL: https://business.example.test
-      BUSINESS_DATABASE_URL: postgres://business_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
+      BUSINESS_DATABASE_URL: postgres://business_establishment_catalog_runtime:ensambria-ci-only@172.29.0.30:5432/ensambria_ci
       BUSINESS_DATABASE_MAX_CONNECTIONS: "4"
       BUSINESS_HTTP_LISTEN_ADDRESS: 127.0.0.1:22100
     steps:
@@ -593,7 +577,7 @@ jobs:
             -c "CREATE ROLE core_runtime LOGIN PASSWORD 'ensambria-ci-only';"
           docker compose -f infra/redis-ha/compose.ci.yml exec -T postgres \
             psql -U core_admin -d ensambria_ci -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE business_runtime LOGIN PASSWORD 'ensambria-ci-only';"
+            -c "CREATE ROLE business_establishment_catalog_runtime LOGIN PASSWORD 'ensambria-ci-only';"
 
       - name: Build the actual BUSINESS HTTP runtime
         run: cargo build --locked -p ensambria-business-runtime --bin business

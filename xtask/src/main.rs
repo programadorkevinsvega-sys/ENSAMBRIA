@@ -72,13 +72,95 @@ fn architecture() -> Result<(), Vec<String>> {
     ];
     for (manifest, dependency) in forbidden {
         let content = read(root.join(manifest), &mut errors);
-        let dependencies = dependency_section(&content);
-        if dependencies
+        if content
             .lines()
             .any(|line| line.trim_start().starts_with(dependency))
         {
             errors.push(format!(
                 "{manifest} has forbidden implementation dependency {dependency}"
+            ));
+        }
+    }
+
+    let required_contract_dependencies = [
+        (
+            "backend/core/Cargo.toml",
+            "ensambria-core-identity-auth-contracts =",
+        ),
+        (
+            "backend/core/Cargo.toml",
+            "ensambria-core-tenancy-contracts =",
+        ),
+        (
+            "backend/business/Cargo.toml",
+            "ensambria-business-establishment-catalog-contracts =",
+        ),
+        (
+            "backend/business/Cargo.toml",
+            "ensambria-core-tenancy-contracts =",
+        ),
+        (
+            "backend/platform/Cargo.toml",
+            "ensambria-platform-product-catalog-contracts =",
+        ),
+        (
+            "backend/platform/Cargo.toml",
+            "ensambria-platform-tenant-onboarding-contracts =",
+        ),
+    ];
+    for (manifest, dependency) in required_contract_dependencies {
+        let content = read(root.join(manifest), &mut errors);
+        if !content
+            .lines()
+            .any(|line| line.trim_start().starts_with(dependency))
+        {
+            errors.push(format!(
+                "{manifest} must depend on its public contract {dependency}"
+            ));
+        }
+    }
+
+    let contract_implementations = [
+        (
+            "backend/core/src/identity_authentication/service.rs",
+            "impl<D: EmailDelivery> IdentityAuthentication for AuthenticationService<D>",
+        ),
+        (
+            "backend/core/src/tenancy_access.rs",
+            "impl TenancyAccess for CoreTenancyAccess",
+        ),
+        (
+            "backend/business/src/service.rs",
+            "impl EstablishmentCatalog for BusinessService",
+        ),
+        (
+            "backend/platform/src/product_catalog.rs",
+            "impl ProductCatalogPort for ProductCatalog",
+        ),
+        (
+            "backend/platform/src/tenant_onboarding.rs",
+            "impl TenantOnboarding for PlatformTenantOnboarding",
+        ),
+    ];
+    for (source, implementation) in contract_implementations {
+        let content = read(root.join(source), &mut errors);
+        if !content.contains(implementation) {
+            errors.push(format!(
+                "{source} does not implement its declared public contract"
+            ));
+        }
+    }
+
+    require_file(
+        root,
+        "backend/architecture-e2e/tests/core_product_catalog_contract.rs",
+        &mut errors,
+    );
+    let e2e_manifest = read(root.join("backend/architecture-e2e/Cargo.toml"), &mut errors);
+    for dependency in ["ensambria-core =", "ensambria-platform ="] {
+        if !e2e_manifest.contains(dependency) {
+            errors.push(format!(
+                "architecture E2E harness must compose {dependency}"
             ));
         }
     }
@@ -255,20 +337,6 @@ fn architecture() -> Result<(), Vec<String>> {
     } else {
         Err(errors)
     }
-}
-
-fn dependency_section(manifest: &str) -> String {
-    let mut active = false;
-    let mut result = String::new();
-    for line in manifest.lines() {
-        if line.starts_with('[') {
-            active = line == "[dependencies]";
-        } else if active {
-            result.push_str(line);
-            result.push(char::from(10));
-        }
-    }
-    result
 }
 
 fn require_file(root: &Path, relative: impl AsRef<Path>, errors: &mut Vec<String>) {

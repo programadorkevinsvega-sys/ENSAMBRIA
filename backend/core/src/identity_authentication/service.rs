@@ -7,6 +7,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use ensambria_core_identity_auth_contracts::{
+    AuthenticatedIdentity, AuthenticationFailure, ContractFuture, IdentityAuthentication,
+};
 use ensambria_shared_cache::TtlCache;
 use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor, message::Mailbox,
@@ -1228,6 +1231,25 @@ impl<D: EmailDelivery> AuthenticationService<D> {
         .await
         .map_err(|_| AuthenticationError::Storage)?;
         Ok(())
+    }
+}
+
+impl<D: EmailDelivery> IdentityAuthentication for AuthenticationService<D> {
+    fn authenticate_bearer<'a>(
+        &'a self,
+        bearer_token: &'a str,
+    ) -> ContractFuture<'a, Result<AuthenticatedIdentity, AuthenticationFailure>> {
+        Box::pin(async move {
+            self.authenticate_access_token(bearer_token)
+                .await
+                .map(|identity_id| AuthenticatedIdentity { identity_id })
+                .map_err(|error| match error {
+                    AuthenticationError::InvalidAccessToken => {
+                        AuthenticationFailure::InvalidCredential
+                    }
+                    _ => AuthenticationFailure::Unavailable,
+                })
+        })
     }
 }
 

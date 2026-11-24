@@ -8,9 +8,8 @@ pub type ContractFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AuthenticatedIdentity {
+    /// Stable identity reference; session and credential internals remain CORE-owned.
     pub identity_id: Uuid,
-    pub session_id: Uuid,
-    pub authenticated_at_unix: i64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -1,5 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
+use ensambria_business_establishment_catalog_contracts::{
+    ContractFuture, CreateEstablishment as CreateEstablishmentContract,
+    Establishment as EstablishmentContract, EstablishmentCatalog, EstablishmentFailure,
+};
 use ensambria_core_tenancy_contracts::{TenancyAccess, TenancyFailure};
 
 use ensambria_shared_cache::TtlCache;
@@ -130,6 +134,61 @@ impl BusinessService {
                 .await;
         }
         Ok(row)
+    }
+}
+
+impl EstablishmentCatalog for BusinessService {
+    fn list_for_tenant<'a>(
+        &'a self,
+        identity_id: Uuid,
+        tenant_id: Uuid,
+    ) -> ContractFuture<'a, Result<Vec<EstablishmentContract>, EstablishmentFailure>> {
+        Box::pin(async move {
+            self.list_establishments(identity_id, tenant_id)
+                .await
+                .map(|rows| rows.into_iter().map(EstablishmentContract::from).collect())
+                .map_err(map_establishment_failure)
+        })
+    }
+
+    fn create<'a>(
+        &'a self,
+        input: CreateEstablishmentContract,
+    ) -> ContractFuture<'a, Result<EstablishmentContract, EstablishmentFailure>> {
+        Box::pin(async move {
+            self.create_establishment(
+                input.identity_id,
+                input.tenant_id,
+                input.organization_id,
+                input.branch_id,
+                input.display_name,
+            )
+            .await
+            .map(EstablishmentContract::from)
+            .map_err(map_establishment_failure)
+        })
+    }
+}
+
+impl From<Establishment> for EstablishmentContract {
+    fn from(value: Establishment) -> Self {
+        Self {
+            id: value.id,
+            tenant_id: value.tenant_id,
+            organization_id: value.organization_id,
+            branch_id: value.branch_id,
+            display_name: value.display_name,
+            status: value.status,
+        }
+    }
+}
+
+fn map_establishment_failure(error: BusinessError) -> EstablishmentFailure {
+    match error {
+        BusinessError::InvalidInput => EstablishmentFailure::InvalidInput,
+        BusinessError::Forbidden => EstablishmentFailure::Forbidden,
+        BusinessError::OrganizationUnavailable => EstablishmentFailure::NotFound,
+        BusinessError::Storage => EstablishmentFailure::Unavailable,
     }
 }
 

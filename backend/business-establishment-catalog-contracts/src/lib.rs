@@ -18,6 +18,8 @@ pub struct Establishment {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CreateEstablishment {
+    /// Authenticated caller; BUSINESS delegates membership validation to CORE.
+    pub identity_id: Uuid,
     pub tenant_id: Uuid,
     pub organization_id: Uuid,
     pub branch_id: Option<Uuid>,
@@ -35,6 +37,7 @@ pub enum EstablishmentFailure {
 pub trait EstablishmentCatalog: Send + Sync {
     fn list_for_tenant<'a>(
         &'a self,
+        identity_id: Uuid,
         tenant_id: Uuid,
     ) -> ContractFuture<'a, Result<Vec<Establishment>, EstablishmentFailure>>;
 

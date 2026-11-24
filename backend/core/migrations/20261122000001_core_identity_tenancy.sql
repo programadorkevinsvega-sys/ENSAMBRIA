@@ -193,12 +193,9 @@ CREATE INDEX security_audit_actor_time_idx
     ON core_identity_auth.security_audit_events (actor_id, occurred_at DESC)
     WHERE actor_id IS NOT NULL;
 
--- Identity is global, but reads/writes are restricted to the authenticated actor.
-ALTER TABLE core_identity_auth.identities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE core_identity_auth.identities FORCE ROW LEVEL SECURITY;
-CREATE POLICY identities_actor_scope ON core_identity_auth.identities
-    USING (id = NULLIF(current_setting('app.actor_id', true), '')::uuid)
-    WITH CHECK (id = NULLIF(current_setting('app.actor_id', true), '')::uuid);
+-- Tenant-scoped policies and grants are applied by the tenancy schema owner.
+RESET ROLE;
+SET LOCAL ROLE core_tenancy_schema_owner;
 
 -- Every tenant-scoped relation is isolated in PostgreSQL, not only in application queries.
 DO $$
@@ -232,6 +229,30 @@ CREATE POLICY tenants_tenant_scope ON core_tenancy.tenants
     USING (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     WITH CHECK (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
+GRANT USAGE ON SCHEMA core_tenancy TO core_tenancy_runtime;
+GRANT SELECT, INSERT, UPDATE ON
+    core_tenancy.tenants,
+    core_tenancy.organizations,
+    core_tenancy.branches,
+    core_tenancy.tenant_memberships,
+    core_tenancy.tenant_roles,
+    core_tenancy.tenant_role_permissions,
+    core_tenancy.membership_role_assignments,
+    core_tenancy.tenant_products
+TO core_tenancy_runtime;
+GRANT DELETE ON core_tenancy.organizations, core_tenancy.branches TO core_tenancy_runtime;
+GRANT SELECT ON core_tenancy.permissions TO core_tenancy_runtime;
+
+-- Global identity and security-audit policies belong to the identity schema owner.
+RESET ROLE;
+SET LOCAL ROLE core_identity_auth_schema_owner;
+
+ALTER TABLE core_identity_auth.identities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE core_identity_auth.identities FORCE ROW LEVEL SECURITY;
+CREATE POLICY identities_actor_scope ON core_identity_auth.identities
+    USING (id = NULLIF(current_setting('app.actor_id', true), '')::uuid)
+    WITH CHECK (id = NULLIF(current_setting('app.actor_id', true), '')::uuid);
+
 ALTER TABLE core_identity_auth.security_audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core_identity_auth.security_audit_events FORCE ROW LEVEL SECURITY;
 CREATE POLICY security_audit_scope ON core_identity_auth.security_audit_events
@@ -249,21 +270,13 @@ CREATE POLICY security_audit_scope ON core_identity_auth.security_audit_events
     );
 
 GRANT USAGE ON SCHEMA core_identity_auth TO core_identity_auth_runtime;
-GRANT USAGE ON SCHEMA core_tenancy TO core_tenancy_runtime;
 GRANT SELECT, INSERT, UPDATE ON core_identity_auth.identities TO core_identity_auth_runtime;
-GRANT SELECT, INSERT, UPDATE ON
-    core_tenancy.tenants,
-    core_tenancy.organizations,
-    core_tenancy.branches,
-    core_tenancy.tenant_memberships,
-    core_tenancy.tenant_roles,
-    core_tenancy.tenant_role_permissions,
-    core_tenancy.membership_role_assignments,
-    core_tenancy.tenant_products
-TO core_tenancy_runtime;
-GRANT DELETE ON core_tenancy.organizations, core_tenancy.branches TO core_tenancy_runtime;
-GRANT SELECT ON core_tenancy.permissions TO core_tenancy_runtime;
 GRANT SELECT, INSERT ON core_identity_auth.security_audit_events TO core_identity_auth_runtime;
+
+-- SQLx records this migration in core_tenancy._sqlx_migrations after executing it.
+-- Leave the transaction under that schema owner for the migration bookkeeping write.
+RESET ROLE;
+SET LOCAL ROLE core_tenancy_schema_owner;
 
 COMMENT ON TABLE core_identity_auth.identities IS
     'Global human identity owned by CORE; never grants tenant or product access by itself.';

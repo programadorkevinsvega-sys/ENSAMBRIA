@@ -199,6 +199,12 @@ CREATE TABLE platform_product_catalog.saas_subscription_outbox (
 CREATE INDEX saas_subscription_outbox_pending_idx
     ON platform_product_catalog.saas_subscription_outbox (occurred_at, event_id) WHERE published_at IS NULL;
 
+-- Trigger functions are internal implementation details. PostgreSQL grants EXECUTE
+-- to PUBLIC by default; revoke it explicitly so the other PLATFORM runtime cannot
+-- invoke product-catalog internals through PUBLIC privileges.
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA platform_product_catalog
+    FROM PUBLIC, platform_product_catalog_runtime, platform_tenant_onboarding_runtime;
+
 DO $$
 DECLARE table_name text;
 BEGIN

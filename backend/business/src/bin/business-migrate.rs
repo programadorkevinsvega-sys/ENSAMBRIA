@@ -208,7 +208,7 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
     }
 
     let has_database_create: bool = sqlx::query_scalar(
-        "SELECT has_database_privilege('business_establishment_catalog_schema_owner', current_database(), 'CREATE')",
+        "SELECT has_schema_privilege('business_establishment_catalog_schema_owner', 'business_establishment_catalog', 'CREATE')",
     )
     .fetch_one(pool)
     .await?;
@@ -217,11 +217,11 @@ async fn preflight_roles(pool: &sqlx::PgPool) -> Result<(), Box<dyn Error>> {
             event = "database.business_migrations.preflight_failed",
             component = "backend-business",
             operation = "database.privileges.verify",
-            failure_class = "business_establishment_catalog_schema_owner_missing_database_create",
+            failure_class = "business_establishment_catalog_schema_owner_missing_schema_create",
             result = "failure"
         );
         return Err(io::Error::other(
-            "business_establishment_catalog_schema_owner requires CREATE on the database",
+            "business_establishment_catalog_schema_owner requires CREATE on its owned schema",
         )
         .into());
     }

@@ -34,7 +34,6 @@ END
 $preconditions$;
 
 GRANT business_establishment_catalog_schema_owner TO core_migrator;
-SELECT format('GRANT CREATE ON DATABASE %I TO business_establishment_catalog_schema_owner', current_database()) \gexec
 SELECT format('GRANT CONNECT ON DATABASE %I TO business_establishment_catalog_runtime', current_database()) \gexec
 
 CREATE SCHEMA IF NOT EXISTS business_establishment_catalog

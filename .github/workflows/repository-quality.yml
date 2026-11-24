@@ -308,6 +308,13 @@ jobs:
           VALUES ('identity.auth', 'v1', 'available');
           INSERT INTO platform.product_capabilities (product_id, capability_code, configuration_version, status)
           VALUES ('018f0f2a-7b3c-7abc-8def-0123456789ab', 'identity.auth', 1, 'enabled');
+          INSERT INTO platform.commercial_offers (id, product_id, offer_key, display_name, status, created_by)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789b1', '018f0f2a-7b3c-7abc-8def-0123456789ab', 'core-standard', 'Core Standard', 'draft', '018f0f2a-7b3c-7abc-8def-0123456789ad');
+          INSERT INTO platform.commercial_offer_versions (offer_id, version, entitlements, commercial_terms, status, created_by, published_at)
+          VALUES ('018f0f2a-7b3c-7abc-8def-0123456789b1', 1, '{"capabilities":["identity.auth"]}'::jsonb, '{}'::jsonb, 'published', '018f0f2a-7b3c-7abc-8def-0123456789ad', clock_timestamp());
+          UPDATE platform.commercial_offers
+             SET status = 'published', published_version = 1, updated_at = clock_timestamp()
+           WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789b1';
           COMMIT;
           SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \

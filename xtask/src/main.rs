@@ -191,6 +191,33 @@ fn architecture() -> Result<(), Vec<String>> {
         &mut errors,
     );
 
+    let product_catalog_migration = read(
+        root.join("backend/platform/migrations/20261122000001_platform_product_catalog.sql"),
+        &mut errors,
+    );
+    if !product_catalog_migration.contains("platform_product_catalog.products")
+        || !product_catalog_migration.contains("platform_product_catalog_runtime")
+    {
+        errors.push("PLATFORM product catalog is not owned by its isolated schema/runtime".to_owned());
+    }
+    let onboarding_migration = read(
+        root.join("backend/platform/migrations/20261122000002_platform_tenant_onboarding_inbox.sql"),
+        &mut errors,
+    );
+    if !onboarding_migration.contains("platform_tenant_onboarding.inbox_messages")
+        || !onboarding_migration.contains("platform_tenant_onboarding_runtime")
+        || onboarding_migration.contains("GRANT SELECT ON\n    platform.products")
+    {
+        errors.push("PLATFORM onboarding is not isolated from the product catalog schema".to_owned());
+    }
+    let onboarding_service = read(
+        root.join("backend/platform/src/tenant_onboarding.rs"),
+        &mut errors,
+    );
+    if onboarding_service.contains("platform_product_catalog.") {
+        errors.push("PLATFORM onboarding implementation queries product catalog tables directly".to_owned());
+    }
+
     let ci = read(
         root.join(".github/workflows/repository-quality.yml"),
         &mut errors,

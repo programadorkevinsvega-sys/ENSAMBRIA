@@ -276,6 +276,8 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/deployment/provision-module-ownership.sql
+          TEST_DATABASE_URL="postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            bash scripts/ci/check-module-schema-isolation.sh
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/platform/migrations/bootstrap/00000000000000_platform_schema.sql
@@ -319,16 +321,6 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_product_catalog_runtime; SELECT count(*) FROM platform_product_catalog.active_product_catalog;"
-
-      - name: Provision isolated PostgreSQL module schemas and roles
-        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: |
-          set -euo pipefail
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -f backend/core/deployment/provision-module-ownership.sql
-          TEST_DATABASE_URL="postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            bash scripts/ci/check-module-schema-isolation.sh
 
       - name: Apply CORE migrations twice and verify rollback compatibility
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''

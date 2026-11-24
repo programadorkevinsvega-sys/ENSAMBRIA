@@ -169,6 +169,16 @@ fn architecture() -> Result<(), Vec<String>> {
         "scripts/ci/check-core-module-isolation.sh",
         &mut errors,
     );
+    require_file(
+        root,
+        "scripts/ci/check-platform-module-isolation.sh",
+        &mut errors,
+    );
+    if !quality_workflow.contains("bash scripts/ci/check-platform-module-isolation.sh") {
+        errors.push(
+            "PostgreSQL CI must execute the PLATFORM runtime isolation proof".to_owned(),
+        );
+    }
     let quality_workflow = read(
         root.join(".github/workflows/repository-quality.yml"),
         &mut errors,

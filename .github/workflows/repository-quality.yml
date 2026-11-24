@@ -315,6 +315,9 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "SET ROLE platform_product_catalog_runtime; SELECT count(*) FROM platform_product_catalog.active_product_catalog;"
 
+      - name: Verify PLATFORM product catalog and onboarding runtime isolation
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: bash scripts/ci/check-platform-module-isolation.sh
       - name: Apply CORE migrations twice and verify rollback compatibility
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         env:

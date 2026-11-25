@@ -188,6 +188,15 @@ fn architecture() -> Result<(), Vec<String>> {
         "scripts/ci/check-platform-module-isolation.sh",
         &mut errors,
     );
+    for required in [
+        "scripts/ci/check-core-identity-rls.sh",
+        "scripts/ci/check-platform-onboarding-rls.sh",
+        "scripts/ci/check-postgres-ownership-catalog.sql",
+        "scripts/ci/render_postgres_policy_values.py",
+        "scripts/test_sql_ownership_inventory.py",
+    ] {
+        require_file(root, required, &mut errors);
+    }
     let quality_workflow = read(
         root.join(".github/workflows/repository-quality.yml"),
         &mut errors,
@@ -198,6 +207,60 @@ fn architecture() -> Result<(), Vec<String>> {
     if !quality_workflow.contains("bash scripts/ci/check-core-module-isolation.sh") {
         errors.push(
             "PostgreSQL CI must execute the CORE runtime and worker isolation proof".to_owned(),
+        );
+    }
+    for required in [
+        "bash scripts/ci/check-core-identity-rls.sh",
+        "bash scripts/ci/check-platform-onboarding-rls.sh",
+        "scripts/ci/check-postgres-ownership-catalog.sql",
+        "render_postgres_policy_values.py",
+    ] {
+        if !quality_workflow.contains(required) {
+            errors.push(format!("PostgreSQL CI must execute {required}"));
+        }
+    }
+
+    let ownership_rule = read(
+        root.join("docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md"),
+        &mut errors,
+    );
+    for phrase in [
+        "Fase 0 — reconciliación SQL",
+        "check-sql-ownership-inventory.py",
+        "check-postgres-ownership-catalog.sql",
+        "EXECUTE format",
+    ] {
+        if !ownership_rule.contains(phrase) {
+            errors.push(format!(
+                "modular-boundaries rule is missing Phase 0 ownership requirement: {phrase}"
+            ));
+        }
+    }
+    let postgres_skill = read(
+        root.join(".github/skills/postgresql-engineering/SKILL.md"),
+        &mut errors,
+    );
+    for phrase in [
+        "check-sql-ownership-inventory.py",
+        "check-postgres-ownership-catalog.sql",
+        "EXECUTE format()",
+    ] {
+        if !postgres_skill.contains(phrase) {
+            errors.push(format!(
+                "PostgreSQL Engineering Skill is missing ownership validation: {phrase}"
+            ));
+        }
+    }
+    let architecture_adr = read(
+        root.join("docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md"),
+        &mut errors,
+    );
+    if !architecture_adr.contains("evidencia de ownership PostgreSQL en Fase 0")
+        || !architecture_adr.contains("políticas creadas dinámicamente")
+    {
+        errors.push(
+            "ADR-0012 is missing the Fase 0 PostgreSQL catalog and dynamic-DDL acceptance gate"
+                .to_owned(),
         );
     }
     if quality_workflow.contains("core.outbox_events")

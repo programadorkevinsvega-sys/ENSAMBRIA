@@ -346,6 +346,9 @@ jobs:
       - name: Verify PLATFORM product catalog and onboarding runtime isolation
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: bash scripts/ci/check-platform-module-isolation.sh
+      - name: Verify PLATFORM Inbox and onboarding tenant RLS
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: bash scripts/ci/check-platform-onboarding-rls.sh
       - name: Apply CORE migrations twice and verify rollback compatibility
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         env:
@@ -369,6 +372,9 @@ jobs:
       - name: Verify CORE identity and tenancy runtime isolation after migrations
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: bash scripts/ci/check-core-module-isolation.sh
+      - name: Verify CORE actor-scoped identity and audit RLS
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: bash scripts/ci/check-core-identity-rls.sh
       - name: Run Rust tests against PostgreSQL
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
         run: cargo test --locked --workspace
@@ -539,6 +545,13 @@ jobs:
           TEST_DATABASE_URL: postgres://core_admin@127.0.0.1:5432/ensambria_core_test
           BUSINESS_DATABASE_URL: postgres://business_establishment_catalog_runtime@127.0.0.1:5432/ensambria_core_test
         run: bash scripts/ci/check-business-module-isolation.sh
+
+      - name: Verify canonical PostgreSQL ownership from system catalogs
+        if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
+        run: |
+          set -euo pipefail
+          policy_values="$(python3 scripts/ci/render_postgres_policy_values.py)"
+          psql "$PLATFORM_VERIFY_DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_policy_values="$policy_values" -f scripts/ci/check-postgres-ownership-catalog.sql
 
 
   redis-ha-integration:

@@ -77,3 +77,15 @@ El mapa de requisitos/casos/pruebas se versiona sin SHA/resultados manuales. CI 
 ## Implementación PostgreSQL por fases
 
 El inventario canónico es [architecture/data-ownership.yaml](../../architecture/data-ownership.yaml) y el procedimiento de transición está en [module-ownership-cutover.md](../postgres/module-ownership-cutover.md). La primera fase solo provisiona roles/schemas aislados y prueba que no tienen permisos implícitos; no mueve tablas ni revoca todavía los grants legacy. La aceptación del ownership requiere completar las fases de contratos, movimiento de objetos, roles runtime, revocación legacy y pruebas negativas reales descritas en el plan.
+
+
+## Enmienda — evidencia de ownership PostgreSQL en Fase 0 (2026-11-25)
+
+La aceptación de Fase 0 requiere dos defensas complementarias y obligatorias:
+
+1. Reconciliación estática de cada migración contra architecture/data-ownership.yaml, incluyendo secuencias, triggers y políticas creadas dinámicamente por bucles PL/pgSQL y EXECUTE format(). El validador debe fallar tanto por objetos SQL no inventariados como por entradas inventariadas que no existen.
+2. Verificación del estado efectivo después de aplicar las migraciones a PostgreSQL efímero. La consulta de catálogos debe comprobar propietarios de schemas/objetos, atributos y membresías de roles, privilegios heredados/efectivos, PUBLIC, secuencias, funciones, ausencia de FKs entre schemas y cobertura exacta de RLS/policies.
+
+Las pruebas negativas deben usar los roles runtime reales y demostrar denegación de lectura y escritura cruzada, spoofing de tenant/actor y fallo cerrado por contexto ausente para las familias RLS aplicables. El catálogo verifica todas las relaciones/policies; las pruebas de comportamiento cubren las familias tenant y actor. CI ejecuta estos controles después de las migraciones y conserva evidencia asociada al SHA probado.
+
+Esta enmienda no autoriza mover tablas legacy ni ejecutar el cutover. La preparación de roles/schemas y la aceptación del enforcement en PostgreSQL preceden a cualquier migración de ownership de datos existentes.

@@ -248,11 +248,12 @@ Antes de cualquier cambio, lee [ADR-0012](docs/adr/ADR-0012-fronteras-modulares-
 - Cada bounded context implementado tiene crate propietario y crate `*-contracts`; consumidores dependen solo de contracts. No importar implementación, dominio, adapters, repositorios, modelos SQLx ni structs internos de otro módulo/backend.
 - La llamada interna inicial usa trait + DTO propios inyectados en memoria. Protobuf versionado existe desde el inicio; Tonic es adapter al separar procesos. No imponer servidor gRPC a módulos co-residentes por defecto.
 - PostgreSQL impone ownership con roles/grants mínimos por módulo. Workers y tests funcionales usan roles runtime restringidos; roles DDL/setup no se reutilizan. Las pruebas deben demostrar denegación real de acceso cruzado.
+- El inventario SQL debe reconciliar tablas, vistas, secuencias, funciones, triggers y políticas estáticas o generadas por EXECUTE format()/FOREACH; el catálogo real de PostgreSQL debe verificar owners, roles, membresías, ACL efectivas, FKs entre schemas y RLS/policies después de aplicar todas las migraciones.
 - HTTP de negocio solo en BFF autorizados. Las APIs de módulos/backends no se exponen directamente a frontends.
 - Eventos durables requieren Outbox, relay, JetStream, consumer durable, Inbox/idempotencia, ACK post-commit y recuperación demostrada.
 - Cada binario requerido debe tener artefacto, configuración y unidad de ejecución. Runtime y E2E de staging se aceptan solo con evidencia del entorno real y SHA exacto.
 - No editar SHA/resultados de trazabilidad a mano: CI los inyecta en el informe de ejecución.
-- Usa exclusivamente `cargo xtask architecture` como punto de entrada del validador, una vez implementado. No añadas scripts Bash con listas duplicadas.
+- Usa exclusivamente `cargo xtask architecture` como punto de entrada del validador arquitectónico y gate obligatorio de CI. No añadas scripts Bash con listas duplicadas.
 - Está prohibido saltar, degradar a warning, neutralizar o crear excepciones a los controles obligatorios. Si falta owner, contrato, grant, entorno o evidencia, detén solo el alcance dependiente y solicita decisión/acceso al propietario.
 
 La aprobación de un diseño no prueba su implementación. No afirmes que un control está activo hasta verificar el workflow y su ejecución sobre el SHA correspondiente.

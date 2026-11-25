@@ -143,3 +143,16 @@ Si falta un contrato, owner, grant, evidencia, entorno o decisión, el agente de
 ## Implementación PostgreSQL por fases
 
 El inventario canónico es [architecture/data-ownership.yaml](../../architecture/data-ownership.yaml) y el procedimiento de transición está en [module-ownership-cutover.md](../postgres/module-ownership-cutover.md). La primera fase solo provisiona roles/schemas aislados y prueba que no tienen permisos implícitos; no mueve tablas ni revoca todavía los grants legacy. La aceptación del ownership requiere completar las fases de contratos, movimiento de objetos, roles runtime, revocación legacy y pruebas negativas reales descritas en el plan.
+
+
+### Fase 0 — reconciliación SQL y evidencia PostgreSQL
+
+La preparación de ownership no mueve tablas legacy. Antes de aceptar esta fase:
+
+- scripts/ci/check-sql-ownership-inventory.py debe reconciliar exactamente tablas, vistas, secuencias, funciones, triggers y políticas. Debe expandir las políticas creadas por PL/pgSQL mediante FOREACH ... ARRAY[...] y EXECUTE format(...); no se permite eximir discrepancias dinámicas del inventario.
+- cargo xtask architecture ejecuta esa reconciliación y CI prueba sus casos positivos y negativos, incluidos secuencias y políticas dinámicas omitidas.
+- Después de aplicar todas las migraciones a PostgreSQL efímero, scripts/ci/check-postgres-ownership-catalog.sql verifica pg_roles, pg_namespace, pg_auth_members, owners de relaciones/funciones, ACL efectivas (incluidos PUBLIC y membresías), secuencias, funciones, ausencia de FKs entre schemas propietarios y el catálogo exacto de políticas.
+- Las pruebas funcionales usan las identidades runtime reales y cubren lectura cruzada, actualización cruzada, inserción con tenant/actor falsificado y contexto ausente para cada familia RLS aplicable. La inspección del catálogo comprueba todas las relaciones protegidas; los recorridos de comportamiento comprueban las familias de políticas tenant y actor.
+- La aceptación queda vinculada al SHA exacto de CI. La existencia de scripts, una migración compilada o un inventario documental no equivale a evidencia ejecutada.
+
+El alcance de Fase 0 prepara los cinco propietarios, roles, schemas, permisos y contratos. No autoriza mover tablas legacy, desplegar runtimes ni iniciar el cutover descrito en docs/postgres/module-ownership-cutover.md.

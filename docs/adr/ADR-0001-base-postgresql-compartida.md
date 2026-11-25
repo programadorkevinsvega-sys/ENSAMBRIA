@@ -89,7 +89,7 @@ El requerimiento ya determina la base física compartida, ownership separado, po
 
 El propietario aceptó expresamente este diseño documental el 2026-11-11. La aceptación confirma coherencia con el requerimiento; no habilita otra topología, runtime ni una excepción a RLS. No hay excepciones solicitadas. Antes de la implementación, cada backend deberá completar su inventario de schemas, roles, grants, parámetros del pool y casos reales de RLS. Cualquier excepción futura —por ejemplo, una tabla sin alcance tenant o una política distinta de `FORCE ROW LEVEL SECURITY`— requiere justificación concreta, owner y aprobación previa conforme a las fuentes normativas. El dimensionamiento requiere datos del entorno y no es una decisión arquitectónica alternativa.
 
-No hay PostgreSQL runtime ni pruebas reales ejecutadas.
+En la fecha de aprobación de esta ADR todavía no existían PostgreSQL runtime ni pruebas reales ejecutadas. La evidencia de implementación y validación posterior debe registrarse en CI sobre el SHA exacto; este estado histórico no equivale a una aceptación actual.
 
 ## Referencias
 

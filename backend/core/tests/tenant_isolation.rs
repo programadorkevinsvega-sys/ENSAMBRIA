@@ -116,12 +116,13 @@ async fn rls_denies_cross_tenant_reads_writes_and_cross_tenant_relationships() {
             .expect("cross-tenant reads must return an empty result");
     assert_eq!(visible, 0);
 
-    let updated =
-        sqlx::query("UPDATE core_tenancy.organizations SET display_name = 'tampered' WHERE id = $1")
-            .bind(org_b)
-            .execute(&mut *transaction)
-            .await
-            .expect("cross-tenant updates must not affect rows");
+    let updated = sqlx::query(
+        "UPDATE core_tenancy.organizations SET display_name = 'tampered' WHERE id = $1",
+    )
+    .bind(org_b)
+    .execute(&mut *transaction)
+    .await
+    .expect("cross-tenant updates must not affect rows");
     assert_eq!(updated.rows_affected(), 0);
 
     let deleted = sqlx::query("DELETE FROM core_tenancy.organizations WHERE id = $1")

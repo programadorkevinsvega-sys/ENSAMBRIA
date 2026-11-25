@@ -123,6 +123,7 @@ allowed_fields = (
     "error_code",
     "sqlstate",
     "missing_roles",
+    "failure_reason",
     "duration_ms",
     "correlation_id",
     "trace_id",
@@ -138,10 +139,13 @@ safe_error_messages = {
     "CORE migration identity could not be verified",
     "CORE migration identity does not have the required restricted privileges",
     "CORE migration identity cannot assume the schema owner role",
-    "CORE schema owner privileges could not be verified",
-    "CORE schema owner role has privileges beyond its schema ownership",
-    "CORE schema ownership could not be verified",
-    "CORE schema must be owned by core_schema_owner",
+    "CORE module schema-owner privileges could not be verified",
+    "CORE module schema-owner role has invalid privileges",
+    "CORE module schema ownership could not be verified",
+    "CORE module schemas must be owned by their dedicated non-login roles",
+    "CORE migration role memberships could not be verified",
+    "CORE migrator must be a member of both CORE schema-owner roles and no CORE runtime roles",
+    "CORE module schemas must be owned by their dedicated non-login roles",
     "CORE required database roles are missing",
     "CORE required database roles could not be verified",
     "CORE migration files could not be loaded",
@@ -192,7 +196,9 @@ for line in sys.stdin:
     diagnostic_fields = []
     for field in allowed_fields:
         value = fields.get(field, span_fields.get(field, ""))
-        if type(value) in (str, int) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(value)):
+        if field == "failure_reason" and isinstance(value, str) and value in safe_error_messages:
+            diagnostic_fields.append(f"{field}={value}")
+        elif type(value) in (str, int) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(value)):
             diagnostic_fields.append(f"{field}={value}")
 
     if diagnostic_fields:
@@ -265,6 +271,9 @@ if not found:
         printf 'Could not retrieve or parse sanitized BUSINESS migration diagnostics.\n' >&2
     fi
 }
+
+
+
 
 rollback() {
     if [[ "$rollback_available" != true ]]; then

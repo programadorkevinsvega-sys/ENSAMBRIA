@@ -148,6 +148,18 @@ jobs:
           grep -Fq 'flock -n 9' backend/core/deployment/deploy-staging.sh
           grep -Fq 'validate_staging_package.py' backend/core/deployment/deploy-staging.sh
           grep -Fq 'SHA256SUMS' backend/core/deployment/deploy-staging.sh
+          ! grep -Eq 'provision_postgres_module_ownership|ENSAMBRIA_POSTGRES_ADMIN' backend/core/deployment/deploy-staging.sh
+          ! grep -Eq 'CORE_STAGING_POSTGRES_ADMIN|provision-module-ownership.sql' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'issue_comment' .github/workflows/postgres-admin.yml
+          grep -Fq '/ensambria postgres provision' .github/workflows/postgres-admin.yml
+          grep -Fq '/ensambria postgres verify' .github/workflows/postgres-admin.yml
+          grep -Fq 'collaborators/$COMMENT_ACTOR/permission' .github/workflows/postgres-admin.yml
+          grep -Fq 'docker exec -i --user postgres crm-postgres' .github/workflows/postgres-admin.yml
+          grep -Fq 'pg_has_role' backend/core/deployment/verify-module-ownership.sql
+          grep -Fq 'aclexplode' backend/core/deployment/verify-module-ownership.sql
+          grep -Fq 'failure_reason = error.message' backend/core/src/core_migrations.rs
+          grep -Fq 'failure_reason' backend/core/deployment/deploy-staging.sh
+          test -s backend/core/deployment/provision-module-ownership.sql
           grep -Fq 'SHA256SUMS' .github/workflows/core-staging-deploy.yml
           grep -Fq 'scripts/validate_staging_package.py' .github/workflows/core-staging-deploy.yml
           grep -Fq 'StartLimitBurst=5' backend/business/deployment/ensambria-business.service
@@ -253,21 +265,39 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "REVOKE TEMP ON DATABASE ensambria_core_test FROM PUBLIC;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
-          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
-            -v ON_ERROR_STOP=1 \
-            -c "GRANT CONNECT ON DATABASE ensambria_core_test TO core_migrator, core_email_worker, core_outbox_relay;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $roles$
+          DECLARE role_name text;
+          BEGIN
+              FOREACH role_name IN ARRAY ARRAY[
+                  'core_migrator',
+                  'core_identity_auth_runtime',
+                  'core_tenancy_runtime',
+                  'business_establishment_catalog_runtime',
+                  'platform_product_catalog_runtime',
+                  'platform_tenant_onboarding_runtime',
+                  'core_email_worker',
+                  'core_outbox_relay'
+              ] LOOP
+                  EXECUTE format(
+                      'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
+                      role_name
+                  );
+              END LOOP;
+          END
+          $roles$;
+          SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/deployment/provision-module-ownership.sql
+          # Re-running the administrative bootstrap must be safe and converge to the same catalog state.
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/core/deployment/provision-module-ownership.sql
+          # The independent read-only catalog verifier must agree with the provisioner.
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
+            -v ON_ERROR_STOP=1 \
+            -f backend/core/deployment/verify-module-ownership.sql
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/migrations/bootstrap/00000000000000_core_schema.sql

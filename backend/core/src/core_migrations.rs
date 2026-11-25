@@ -298,7 +298,7 @@ pub async fn run_core_migrations_from_path(
         {
             return Err(CoreMigrationError::new(
                 CoreMigrationFailureKind::OwnerRole,
-                "CORE migrator must assume only the two module schema-owner roles",
+                "CORE migrator must be a member of both CORE schema-owner roles and no CORE runtime roles",
                 None,
             ));
         }
@@ -415,6 +415,7 @@ pub async fn run_core_migrations_from_path(
                 event = "database.migrations.failed",
                 result = "failure",
                 failure_class = error.failure_kind().as_str(),
+                failure_reason = error.message,
                 error_code = "CORE_MIGRATION_FAILED",
                 sqlstate = error.sqlstate().as_deref().unwrap_or(""),
                 source_error = error.source().map(ToString::to_string).unwrap_or_default(),

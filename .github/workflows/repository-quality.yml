@@ -445,8 +445,34 @@ jobs:
                  OR has_schema_privilege('platform_tenant_onboarding_runtime', 'platform_product_catalog', 'USAGE') THEN
                   RAISE EXCEPTION 'PLATFORM runtime roles must not cross schema ownership boundaries';
               END IF;
-              IF NOT has_table_privilege('platform_product_catalog_runtime', 'platform_product_catalog.active_product_catalog', 'SELECT')
-                 OR has_table_privilege('platform_product_catalog_runtime', 'platform_product_catalog.products', 'INSERT,UPDATE,DELETE') THEN
+              IF NOT COALESCE(
+                     has_table_privilege(
+                         'platform_product_catalog_runtime',
+                         (
+                             SELECT c.oid
+                             FROM pg_catalog.pg_class AS c
+                             JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                             WHERE n.nspname = 'platform_product_catalog'
+                               AND c.relname = 'active_product_catalog'
+                         ),
+                         'SELECT'
+                     ),
+                     false
+                 )
+                 OR COALESCE(
+                     has_table_privilege(
+                         'platform_product_catalog_runtime',
+                         (
+                             SELECT c.oid
+                             FROM pg_catalog.pg_class AS c
+                             JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                             WHERE n.nspname = 'platform_product_catalog'
+                               AND c.relname = 'products'
+                         ),
+                         'INSERT,UPDATE,DELETE'
+                     ),
+                     false
+                 ) THEN
                   RAISE EXCEPTION 'PLATFORM product runtime grants are not read-only';
               END IF;
           END

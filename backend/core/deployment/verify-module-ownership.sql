@@ -40,7 +40,44 @@ BEGIN
          WHERE r.rolname IN ('core_identity_auth_runtime','core_tenancy_runtime','business_establishment_catalog_runtime','platform_product_catalog_runtime','platform_tenant_onboarding_runtime','core_email_worker','core_outbox_relay')
            AND pg_catalog.pg_has_role(r.oid, 'core_migrator', 'MEMBER')
     ) THEN RAISE EXCEPTION 'runtime or worker role unexpectedly belongs to core_migrator'; END IF;
-    RAISE NOTICE 'PostgreSQL module ownership catalog audit passed';
+
+    IF pg_catalog.has_database_privilege('core_migrator', current_database(), 'CREATE') THEN
+        RAISE EXCEPTION 'core_migrator has database CREATE privilege';
+    END IF;
+    IF EXISTS (
+        SELECT 1
+          FROM pg_catalog.pg_database d,
+               LATERAL pg_catalog.aclexplode(COALESCE(d.datacl, pg_catalog.acldefault('d', d.datdba))) acl
+         WHERE d.datname=current_database() AND acl.grantee=0 AND acl.privilege_type='CREATE'
+    ) THEN RAISE EXCEPTION 'PUBLIC retains database CREATE privilege'; END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM pg_catalog.pg_roles r
+         WHERE r.rolname=ANY(ARRAY['core_migrator','core_identity_auth_runtime','core_tenancy_runtime','business_establishment_catalog_runtime','platform_product_catalog_runtime','platform_tenant_onboarding_runtime','core_email_worker','core_outbox_relay'])
+           AND NOT pg_catalog.has_database_privilege(r.oid, current_database(), 'CONNECT')
+    ) THEN RAISE EXCEPTION 'a required LOGIN role lacks database CONNECT'; END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM pg_catalog.pg_namespace n,
+               LATERAL pg_catalog.aclexplode(COALESCE(n.nspacl, pg_catalog.acldefault('n', n.nspowner))) acl
+         WHERE n.nspname=ANY(expected_schemas) AND acl.grantee=0
+           AND acl.privilege_type IN ('USAGE','CREATE')
+    ) THEN RAISE EXCEPTION 'PUBLIC retains module schema privileges'; END IF;
+
+    IF NOT pg_catalog.has_schema_privilege('core_identity_auth_schema_owner', 'core_tenancy', 'USAGE') THEN
+        RAISE EXCEPTION 'identity schema owner lacks required tenancy schema USAGE';
+    END IF;
+
+    IF pg_catalog.pg_has_role('core_migrator', 'core_identity_auth_schema_owner', 'USAGE')
+       OR pg_catalog.pg_has_role('core_migrator', 'core_tenancy_schema_owner', 'USAGE')
+       OR pg_catalog.pg_has_role('core_migrator', 'business_establishment_catalog_schema_owner', 'USAGE')
+       OR pg_catalog.pg_has_role('core_migrator', 'platform_product_catalog_schema_owner', 'USAGE')
+       OR pg_catalog.pg_has_role('core_migrator', 'platform_tenant_onboarding_schema_owner', 'USAGE') THEN
+        RAISE EXCEPTION 'NOINHERIT core_migrator unexpectedly inherits schema-owner privileges without SET ROLE';
+    END IF;
+
+    RAISE NOTICE 'PostgreSQL module ownership and effective privilege audit passed';
 END
 $audit$;
 

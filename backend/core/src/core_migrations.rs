@@ -298,7 +298,7 @@ pub async fn run_core_migrations_from_path(
         {
             return Err(CoreMigrationError::new(
                 CoreMigrationFailureKind::OwnerRole,
-                "CORE migrator must assume only the two module schema-owner roles",
+                "CORE migrator must be a member of both CORE schema-owner roles and no CORE runtime roles",
                 None,
             ));
         }

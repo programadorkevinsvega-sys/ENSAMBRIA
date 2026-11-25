@@ -253,6 +253,15 @@ GRANT USAGE ON SCHEMA platform_product_catalog TO platform_product_catalog_runti
 -- remain private to the module owner and are not directly queryable.
 GRANT SELECT ON platform_product_catalog.active_product_catalog
 TO platform_product_catalog_runtime;
+-- The runtime may read only the supporting metadata required to assemble the
+-- published contract. Product identity/configuration base tables stay private.
+GRANT SELECT ON
+    platform_product_catalog.product_domains,
+    platform_product_catalog.product_markets,
+    platform_product_catalog.product_surfaces,
+    platform_product_catalog.product_capabilities,
+    platform_product_catalog.capability_catalog
+TO platform_product_catalog_runtime;
 
 COMMENT ON TABLE platform_product_catalog.products IS
     'PLATFORM-owned canonical SaaS product catalogue; product identity is not tenant authorization.';

@@ -202,6 +202,65 @@ psql "$CORE_OUTBOX_DATABASE_URL" -v ON_ERROR_STOP=1 -c   "SELECT count(*) FROM c
 psql "$CORE_EMAIL_WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -c   "UPDATE core_identity_auth.email_outbox SET status = status WHERE false" >/dev/null
 psql "$CORE_OUTBOX_DATABASE_URL" -v ON_ERROR_STOP=1 -c   "UPDATE core_tenancy.outbox_events SET status = status WHERE false" >/dev/null
 
+# Prove CORE tenancy's tenant RLS with two seeded tenants and the real
+# core_tenancy_runtime identity. The verifier seeds data; runtime cannot cross
+# tenant boundaries, spoof a tenant, or read without a tenant context.
+psql "$PLATFORM_VERIFY_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+INSERT INTO core_tenancy.tenants (id, status)
+VALUES
+    ('018f0f2a-7b3c-7abc-8def-0123456789c1', 'active'),
+    ('018f0f2a-7b3c-7abc-8def-0123456789c2', 'active');
+SQL
+
+psql "$CORE_TENANCY_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789c1', true);
+DO $tenant_rls$
+DECLARE
+    visible_rows integer;
+    affected_rows integer;
+    spoof_rejected boolean := false;
+BEGIN
+    SELECT count(*) INTO visible_rows FROM core_tenancy.tenants;
+    IF visible_rows <> 1 THEN
+        RAISE EXCEPTION 'tenant A must see exactly its own tenant row, saw %', visible_rows;
+    END IF;
+
+    SELECT count(*) INTO visible_rows
+      FROM core_tenancy.tenants
+     WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789c2';
+    IF visible_rows <> 0 THEN
+        RAISE EXCEPTION 'tenant A can read tenant B';
+    END IF;
+
+    UPDATE core_tenancy.tenants
+       SET status = 'suspended'
+     WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789c2';
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    IF affected_rows <> 0 THEN
+        RAISE EXCEPTION 'tenant A modified tenant B';
+    END IF;
+
+    BEGIN
+        INSERT INTO core_tenancy.tenants (id, status)
+        VALUES ('018f0f2a-7b3c-7abc-8def-0123456789c3', 'active');
+    EXCEPTION WHEN insufficient_privilege THEN
+        spoof_rejected := true;
+    END;
+    IF NOT spoof_rejected THEN
+        RAISE EXCEPTION 'tenant A inserted a row outside its own tenant scope';
+    END IF;
+
+    PERFORM set_config('app.tenant_id', '', true);
+    SELECT count(*) INTO visible_rows FROM core_tenancy.tenants;
+    IF visible_rows <> 0 THEN
+        RAISE EXCEPTION 'missing tenant context must fail closed';
+    END IF;
+END
+$tenant_rls$;
+ROLLBACK;
+SQL
+
 expect_denied() {
     local database_url="$1"
     local description="$2"

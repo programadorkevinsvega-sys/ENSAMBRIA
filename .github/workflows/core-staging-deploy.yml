@@ -140,7 +140,7 @@ jobs:
           [[ -n "$DEPLOY_SSH_KEY" ]]
           [[ -n "$TS_OAUTH_CLIENT_ID" ]]
           [[ -n "$TS_OAUTH_SECRET" ]]
-          [[ "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == true || "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == false ]]
+          [[ "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == true ]]
           [[ "$CORE_STAGING_POSTGRES_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
           [[ "$CORE_STAGING_POSTGRES_DATABASE" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]
           install -m 0700 -d "$HOME/.ssh"

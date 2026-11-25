@@ -1,7 +1,7 @@
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::ExitCode,
+    process::{Command, ExitCode},
 };
 
 fn main() -> ExitCode {
@@ -31,6 +31,20 @@ fn architecture() -> Result<(), Vec<String>> {
         .parent()
         .expect("xtask must be directly under workspace root");
     let mut errors = Vec::new();
+
+    match Command::new("python3")
+        .arg("scripts/ci/check-sql-ownership-inventory.py")
+        .current_dir(root)
+        .status()
+    {
+        Ok(status) if status.success() => {}
+        Ok(status) => errors.push(format!(
+            "SQL ownership inventory validation failed with status {status}"
+        )),
+        Err(error) => errors.push(format!(
+            "cannot execute SQL ownership inventory validator: {error}"
+        )),
+    }
 
     let workspace = read(root.join("Cargo.toml"), &mut errors);
     let contracts = [

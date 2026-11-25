@@ -146,7 +146,8 @@ async fn integration_connection_uses_a_non_privileged_database_role() {
 }
 
 #[tokio::test]
-async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cross_access_schemas() {
+async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cross_access_schemas()
+{
     let migration_database_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL").expect(
         "CORE_TEST_MIGRATOR_DATABASE_URL must point to an isolated PostgreSQL test database",
     );
@@ -193,7 +194,17 @@ async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cro
     ): (bool, bool, bool, bool) = sqlx::query_as(
         r#"SELECT has_schema_privilege(current_user, 'core_identity_auth', 'USAGE'),
                   has_schema_privilege(current_user, 'core_identity_auth', 'CREATE'),
-                  has_table_privilege(current_user, 'core_tenancy._sqlx_migrations', 'SELECT'),
+                  COALESCE(
+                      (
+                          SELECT has_table_privilege(current_user, relation.oid, 'SELECT')
+                          FROM pg_catalog.pg_class AS relation
+                          JOIN pg_catalog.pg_namespace AS namespace
+                            ON namespace.oid = relation.relnamespace
+                          WHERE namespace.nspname = 'core_tenancy'
+                            AND relation.relname = '_sqlx_migrations'
+                      ),
+                      false
+                  ),
                   has_schema_privilege(current_user, 'core_tenancy', 'USAGE')"#,
     )
     .fetch_one(&pool)

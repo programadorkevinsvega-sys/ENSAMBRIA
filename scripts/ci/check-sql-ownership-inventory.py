@@ -26,6 +26,14 @@ PATTERNS = {
         r"\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_][\w$]*\.[a-z_][\w$]*)",
         re.IGNORECASE,
     ),
+    "triggers": re.compile(
+        r"\bCREATE\s+TRIGGER\s+([a-z_][\w$]*)[\s\S]*?\bON\s+([a-z_][\w$]*)\.([a-z_][\w$]*)",
+        re.IGNORECASE,
+    ),
+    "policies": re.compile(
+        r"\bCREATE\s+POLICY\s+([a-z_][\w$]*)\s+ON\s+([a-z_][\w$]*)\.([a-z_][\w$]*)",
+        re.IGNORECASE,
+    ),
 }
 
 
@@ -42,7 +50,7 @@ def parse_inventory(text: str) -> dict[str, dict[str, set[str]]]:
         lines = block.splitlines()
         active: str | None = None
         for line in lines:
-            section_match = re.match(r"^    (tables|views|functions):\s*$", line)
+            section_match = re.match(r"^    (tables|views|functions|triggers|policies):\s*$", line)
             if section_match:
                 active = section_match.group(1)
                 continue

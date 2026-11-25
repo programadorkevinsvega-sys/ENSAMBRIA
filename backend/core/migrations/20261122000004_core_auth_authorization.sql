@@ -245,7 +245,7 @@ AS $$
        AND t.status = 'active'
        AND (o.id IS NULL OR o.status = 'active')
        AND (b.id IS NULL OR b.status = 'active')
- $;
+ $$;
 -- Tenancy owns these authorization functions. Keep their ACL changes in the
 -- tenancy-owner context; the identity owner must never mutate another module's
 -- function privileges. CREATE OR REPLACE above preserves the existing ACL.

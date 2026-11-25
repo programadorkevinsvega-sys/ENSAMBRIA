@@ -225,4 +225,106 @@ expect_denied "$PLATFORM_TENANT_ONBOARDING_DATABASE_URL" "read product catalog" 
 expect_denied "$PLATFORM_TENANT_ONBOARDING_DATABASE_URL" "delete onboarding history"   "DELETE FROM platform_tenant_onboarding.tenant_onboardings WHERE false"
 expect_denied "$PLATFORM_TENANT_ONBOARDING_DATABASE_URL" "assume onboarding schema owner"   "SET ROLE platform_tenant_onboarding_schema_owner"
 
+
+# Verify tenant-scoped SaaS subscription tables enforce RLS at runtime, not only
+# by inspecting catalog flags. Seed two tenants as the verifier, then execute
+# reads/writes as the real PLATFORM product-catalog runtime identity.
+psql "$PLATFORM_VERIFY_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+DO $rls_catalog$
+DECLARE
+    table_name text;
+BEGIN
+    FOREACH table_name IN ARRAY ARRAY[
+        'saas_subscriptions',
+        'saas_subscription_audit',
+        'saas_subscription_commands',
+        'saas_subscription_outbox'
+    ] LOOP
+        IF NOT EXISTS (
+            SELECT 1
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'platform_product_catalog'
+               AND c.relname = table_name
+               AND c.relrowsecurity
+               AND c.relforcerowsecurity
+        ) THEN
+            RAISE EXCEPTION 'tenant-scoped table %.% must ENABLE and FORCE RLS',
+                'platform_product_catalog', table_name;
+        END IF;
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+             WHERE schemaname = 'platform_product_catalog'
+               AND tablename = table_name
+               AND policyname = 'tenant_scope'
+               AND cmd = 'ALL'
+        ) THEN
+            RAISE EXCEPTION 'tenant-scoped table %.% is missing its ALL tenant_scope policy',
+                'platform_product_catalog', table_name;
+        END IF;
+    END LOOP;
+END
+$rls_catalog$;
+
+BEGIN;
+INSERT INTO platform_product_catalog.saas_subscription_commands
+    (tenant_id, idempotency_key, request_hash, response)
+VALUES
+    ('018f0f2a-7b3c-7abc-8def-0123456789ae', 'rls-tenant-a-key', decode(repeat('11', 32), 'hex'), '{"tenant":"a"}'),
+    ('018f0f2a-7b3c-7abc-8def-0123456789af', 'rls-tenant-b-key', decode(repeat('22', 32), 'hex'), '{"tenant":"b"}');
+
+SET LOCAL ROLE platform_product_catalog_runtime;
+SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+DO $rls_runtime$
+DECLARE
+    visible_rows integer;
+    affected_rows integer;
+    spoof_rejected boolean := false;
+BEGIN
+    SELECT count(*) INTO visible_rows
+      FROM platform_product_catalog.saas_subscription_commands;
+    IF visible_rows <> 1 THEN
+        RAISE EXCEPTION 'tenant A must see exactly its own command, saw %', visible_rows;
+    END IF;
+
+    SELECT count(*) INTO visible_rows
+      FROM platform_product_catalog.saas_subscription_commands
+     WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789af';
+    IF visible_rows <> 0 THEN
+        RAISE EXCEPTION 'tenant A can read tenant B command';
+    END IF;
+
+    UPDATE platform_product_catalog.saas_subscription_commands
+       SET response = '{"tampered":true}'
+     WHERE tenant_id = '018f0f2a-7b3c-7abc-8def-0123456789af';
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    IF affected_rows <> 0 THEN
+        RAISE EXCEPTION 'tenant A modified tenant B command';
+    END IF;
+
+    BEGIN
+        INSERT INTO platform_product_catalog.saas_subscription_commands
+            (tenant_id, idempotency_key, request_hash)
+        VALUES
+            ('018f0f2a-7b3c-7abc-8def-0123456789af',
+             'rls-spoofed-tenant-key', decode(repeat('33', 32), 'hex'));
+    EXCEPTION WHEN insufficient_privilege THEN
+        spoof_rejected := true;
+    END;
+    IF NOT spoof_rejected THEN
+        RAISE EXCEPTION 'tenant A inserted a command for tenant B';
+    END IF;
+
+    PERFORM set_config('app.tenant_id', '', true);
+    SELECT count(*) INTO visible_rows
+      FROM platform_product_catalog.saas_subscription_commands;
+    IF visible_rows <> 0 THEN
+        RAISE EXCEPTION 'missing tenant context must fail closed';
+    END IF;
+END
+$rls_runtime$;
+ROLLBACK;
+
+echo "PASS: PLATFORM SaaS tenant tables ENABLE/FORCE RLS; tenant A cannot read, update or insert tenant B data, and missing tenant context fails closed."
+
 echo "PASS: PLATFORM product catalog and tenant onboarding runtime identities have positive own-object access and real PostgreSQL denial across schemas, tables, functions, sequences, DDL and owner/migrator memberships."

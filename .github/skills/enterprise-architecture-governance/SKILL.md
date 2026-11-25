@@ -45,7 +45,7 @@ Antes de ejecutar el procedimiento:
 1. Inspecciona la estructura, implementación, documentación, contratos y decisiones existentes; separa hechos verificados de propuestas.
 2. Identifica el requisito afectado, su dueño, interesados, límites, riesgos y evidencia requerida.
 3. Para una capacidad transversal, consulta su matriz de definición/ownership/fases de la sección 14 y comprueba la salida documental de Fase 0: actor/dato, owner, contratos/integraciones, controles, dependencias, secuencia, aceptación, N/A y decisiones pendientes/aprobadores.
-4. Identifica los artefactos que requiere el alcance —por ejemplo contexto, vista C4, contrato o ADR— y vincula la trazabilidad requisito → decisión (si aplica) → cambio → prueba → CI/evidencia.
+4. Identifica los artefactos que requiere el alcance —por ejemplo contexto, vista C4, contrato o ADR— y vincula la trazabilidad requisito → decisión (si aplica) → cambio → prueba → CI/evidencia. Para Fase 0 de ENSAMBRIA exige reconciliación del inventario SQL con DDL dinámico, verificación de catálogos PostgreSQL, contratos/DTO/Protobuf por módulo y CI completo sobre el SHA exacto; no habilites movimiento de tablas ni runtimes.
 5. Actualiza la fuente propietaria del contenido. Enlaza las fuentes especializadas en vez de copiar sus reglas.
 6. Revisa compatibilidad, dependencias, referencias, aceptación y responsabilidades antes de cerrar o solicitar revisión.
 
@@ -73,4 +73,4 @@ Si hay contradicción real entre código, roadmap, contrato, ADR o estándares, 
 
 ## Mantenimiento
 
-Revisada el 2026-11-24. Si cambia una fuente enlazada, revisa esta Skill en el mismo PR. Registra la fecha de revisión real; conserva versiones de fuente solo cuando existan.
+Revisada el 2026-11-25. Si cambia una fuente enlazada, revisa esta Skill en el mismo PR. Registra la fecha de revisión real; conserva versiones de fuente solo cuando existan.

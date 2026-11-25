@@ -90,6 +90,13 @@ modules:
     policies:
       - tenants.tenants_tenant_scope
       - tenants.tenants_definer_owner_access
+      - organizations.organizations_tenant_scope
+      - branches.branches_tenant_scope
+      - tenant_memberships.tenant_memberships_tenant_scope
+      - tenant_roles.tenant_roles_tenant_scope
+      - tenant_role_permissions.tenant_role_permissions_tenant_scope
+      - membership_role_assignments.membership_role_assignments_tenant_scope
+      - tenant_products.tenant_products_tenant_scope
       - organizations.organizations_definer_owner_access
       - branches.branches_definer_owner_access
       - tenant_memberships.tenant_memberships_definer_owner_access

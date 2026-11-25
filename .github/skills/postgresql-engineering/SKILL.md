@@ -34,7 +34,7 @@ Pool por proceso, presupuesto de conexiones, credenciales, migraciones, transacc
 Antes de tocar persistencia:
 
 1. Confirma fase, proceso/backend y módulo propietario; lee [AGENTS.md](../../../AGENTS.md), [ARCHITECTURE_RULES.md](../../../ARCHITECTURE_RULES.md), la guía PostgreSQL completa, requisitos de fase y ADR/contratos aprobados pertinentes.
-2. Mapea la única base compartida a schemas/migraciones por owner, roles migrator/runtime, grants mínimos, pool por proceso y la condición de RLS. Define cómo una credencial/tenant ajeno será denegado; documentar RLS o aislamiento no demuestra enforcement.
+2. Mapea la única base compartida a schemas/migraciones por owner, roles migrator/runtime, grants mínimos, pool por proceso y la condición de RLS. Define cómo una credencial/tenant ajeno será denegado; documentar RLS o aislamiento no demuestra enforcement. En Fase 0 no muevas tablas legacy: verifica el inventario SQL, expande DDL dinámico y valida owners/ACL/membresías/policies en los catálogos PostgreSQL.
 3. Vincula cada control a PostgreSQL real y a pruebas negativas de acceso entre tenants/dominos, fuga de contexto al reutilizar conexión, rollback, timeout/concurrencia y recuperación según aplique. Reporta versiones, comandos, resultados y evidencia.
 4. No infieras aprobación de ADR ni configures valores ilustrativos como efectivos. Distingue **REQUERIDO, DISEÑADO, IMPLEMENTADO, VALIDADO, APROBADO y BLOQUEADO**; detén cambios cuyo aislamiento dependa de una decisión no ratificada.
 
@@ -55,6 +55,8 @@ Antes de tocar persistencia:
 
 ## Validaciones obligatorias
 
+- Ejecuta python3 scripts/ci/check-sql-ownership-inventory.py (a través de cargo xtask architecture) y prueba detección de tablas, vistas, secuencias, funciones, triggers y políticas dinámicas generadas con FOREACH/EXECUTE format().
+- Ejecuta psql "$PLATFORM_VERIFY_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/ci/check-postgres-ownership-catalog.sql después de todas las migraciones; comprueba roles, memberships, owners, ACL efectivas, secuencias, funciones, FKs entre schemas y catálogo exacto de RLS.
 - Comprueba permisos mínimos, ownership de migraciones, presupuesto total, adquisición/cancelación y recuperación.
 - Prueba con PostgreSQL real los aspectos de persistencia, RLS/limpieza del contexto, concurrencia y saturación que apliquen.
 - Ejecuta migraciones y pruebas pertinentes de forma coordinada, sin tocar entornos compartidos o producción sin autorización.
@@ -69,4 +71,4 @@ Si el entorno o versión real no está disponible, registra el bloqueo y limita 
 
 ## Mantenimiento
 
-Revisada el 2026-11-24. Actualiza esta Skill junto con cambios a las fuentes citadas. Conserva los metadatos fuente disponibles; no inventes una versión.
+Revisada el 2026-11-25. Actualiza esta Skill junto con cambios a las fuentes citadas. Conserva los metadatos fuente disponibles; no inventes una versión.

@@ -45,6 +45,26 @@ modules:
       - auth_confirm_totp_step
       - auth_lookup_pending_identity
       - auth_record_security_event
+    policies:
+      - identities.identities_actor_scope
+      - security_audit_events.security_audit_scope
+      - account_recovery_tokens.account_recovery_tokens_actor_scope
+      - identity_verification_tokens.identity_verification_tokens_actor_scope
+      - identity_credentials.identity_credentials_actor_scope
+      - auth_sessions.auth_sessions_actor_scope
+      - identity_mfa_totp.identity_mfa_totp_actor_scope
+      - identity_mfa_recovery_codes.identity_mfa_recovery_codes_actor_scope
+      - auth_rate_limits.auth_rate_limits_no_direct_access
+      - identities.identities_definer_owner_access
+      - identity_credentials.identity_credentials_definer_owner_access
+      - auth_sessions.auth_sessions_definer_owner_access
+      - account_recovery_tokens.account_recovery_tokens_definer_owner_access
+      - identity_verification_tokens.identity_verification_tokens_definer_owner_access
+      - identity_mfa_totp.identity_mfa_totp_definer_owner_access
+      - identity_mfa_recovery_codes.identity_mfa_recovery_codes_definer_owner_access
+      - auth_rate_limits.auth_rate_limits_definer_owner_access
+      - auth_mfa_challenges.auth_mfa_challenges_definer_only
+      - security_audit_events.security_audit_events_definer_access
   - id: core.tenancy-membership-organization-branch-product
     backend: CORE
     context: tenancy-membership-organization-branch-product
@@ -65,6 +85,19 @@ modules:
     functions:
       - has_permission
       - resolve_regional_context
+    policies:
+      - tenants.tenants_tenant_scope
+      - tenants.tenants_definer_owner_access
+      - organizations.organizations_definer_owner_access
+      - branches.branches_definer_owner_access
+      - tenant_memberships.tenant_memberships_definer_owner_access
+      - tenant_roles.tenant_roles_definer_owner_access
+      - tenant_role_permissions.tenant_role_permissions_definer_owner_access
+      - membership_role_assignments.membership_role_assignments_definer_owner_access
+      - tenant_products.tenant_products_definer_owner_access
+      - outbox_events.outbox_tenant_insert
+      - outbox_events.outbox_relay_read
+      - outbox_events.outbox_relay_update
     contract_dependencies:
       - core.identity-authentication
       - platform.product-catalog
@@ -76,6 +109,8 @@ modules:
     runtime_role: business_establishment_catalog_runtime
     tables:
       - establishments
+    policies:
+      - establishments.establishments_tenant_scope
     contract_dependencies:
       - core.identity-authentication
       - core.tenancy-membership-organization-branch-product
@@ -140,6 +175,9 @@ modules:
     tables:
       - inbox_messages
       - tenant_onboardings
+    policies:
+      - inbox_messages.inbox_tenant_scope
+      - tenant_onboardings.tenant_onboardings_tenant_scope
     contract_dependencies:
       - platform.product-catalog
       - core.tenancy-membership-organization-branch-product

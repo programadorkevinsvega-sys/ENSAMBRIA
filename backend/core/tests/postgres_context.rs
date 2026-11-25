@@ -146,8 +146,7 @@ async fn integration_connection_uses_a_non_privileged_database_role() {
 }
 
 #[tokio::test]
-async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cross_access_schemas()
-{
+async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cross_access_schemas() {
     let migration_database_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL").expect(
         "CORE_TEST_MIGRATOR_DATABASE_URL must point to an isolated PostgreSQL test database",
     );
@@ -161,10 +160,11 @@ async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cro
 
     let pool = test_pool().await;
     let schema_owners: Vec<(String, String)> = sqlx::query_as(
-        "SELECT namespace.nspname::text, pg_catalog.pg_get_userbyid(namespace.nspowner)::text \\
-         FROM pg_catalog.pg_namespace AS namespace \\
-         WHERE namespace.nspname IN ('core_identity_auth', 'core_tenancy') \\
-         ORDER BY namespace.nspname",
+        r#"SELECT namespace.nspname::text,
+                  pg_catalog.pg_get_userbyid(namespace.nspowner)::text
+           FROM pg_catalog.pg_namespace AS namespace
+           WHERE namespace.nspname IN ('core_identity_auth', 'core_tenancy')
+           ORDER BY namespace.nspname"#,
     )
     .fetch_all(&pool)
     .await
@@ -191,10 +191,10 @@ async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cro
         can_read_migration_table,
         can_use_tenancy_schema,
     ): (bool, bool, bool, bool) = sqlx::query_as(
-        "SELECT has_schema_privilege(current_user, 'core_identity_auth', 'USAGE'), \\
-                has_schema_privilege(current_user, 'core_identity_auth', 'CREATE'), \\
-                has_table_privilege(current_user, 'core_tenancy._sqlx_migrations', 'SELECT'), \\
-                has_schema_privilege(current_user, 'core_tenancy', 'USAGE')",
+        r#"SELECT has_schema_privilege(current_user, 'core_identity_auth', 'USAGE'),
+                  has_schema_privilege(current_user, 'core_identity_auth', 'CREATE'),
+                  has_table_privilege(current_user, 'core_tenancy._sqlx_migrations', 'SELECT'),
+                  has_schema_privilege(current_user, 'core_tenancy', 'USAGE')"#,
     )
     .fetch_one(&pool)
     .await

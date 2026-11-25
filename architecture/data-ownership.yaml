@@ -159,8 +159,8 @@ modules:
       - commercial_offer_identity_immutable
       - saas_subscription_transition_guard
     policies:
-      - commercial_offers_read_published
-      - commercial_offer_versions_read_published
+      - commercial_offers.commercial_offers_read_published
+      - commercial_offer_versions.commercial_offer_versions_read_published
       - saas_subscriptions.tenant_scope
       - saas_subscription_audit.tenant_scope
       - saas_subscription_commands.tenant_scope

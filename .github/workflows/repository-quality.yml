@@ -548,7 +548,10 @@ jobs:
 
       - name: Verify canonical PostgreSQL ownership from system catalogs
         if: hashFiles('Cargo.toml', 'Cargo.lock') != ''
-        run: psql "$PLATFORM_VERIFY_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/ci/check-postgres-ownership-catalog.sql
+        run: |
+          set -euo pipefail
+          policy_values="$(python3 scripts/ci/render_postgres_policy_values.py)"
+          psql "$PLATFORM_VERIFY_DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_policy_values="$policy_values" -f scripts/ci/check-postgres-ownership-catalog.sql
 
 
   redis-ha-integration:

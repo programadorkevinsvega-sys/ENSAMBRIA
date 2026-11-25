@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,8 @@ validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
 discover_sql_objects = validator.discover_sql_objects
 validate_inventory = validator.validate_inventory
+sys.path.insert(0, str(Path(__file__).parent / "ci"))
+from render_postgres_policy_values import render_policy_values
 
 
 class SqlOwnershipInventoryTests(unittest.TestCase):
@@ -93,6 +96,24 @@ modules:
             any("sessions.sessions_tenant_scope" in error and "missing from inventory" in error
                 for error in errors),
             errors,
+        )
+
+    def test_catalog_policy_values_are_rendered_from_the_canonical_inventory(self):
+        inventory = """version: 1
+modules:
+  - id: app.data
+    schema: app_data
+    policies:
+      - accounts.accounts_tenant_scope
+      - sessions.sessions_tenant_scope
+    tables:
+      - accounts
+      - sessions
+"""
+        self.assertEqual(
+            render_policy_values(inventory),
+            "('app_data', 'accounts', 'accounts_tenant_scope'),\n        "
+            "('app_data', 'sessions', 'sessions_tenant_scope')",
         )
 
     def test_missing_sequence_is_a_hard_inventory_error(self):

@@ -192,6 +192,7 @@ fn architecture() -> Result<(), Vec<String>> {
         "scripts/ci/check-core-identity-rls.sh",
         "scripts/ci/check-platform-onboarding-rls.sh",
         "scripts/ci/check-postgres-ownership-catalog.sql",
+        "scripts/ci/render_postgres_policy_values.py",
         "scripts/test_sql_ownership_inventory.py",
     ] {
         require_file(root, required, &mut errors);
@@ -212,6 +213,7 @@ fn architecture() -> Result<(), Vec<String>> {
         "bash scripts/ci/check-core-identity-rls.sh",
         "bash scripts/ci/check-platform-onboarding-rls.sh",
         "scripts/ci/check-postgres-ownership-catalog.sql",
+        "render_postgres_policy_values.py",
     ] {
         if !quality_workflow.contains(required) {
             errors.push(format!("PostgreSQL CI must execute {required}"));

@@ -221,7 +221,8 @@ BEGIN
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault(
-              CASE WHEN c.relkind = 'S' THEN 'S' ELSE 'r' END, c.relowner
+              (CASE WHEN c.relkind = 'S' THEN 'S' ELSE 'r' END)::"char",
+              c.relowner
           ))) acl
          WHERE n.nspname IN (
              'core_identity_auth', 'core_tenancy',

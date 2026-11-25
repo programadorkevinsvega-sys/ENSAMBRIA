@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "architecture/data-ownership.yaml"
-SECTIONS = ("tables", "views", "functions", "triggers", "policies")
+SECTIONS = ("tables", "views", "sequences", "functions", "triggers", "policies")
 PATTERNS = {
     "tables": re.compile(
         r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][\w$]*\.[a-z_][\w$]*)",
@@ -20,6 +20,10 @@ PATTERNS = {
     ),
     "views": re.compile(
         r"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+([a-z_][\w$]*\.[a-z_][\w$]*)",
+        re.IGNORECASE,
+    ),
+    "sequences": re.compile(
+        r"\\bCREATE\\s+SEQUENCE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([a-z_][\\w$]*\\.[a-z_][\\w$]*)",
         re.IGNORECASE,
     ),
     "functions": re.compile(
@@ -50,7 +54,7 @@ def parse_inventory(text: str) -> dict[str, dict[str, set[str]]]:
         lines = block.splitlines()
         active: str | None = None
         for line in lines:
-            section_match = re.match(r"^    (tables|views|functions|triggers|policies):\s*$", line)
+            section_match = re.match(r"^    (tables|views|sequences|functions|triggers|policies):\s*$", line)
             if section_match:
                 active = section_match.group(1)
                 continue

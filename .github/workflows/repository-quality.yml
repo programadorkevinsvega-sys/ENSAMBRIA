@@ -79,7 +79,7 @@ jobs:
   rust-workspace-quality:
     name: rust-workspace-quality
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -116,7 +116,7 @@ jobs:
   protobuf-contracts:
     name: protobuf-contracts
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -134,7 +134,7 @@ jobs:
 
   deployment-contract:
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     name: deployment-contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -201,7 +201,7 @@ jobs:
   postgres-integration:
     name: postgres-integration
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -545,7 +545,7 @@ jobs:
   redis-ha-integration:
     name: redis-ha-integration
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -750,7 +750,7 @@ jobs:
   nats-jetstream-ha-integration:
     name: nats-jetstream-ha-integration
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -778,7 +778,7 @@ jobs:
   # to execute concurrently.
   repository-quality:
     name: repository-quality
-    if: always() && github.event_name != 'push' && needs.changes.result == 'success'
+    if: always() && needs.changes.result == 'success'
     needs:
       - changes
       - rust-workspace-quality
@@ -872,7 +872,7 @@ jobs:
   security-dependencies:
     name: security-dependencies
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

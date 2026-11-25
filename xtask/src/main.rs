@@ -229,7 +229,9 @@ fn architecture() -> Result<(), Vec<String>> {
         "EXECUTE format",
     ] {
         if !ownership_rule.contains(phrase) {
-            errors.push(format!("modular-boundaries rule is missing Phase 0 ownership requirement: {phrase}"));
+            errors.push(format!(
+                "modular-boundaries rule is missing Phase 0 ownership requirement: {phrase}"
+            ));
         }
     }
     let postgres_skill = read(
@@ -242,7 +244,9 @@ fn architecture() -> Result<(), Vec<String>> {
         "EXECUTE format()",
     ] {
         if !postgres_skill.contains(phrase) {
-            errors.push(format!("PostgreSQL Engineering Skill is missing ownership validation: {phrase}"));
+            errors.push(format!(
+                "PostgreSQL Engineering Skill is missing ownership validation: {phrase}"
+            ));
         }
     }
     let architecture_adr = read(
@@ -252,7 +256,10 @@ fn architecture() -> Result<(), Vec<String>> {
     if !architecture_adr.contains("evidencia de ownership PostgreSQL en Fase 0")
         || !architecture_adr.contains("políticas creadas dinámicamente")
     {
-        errors.push("ADR-0012 is missing the Fase 0 PostgreSQL catalog and dynamic-DDL acceptance gate".to_owned());
+        errors.push(
+            "ADR-0012 is missing the Fase 0 PostgreSQL catalog and dynamic-DDL acceptance gate"
+                .to_owned(),
+        );
     }
     if quality_workflow.contains("core.outbox_events")
         || quality_workflow.contains("core.auth_rotate_refresh_token")

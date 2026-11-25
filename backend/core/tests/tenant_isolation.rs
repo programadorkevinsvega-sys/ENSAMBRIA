@@ -108,11 +108,12 @@ async fn rls_denies_cross_tenant_reads_writes_and_cross_tenant_relationships() {
     .expect("organization B must be insertable within its own scope");
 
     set_tenant(&mut transaction, tenant_a).await;
-    let visible: i64 = sqlx::query_scalar("SELECT count(*) FROM core_tenancy.tenants WHERE id = $1")
-        .bind(tenant_b)
-        .fetch_one(&mut *transaction)
-        .await
-        .expect("cross-tenant reads must return an empty result");
+    let visible: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM core_tenancy.tenants WHERE id = $1")
+            .bind(tenant_b)
+            .fetch_one(&mut *transaction)
+            .await
+            .expect("cross-tenant reads must return an empty result");
     assert_eq!(visible, 0);
 
     let updated =
@@ -176,24 +177,37 @@ async fn actor_rls_and_tenant_context_do_not_leak_after_commit_or_rollback() {
     .execute(&mut *transaction)
     .await
     .expect("actor A may create its own identity context");
-    transaction.commit().await.expect("identity transaction must commit");
+    transaction
+        .commit()
+        .await
+        .expect("identity transaction must commit");
 
-    let mut tenancy_transaction = tenancy_pool.begin().await.expect("tenancy transaction must begin");
+    let mut tenancy_transaction = tenancy_pool
+        .begin()
+        .await
+        .expect("tenancy transaction must begin");
     set_tenant(&mut tenancy_transaction, tenant_a).await;
     sqlx::query("INSERT INTO core_tenancy.tenants (id) VALUES ($1)")
         .bind(tenant_a)
         .execute(&mut *tenancy_transaction)
         .await
         .expect("tenant must be created by the tenancy runtime in its own scope");
-    tenancy_transaction.commit().await.expect("tenancy transaction must commit");
-
-    let mut transaction = pool.begin().await.expect("second identity transaction must begin");
-    set_actor(&mut transaction, actor_b).await;
-    let visible: i64 = sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.identities WHERE id = $1")
-        .bind(identity_id)
-        .fetch_one(&mut *transaction)
+    tenancy_transaction
+        .commit()
         .await
-        .expect("another actor must not read this identity");
+        .expect("tenancy transaction must commit");
+
+    let mut transaction = pool
+        .begin()
+        .await
+        .expect("second identity transaction must begin");
+    set_actor(&mut transaction, actor_b).await;
+    let visible: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM core_identity_auth.identities WHERE id = $1")
+            .bind(identity_id)
+            .fetch_one(&mut *transaction)
+            .await
+            .expect("another actor must not read this identity");
     assert_eq!(visible, 0);
     let forged = sqlx::query(
         "INSERT INTO core_identity_auth.identities (id, email_normalized, email_display) VALUES ($1, 'b@example.test', 'b@example.test')",

@@ -40,7 +40,9 @@ jobs:
           [[ "$COMMAND" == '/ensambria postgres provision' || "$COMMAND" == '/ensambria postgres verify' ]]
           [[ "$POSTGRES_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
           pr="$(gh api "repos/$GH_REPOSITORY/pulls/$PR_NUMBER")"
-          [[ "$(jq -r '.state' <<<"$pr")" == open ]]
+          state="$(jq -r '.state' <<<"$pr")"
+          merged="$(jq -r '.merged' <<<"$pr")"
+          [[ "$state" == open || ( "$state" == closed && "$merged" == true ) ]]
           [[ "$(jq -r '.base.ref' <<<"$pr")" == main ]]
           [[ "$(jq -r '.head.repo.full_name // empty' <<<"$pr")" == "$GH_REPOSITORY" ]]
           permission="$(gh api "repos/$GH_REPOSITORY/collaborators/$COMMENT_ACTOR/permission" --jq '.permission')"

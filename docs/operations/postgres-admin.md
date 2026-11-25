@@ -7,8 +7,8 @@ it never provisions PostgreSQL roles or schemas.
 
 ## Explicit PR commands
 
-Post exactly one of these comments on an open PR targeting `main` in this
-repository:
+Post exactly one of these comments on an open PR targeting `main`, or on a
+merged PR that targeted `main`, in this repository:
 
 - `/ensambria postgres verify` — read-only catalog audit.
 - `/ensambria postgres provision` — idempotent role/schema bootstrap followed

@@ -54,7 +54,7 @@ pub async fn create_tenant_with_outbox(
         .await
         .map_err(|_| TenantLifecycleError::Storage)?;
     sqlx::query(
-        "INSERT INTO core.tenants (id,status,country_code,currency_code,locale,time_zone)
+        "INSERT INTO core_tenancy.tenants (id,status,country_code,currency_code,locale,time_zone)
          VALUES ($1,'provisioning',$2,$3,$4,$5)",
     )
     .bind(input.tenant_id)
@@ -66,7 +66,7 @@ pub async fn create_tenant_with_outbox(
     .await
     .map_err(|_| TenantLifecycleError::Storage)?;
     sqlx::query(
-        "INSERT INTO core.organizations
+        "INSERT INTO core_tenancy.organizations
          (id,tenant_id,display_name,country_code,currency_code,locale,time_zone)
          VALUES ($1,$2,$3,$4,$5,$6,$7)",
     )
@@ -81,7 +81,7 @@ pub async fn create_tenant_with_outbox(
     .await
     .map_err(|_| TenantLifecycleError::Storage)?;
     sqlx::query(
-        "INSERT INTO core.tenant_products
+        "INSERT INTO core_tenancy.tenant_products
          (tenant_id,product_id,product_config_version,association_status,validated_at)
          VALUES ($1,$2,$3,'pending',clock_timestamp())",
     )

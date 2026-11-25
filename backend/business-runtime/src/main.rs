@@ -1,9 +1,10 @@
 use std::{error::Error, net::SocketAddr, sync::Arc};
 
-use ensambria_business::{
-    http::{ApiState, router},
-    service::BusinessService,
-};
+mod http;
+
+use crate::http::{ApiState, router};
+use ensambria_business::service::BusinessService;
+use ensambria_core::tenancy_access::CoreTenancyAccess;
 use ensambria_core::{
     identity_authentication::{
         email_outbox::OutboxEmailDelivery, production::authentication_service_from_env,
@@ -18,6 +19,10 @@ use tokio::net::TcpListener;
 async fn main() -> Result<(), Box<dyn Error>> {
     let core_config = PgDatabaseConfiguration::from_env()?;
     let core_pool = core_config.connect_lazy();
+    let tenancy_pool = PgPoolOptions::new()
+        .max_connections(16)
+        .connect(&std::env::var("CORE_TENANCY_DATABASE_URL")?)
+        .await?;
     let business_url = std::env::var("BUSINESS_DATABASE_URL")?;
     let business_pool = PgPoolOptions::new()
         .max_connections(
@@ -65,7 +70,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             None
         }
     };
-    let business = BusinessService::new(business_pool.clone(), cache);
+    let tenancy = Arc::new(CoreTenancyAccess::new(tenancy_pool.clone()));
+    let business = BusinessService::new(business_pool.clone(), cache, tenancy);
     let state = Arc::new(ApiState { auth, business });
     let app = router::<OutboxEmailDelivery>(state);
 
@@ -76,5 +82,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing::info!(event="business.http.started", address=%listener.local_addr()?);
     axum::serve(listener, app).await?;
     business_pool.close().await;
+    tenancy_pool.close().await;
     Ok(())
 }

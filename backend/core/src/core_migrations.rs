@@ -195,82 +195,122 @@ pub async fn run_core_migrations_from_path(
             ));
         }
 
-        sqlx::query("SET ROLE core_schema_owner")
-            .execute(&mut connection)
+        let owner_roles = [
+            ("core_identity_auth_schema_owner", "core_identity_auth"),
+            ("core_tenancy_schema_owner", "core_tenancy"),
+        ];
+        for (owner_role, schema_name) in owner_roles {
+            let (
+                owner_can_login,
+                owner_is_superuser,
+                owner_can_create_database,
+                owner_can_create_roles,
+                owner_bypasses_rls,
+                owner_can_create_schema,
+            ): (bool, bool, bool, bool, bool, bool) = sqlx::query_as(
+                "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, \
+                        has_schema_privilege(rolname, $1, 'CREATE') \
+                 FROM pg_catalog.pg_roles WHERE rolname = $2",
+            )
+            .bind(schema_name)
+            .bind(owner_role)
+            .fetch_one(&mut connection)
             .await
             .map_err(|source| {
                 CoreMigrationError::new(
                     CoreMigrationFailureKind::OwnerRole,
-                    "CORE migration identity cannot assume the schema owner role",
+                    "CORE module schema-owner privileges could not be verified",
                     Some(Box::new(source)),
                 )
             })?;
 
+            if owner_can_login
+                || owner_is_superuser
+                || owner_can_create_database
+                || owner_can_create_roles
+                || owner_bypasses_rls
+                || !owner_can_create_schema
+            {
+                return Err(CoreMigrationError::new(
+                    CoreMigrationFailureKind::OwnerRole,
+                    "CORE module schema-owner role has invalid privileges",
+                    None,
+                ));
+            }
+        }
+
+        let schema_owners: Vec<(String, String)> = sqlx::query_as(
+            "SELECT n.nspname::text, pg_catalog.pg_get_userbyid(n.nspowner)::text \
+             FROM pg_catalog.pg_namespace n \
+             WHERE n.nspname IN ('core_identity_auth', 'core_tenancy') \
+             ORDER BY n.nspname",
+        )
+        .fetch_all(&mut connection)
+        .await
+        .map_err(|source| {
+            CoreMigrationError::new(
+                CoreMigrationFailureKind::OwnerRole,
+                "CORE module schema ownership could not be verified",
+                Some(Box::new(source)),
+            )
+        })?;
+        if schema_owners
+            != vec![
+                (
+                    "core_identity_auth".to_owned(),
+                    "core_identity_auth_schema_owner".to_owned(),
+                ),
+                (
+                    "core_tenancy".to_owned(),
+                    "core_tenancy_schema_owner".to_owned(),
+                ),
+            ]
+        {
+            return Err(CoreMigrationError::new(
+                CoreMigrationFailureKind::OwnerRole,
+                "CORE module schemas must be owned by their dedicated non-login roles",
+                None,
+            ));
+        }
+
         let (
-            owner_can_login,
-            owner_is_superuser,
-            owner_can_create_database,
-            owner_can_create_roles,
-            owner_can_create_schema,
-        ): (bool, bool, bool, bool, bool) = sqlx::query_as(
-            "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, \
-                    has_database_privilege('core_schema_owner', current_database(), 'CREATE') \
-             FROM pg_catalog.pg_roles \
-             WHERE rolname = 'core_schema_owner'",
+            migrator_can_assume_identity_owner,
+            migrator_can_assume_tenancy_owner,
+            migrator_can_assume_runtime,
+        ): (bool, bool, bool) = sqlx::query_as(
+            "SELECT pg_has_role('core_migrator', 'core_identity_auth_schema_owner', 'MEMBER'), \
+                    pg_has_role('core_migrator', 'core_tenancy_schema_owner', 'MEMBER'), \
+                    pg_has_role('core_migrator', 'core_identity_auth_runtime', 'MEMBER') \
+                        OR pg_has_role('core_migrator', 'core_tenancy_runtime', 'MEMBER')",
         )
         .fetch_one(&mut connection)
         .await
         .map_err(|source| {
             CoreMigrationError::new(
                 CoreMigrationFailureKind::OwnerRole,
-                "CORE schema owner privileges could not be verified",
+                "CORE migration role memberships could not be verified",
                 Some(Box::new(source)),
             )
         })?;
-
-        if owner_can_login
-            || owner_is_superuser
-            || owner_can_create_database
-            || owner_can_create_roles
-            || owner_can_create_schema
+        if !migrator_can_assume_identity_owner
+            || !migrator_can_assume_tenancy_owner
+            || migrator_can_assume_runtime
         {
             return Err(CoreMigrationError::new(
                 CoreMigrationFailureKind::OwnerRole,
-                "CORE schema owner role has privileges beyond its schema ownership",
+                "CORE migrator must assume only the two module schema-owner roles",
                 None,
             ));
         }
 
-        let schema_owner: Option<String> = sqlx::query_scalar(
-            "SELECT pg_catalog.pg_get_userbyid(nspowner)::text \
-             FROM pg_catalog.pg_namespace \
-             WHERE nspname = 'core'",
-        )
-        .fetch_optional(&mut connection)
-        .await
-        .map_err(|source| {
-            CoreMigrationError::new(
-                CoreMigrationFailureKind::OwnerRole,
-                "CORE schema ownership could not be verified",
-                Some(Box::new(source)),
-            )
-        })?;
-
-        if schema_owner.as_deref() != Some("core_schema_owner") {
-            return Err(CoreMigrationError::new(
-                CoreMigrationFailureKind::OwnerRole,
-                "CORE schema must be owned by core_schema_owner",
-                None,
-            ));
-        }
-
-        // These least-privilege login roles are provisioned by the database
-        // operator, never by the restricted migration identity. Every role is
-        // referenced by a GRANT or RLS policy in the migration set.
         let missing_roles: Vec<String> = sqlx::query_scalar(
             "SELECT required.role_name \
-             FROM unnest(ARRAY['core_runtime', 'core_email_worker', 'core_outbox_relay']::text[]) \
-                  AS required(role_name) \
+             FROM unnest(ARRAY[ \
+                 'core_identity_auth_runtime', \
+                 'core_tenancy_runtime', \
+                 'core_email_worker', \
+                 'core_outbox_relay' \
+             ]::text[]) AS required(role_name) \
              LEFT JOIN pg_catalog.pg_roles existing ON existing.rolname = required.role_name \
              WHERE existing.rolname IS NULL \
              ORDER BY required.role_name",
@@ -288,6 +328,17 @@ pub async fn run_core_migrations_from_path(
             return Err(CoreMigrationError::missing_roles(missing_roles));
         }
 
+        sqlx::query("SET ROLE core_tenancy_schema_owner")
+            .execute(&mut connection)
+            .await
+            .map_err(|source| {
+                CoreMigrationError::new(
+                    CoreMigrationFailureKind::OwnerRole,
+                    "CORE migration identity cannot assume the tenancy schema owner role",
+                    Some(Box::new(source)),
+                )
+            })?;
+
         let mut migrator = sqlx::migrate::Migrator::new(migrations_path)
             .await
             .map_err(|source| {
@@ -297,7 +348,7 @@ pub async fn run_core_migrations_from_path(
                     Some(Box::new(source)),
                 )
             })?;
-        migrator.dangerous_set_table_name("core._sqlx_migrations");
+        migrator.dangerous_set_table_name("core_tenancy._sqlx_migrations");
 
         // Serialize all migrators, including concurrent deploys and test processes.
         sqlx::query("SELECT pg_advisory_lock($1, $2)")
@@ -366,6 +417,7 @@ pub async fn run_core_migrations_from_path(
                 failure_class = error.failure_kind().as_str(),
                 error_code = "CORE_MIGRATION_FAILED",
                 sqlstate = error.sqlstate().as_deref().unwrap_or(""),
+                source_error = error.source().map(ToString::to_string).unwrap_or_default(),
                 missing_roles = error.missing_roles.as_deref().unwrap_or(""),
                 duration_ms
             ),

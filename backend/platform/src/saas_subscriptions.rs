@@ -152,8 +152,8 @@ impl SaaSSubscriptions {
         let offer = sqlx::query(
             "SELECT o.product_id, o.status AS offer_status, \
                     v.status AS version_status, v.entitlements \
-             FROM platform.commercial_offers o \
-             JOIN platform.commercial_offer_versions v ON v.offer_id = o.id \
+             FROM platform_product_catalog.commercial_offers o \
+             JOIN platform_product_catalog.commercial_offer_versions v ON v.offer_id = o.id \
              WHERE o.id = $1 AND v.version = $2",
         )
         .bind(command.offer_id)
@@ -172,7 +172,7 @@ impl SaaSSubscriptions {
 
         let subscription_id = Uuid::now_v7();
         let inserted = sqlx::query(
-            "INSERT INTO platform.saas_subscriptions \
+            "INSERT INTO platform_product_catalog.saas_subscriptions \
              (id, tenant_id, product_id, offer_id, offer_version, entitlements_snapshot, \
               status, starts_at, ends_at, created_by) \
              VALUES ($1, $2, $3, $4, $5, $6, 'active', clock_timestamp(), \
@@ -275,7 +275,7 @@ impl SaaSSubscriptions {
 
         let row = sqlx::query(
             "SELECT status, extract(epoch FROM ends_at)::bigint AS ends_at_epoch, version \
-             FROM platform.saas_subscriptions \
+             FROM platform_product_catalog.saas_subscriptions \
              WHERE id = $1 AND tenant_id = $2 FOR UPDATE",
         )
         .bind(command.subscription_id)
@@ -324,7 +324,7 @@ impl SaaSSubscriptions {
         }
 
         sqlx::query(
-            "UPDATE platform.saas_subscriptions \
+            "UPDATE platform_product_catalog.saas_subscriptions \
              SET status = $3, \
                  ends_at = to_timestamp($4::bigint::double precision), \
                  suspended_at = CASE WHEN $3 = 'suspended' THEN clock_timestamp() ELSE NULL END, \
@@ -383,7 +383,7 @@ impl SaaSSubscriptions {
             "SELECT id, tenant_id, product_id, offer_id, offer_version, entitlements_snapshot, \
                     status, extract(epoch FROM starts_at)::bigint AS starts_at_epoch, \
                     extract(epoch FROM ends_at)::bigint AS ends_at_epoch, version \
-             FROM platform.saas_subscriptions WHERE id = $1 AND tenant_id = $2",
+             FROM platform_product_catalog.saas_subscriptions WHERE id = $1 AND tenant_id = $2",
         )
         .bind(subscription_id)
         .bind(tenant_id)
@@ -440,7 +440,7 @@ async fn replay_command(
     hash: &[u8],
 ) -> Result<Option<Value>, SubscriptionError> {
     let inserted = sqlx::query(
-        "INSERT INTO platform.saas_subscription_commands \
+        "INSERT INTO platform_product_catalog.saas_subscription_commands \
          (tenant_id, idempotency_key, request_hash) VALUES ($1, $2, $3) \
          ON CONFLICT DO NOTHING RETURNING idempotency_key",
     )
@@ -455,7 +455,7 @@ async fn replay_command(
     }
 
     let row = sqlx::query(
-        "SELECT request_hash, response FROM platform.saas_subscription_commands \
+        "SELECT request_hash, response FROM platform_product_catalog.saas_subscription_commands \
          WHERE tenant_id = $1 AND idempotency_key = $2",
     )
     .bind(tenant_id)
@@ -480,7 +480,7 @@ async fn store_command(
 ) -> Result<(), SubscriptionError> {
     let response = serde_json::to_value(snapshot).map_err(|_| SubscriptionError::Storage)?;
     sqlx::query(
-        "UPDATE platform.saas_subscription_commands \
+        "UPDATE platform_product_catalog.saas_subscription_commands \
          SET subscription_id = $3, response = $4 \
          WHERE tenant_id = $1 AND idempotency_key = $2 AND request_hash = $5",
     )
@@ -504,7 +504,7 @@ async fn load_snapshot(
         "SELECT id, tenant_id, product_id, offer_id, offer_version, entitlements_snapshot, \
                 status, extract(epoch FROM starts_at)::bigint AS starts_at_epoch, \
                 extract(epoch FROM ends_at)::bigint AS ends_at_epoch, version \
-         FROM platform.saas_subscriptions WHERE id = $1 AND tenant_id = $2",
+         FROM platform_product_catalog.saas_subscriptions WHERE id = $1 AND tenant_id = $2",
     )
     .bind(subscription_id)
     .bind(tenant_id)
@@ -578,7 +578,7 @@ async fn write_effects(
     });
 
     sqlx::query(
-        "INSERT INTO platform.saas_subscription_audit \
+        "INSERT INTO platform_product_catalog.saas_subscription_audit \
          (audit_id, subscription_id, tenant_id, actor_id, action, previous_status, new_status, \
           previous_version, new_version, reason_code) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -602,7 +602,7 @@ async fn write_effects(
     .map_err(|_| SubscriptionError::Storage)?;
 
     sqlx::query(
-        "INSERT INTO platform.saas_subscription_outbox \
+        "INSERT INTO platform_product_catalog.saas_subscription_outbox \
          (event_id, tenant_id, subscription_id, aggregate_version, event_type, payload) \
          VALUES ($1, $2, $3, $4, $5, $6)",
     )

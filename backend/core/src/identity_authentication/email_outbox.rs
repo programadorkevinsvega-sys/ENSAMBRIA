@@ -26,7 +26,7 @@ impl EmailDelivery for OutboxEmailDelivery {
     ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
         Box::pin(async move {
             sqlx::query(
-                "INSERT INTO core.email_outbox (id, recipient, subject, text_body) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO core_identity_auth.email_outbox (id, recipient, subject, text_body) VALUES ($1, $2, $3, $4)",
             )
             .bind(Uuid::now_v7())
             .bind(message.recipient)
@@ -46,7 +46,7 @@ impl EmailDelivery for OutboxEmailDelivery {
     ) -> Pin<Box<dyn Future<Output = Result<(), EmailDeliveryError>> + Send + 'a>> {
         Box::pin(async move {
             sqlx::query(
-                "INSERT INTO core.email_outbox (id, recipient, subject, text_body) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO core_identity_auth.email_outbox (id, recipient, subject, text_body) VALUES ($1, $2, $3, $4)",
             )
             .bind(Uuid::now_v7())
             .bind(message.recipient)
@@ -89,7 +89,7 @@ impl EmailOutboxWorker {
         }
 
         sqlx::query(
-            "UPDATE core.email_outbox SET status = 'dead', locked_until = NULL, text_body = '[REDACTED]', last_error = 'delivery lease expired after maximum attempts' WHERE status = 'processing' AND locked_until <= clock_timestamp() AND attempts >= $1",
+            "UPDATE core_identity_auth.email_outbox SET status = 'dead', locked_until = NULL, text_body = '[REDACTED]', last_error = 'delivery lease expired after maximum attempts' WHERE status = 'processing' AND locked_until <= clock_timestamp() AND attempts >= $1",
         )
         .bind(MAX_ATTEMPTS)
         .execute(pool)
@@ -97,7 +97,7 @@ impl EmailOutboxWorker {
         .map_err(|_| EmailOutboxError::Storage)?;
 
         let messages = sqlx::query_as::<_, (Uuid, String, String, String, i32)>(
-            "WITH candidates AS (                SELECT id FROM core.email_outbox                 WHERE ((status = 'pending' AND available_at <= clock_timestamp())                     OR (status = 'processing' AND locked_until <= clock_timestamp()))                     AND attempts < $1                 ORDER BY available_at, created_at LIMIT $2 FOR UPDATE SKIP LOCKED             )              UPDATE core.email_outbox AS outbox              SET status = 'processing', attempts = attempts + 1,                  locked_until = clock_timestamp() + ($3 * interval '1 second')              FROM candidates WHERE outbox.id = candidates.id              RETURNING outbox.id, outbox.recipient, outbox.subject, outbox.text_body, outbox.attempts",
+            "WITH candidates AS (                SELECT id FROM core_identity_auth.email_outbox                 WHERE ((status = 'pending' AND available_at <= clock_timestamp())                     OR (status = 'processing' AND locked_until <= clock_timestamp()))                     AND attempts < $1                 ORDER BY available_at, created_at LIMIT $2 FOR UPDATE SKIP LOCKED             )              UPDATE core_identity_auth.email_outbox AS outbox              SET status = 'processing', attempts = attempts + 1,                  locked_until = clock_timestamp() + ($3 * interval '1 second')              FROM candidates WHERE outbox.id = candidates.id              RETURNING outbox.id, outbox.recipient, outbox.subject, outbox.text_body, outbox.attempts",
         )
         .bind(MAX_ATTEMPTS)
         .bind(limit)
@@ -116,7 +116,7 @@ impl EmailOutboxWorker {
             match delivery.send(message).await {
                 Ok(()) => {
                     sqlx::query(
-                        "UPDATE core.email_outbox SET status = 'sent', sent_at = clock_timestamp(), locked_until = NULL, last_error = NULL, text_body = '[REDACTED]' WHERE id = $1 AND status = 'processing'",
+                        "UPDATE core_identity_auth.email_outbox SET status = 'sent', sent_at = clock_timestamp(), locked_until = NULL, last_error = NULL, text_body = '[REDACTED]' WHERE id = $1 AND status = 'processing'",
                     )
                     .bind(id)
                     .execute(pool)
@@ -128,7 +128,7 @@ impl EmailOutboxWorker {
                     let terminal = attempts >= MAX_ATTEMPTS;
                     let delay_seconds = 30_i64.saturating_mul(1_i64 << attempts.min(10));
                     sqlx::query(
-                        "UPDATE core.email_outbox SET status = CASE WHEN $2 THEN 'dead' ELSE 'pending' END, text_body = CASE WHEN $2 THEN '[REDACTED]' ELSE text_body END, available_at = clock_timestamp() + ($3 * interval '1 second'), locked_until = NULL, last_error = 'smtp delivery failed' WHERE id = $1 AND status = 'processing'",
+                        "UPDATE core_identity_auth.email_outbox SET status = CASE WHEN $2 THEN 'dead' ELSE 'pending' END, text_body = CASE WHEN $2 THEN '[REDACTED]' ELSE text_body END, available_at = clock_timestamp() + ($3 * interval '1 second'), locked_until = NULL, last_error = 'smtp delivery failed' WHERE id = $1 AND status = 'processing'",
                     )
                     .bind(id)
                     .bind(terminal)

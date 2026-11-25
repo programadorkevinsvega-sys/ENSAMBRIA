@@ -599,3 +599,8 @@ Ninguna funcionalidad, fase, urgencia, agente de IA o desarrollador puede justif
 El repositorio debe permitir demostrar qué se cambió, quién o qué agente lo cambió, por qué se cambió, qué validaciones se ejecutaron, quién lo revisó y bajo qué condiciones se integró.
 
 **La calidad del software no se demuestra únicamente porque compila o porque GitHub muestra un CI verde. Se demuestra mediante arquitectura correcta, pruebas suficientes, seguridad, revisión, trazabilidad y evidencia reproducible.**
+
+
+## Gate de cumplimiento arquitectónico ENSAMBRIA
+
+Los checks requeridos deben aplicar [ADR-0012](../adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y [ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md](ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md). El validador de arquitectura tendrá un único punto de entrada `cargo xtask architecture`; los gates PR y release/staging se separan por sus dependencias. El job agregado falla ante cualquier control aplicable fallido, omitido o sin evidencia. El E2E de staging y el inventario runtime se vinculan al SHA exacto desplegado. No se modifica manualmente la evidencia generada por CI ni se rebajan checks para obtener verde.

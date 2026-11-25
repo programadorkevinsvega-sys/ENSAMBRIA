@@ -1,7 +1,9 @@
+SET LOCAL ROLE core_tenancy_schema_owner;
+
 -- Explicit authorization evaluation and inherited regional context.
 -- These functions are SECURITY INVOKER and require transaction-local actor/tenant context.
 
-CREATE FUNCTION core.has_permission(
+CREATE FUNCTION core_tenancy.has_permission(
     p_actor_id uuid,
     p_tenant_id uuid,
     p_permission_code text,
@@ -26,17 +28,14 @@ AS $function$
         AND (p_branch_id IS NULL OR p_organization_id IS NOT NULL)
         AND EXISTS (
             SELECT 1
-            FROM core.identities AS i
-            INNER JOIN core.tenants AS t ON t.id = p_tenant_id
-            INNER JOIN core.tenant_memberships AS m
-                ON m.tenant_id = t.id AND m.identity_id = i.id
-            INNER JOIN core.membership_role_assignments AS a
+            FROM core_tenancy.tenants AS t
+            INNER JOIN core_tenancy.tenant_memberships AS m
+                ON m.tenant_id = t.id AND m.identity_id = p_actor_id
+            INNER JOIN core_tenancy.membership_role_assignments AS a
                 ON a.tenant_id = m.tenant_id AND a.membership_id = m.id
-            INNER JOIN core.tenant_role_permissions AS rp
+            INNER JOIN core_tenancy.tenant_role_permissions AS rp
                 ON rp.tenant_id = a.tenant_id AND rp.role_id = a.role_id
-            WHERE i.id = p_actor_id
-              AND i.status = 'active'
-              AND t.status = 'active'
+            WHERE t.status = 'active'
               AND m.status = 'active'
               AND rp.permission_code = p_permission_code
               AND (
@@ -51,7 +50,7 @@ AS $function$
               AND (
                     p_organization_id IS NULL
                     OR EXISTS (
-                        SELECT 1 FROM core.organizations AS o
+                        SELECT 1 FROM core_tenancy.organizations AS o
                         WHERE o.id = p_organization_id
                           AND o.tenant_id = p_tenant_id
                           AND o.status = 'active'
@@ -60,7 +59,7 @@ AS $function$
               AND (
                     p_branch_id IS NULL
                     OR EXISTS (
-                        SELECT 1 FROM core.branches AS b
+                        SELECT 1 FROM core_tenancy.branches AS b
                         WHERE b.id = p_branch_id
                           AND b.tenant_id = p_tenant_id
                           AND b.organization_id = p_organization_id
@@ -70,7 +69,7 @@ AS $function$
         )
 $function$;
 
-CREATE FUNCTION core.resolve_regional_context(
+CREATE FUNCTION core_tenancy.resolve_regional_context(
     p_tenant_id uuid,
     p_organization_id uuid,
     p_branch_id uuid
@@ -91,12 +90,12 @@ AS $function$
         COALESCE(b.currency_code, o.currency_code, t.currency_code),
         COALESCE(b.locale, o.locale, t.locale),
         COALESCE(b.time_zone, o.time_zone, t.time_zone)
-    FROM core.tenants AS t
-    LEFT JOIN core.organizations AS o
+    FROM core_tenancy.tenants AS t
+    LEFT JOIN core_tenancy.organizations AS o
         ON o.tenant_id = t.id
        AND o.id = p_organization_id
        AND o.status = 'active'
-    LEFT JOIN core.branches AS b
+    LEFT JOIN core_tenancy.branches AS b
         ON b.tenant_id = t.id
        AND b.organization_id = o.id
        AND b.id = p_branch_id
@@ -108,12 +107,19 @@ AS $function$
       AND (p_branch_id IS NULL OR (p_organization_id IS NOT NULL AND b.id IS NOT NULL))
 $function$;
 
-REVOKE ALL ON FUNCTION core.has_permission(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.resolve_regional_context(uuid, uuid, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION core.has_permission(uuid, uuid, text, uuid, uuid) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.resolve_regional_context(uuid, uuid, uuid) TO core_runtime;
+REVOKE ALL ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) TO core_tenancy_runtime;
+-- The non-login identity schema owner installs auth objects whose RLS/RI
+-- validation resolves the tenancy authorization primitive; runtime remains isolated.
+GRANT EXECUTE ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid)
+    TO core_identity_auth_schema_owner;
+GRANT EXECUTE ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) TO core_tenancy_runtime;
 
-COMMENT ON FUNCTION core.has_permission(uuid, uuid, text, uuid, uuid) IS
+COMMENT ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) IS
     'Evaluates active membership permissions at tenant, organization or branch scope under transaction-local actor and tenant RLS context.';
-COMMENT ON FUNCTION core.resolve_regional_context(uuid, uuid, uuid) IS
+COMMENT ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) IS
     'Resolves regional settings with branch > organization > tenant precedence and validates the supplied scope.';
+
+-- SQLx migration ledger is owned by core_tenancy_schema_owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

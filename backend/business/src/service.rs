@@ -1,4 +1,10 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+
+use ensambria_business_establishment_catalog_contracts::{
+    ContractFuture, CreateEstablishment as CreateEstablishmentContract,
+    Establishment as EstablishmentContract, EstablishmentCatalog, EstablishmentFailure,
+};
+use ensambria_core_tenancy_contracts::{TenancyAccess, TenancyFailure};
 
 use ensambria_shared_cache::TtlCache;
 use serde::{Deserialize, Serialize};
@@ -11,13 +17,19 @@ const ESTABLISHMENT_LIST_TTL: Duration = Duration::from_secs(10);
 pub struct BusinessService {
     business_pool: PgPool,
     cache: Option<TtlCache>,
+    tenancy: Arc<dyn TenancyAccess>,
 }
 
 impl BusinessService {
-    pub fn new(business_pool: PgPool, cache: Option<TtlCache>) -> Self {
+    pub fn new(
+        business_pool: PgPool,
+        cache: Option<TtlCache>,
+        tenancy: Arc<dyn TenancyAccess>,
+    ) -> Self {
         Self {
             business_pool,
             cache,
+            tenancy,
         }
     }
 
@@ -32,7 +44,10 @@ impl BusinessService {
             .await
             .map_err(|_| BusinessError::Storage)?;
         set_tenant(&mut transaction, tenant_id).await?;
-        require_active_membership(&mut transaction, identity_id, tenant_id).await?;
+        self.tenancy
+            .require_active_membership(identity_id, tenant_id)
+            .await
+            .map_err(map_tenancy_failure)?;
         let cache_key = format!("tenant:{tenant_id}:establishments:v1");
         if let Some(cache) = &self.cache
             && let Ok(Some(value)) = cache.get(&cache_key).await
@@ -46,7 +61,7 @@ impl BusinessService {
         }
 
         let rows = sqlx::query_as::<_, Establishment>(
-            "SELECT id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at FROM business.establishments WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT 200"
+            "SELECT id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at FROM business_establishment_catalog.establishments WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT 200"
         )
         .bind(tenant_id)
         .fetch_all(&mut *transaction)
@@ -82,34 +97,22 @@ impl BusinessService {
             .await
             .map_err(|_| BusinessError::Storage)?;
         set_tenant(&mut transaction, tenant_id).await?;
-        require_active_membership(&mut transaction, identity_id, tenant_id).await?;
-        let organization_active: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM core.organizations WHERE tenant_id = $1 AND id = $2 AND status = 'active')"
-        )
-        .bind(tenant_id)
-        .bind(organization_id)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(|_| BusinessError::Storage)?;
-        if !organization_active {
-            return Err(BusinessError::OrganizationUnavailable);
-        }
-        if let Some(branch_id) = branch_id {
-            let branch_active: bool = sqlx::query_scalar(
-                "SELECT EXISTS (SELECT 1 FROM core.branches WHERE tenant_id = $1 AND organization_id = $2 AND id = $3 AND status = 'active')"
-            )
-            .bind(tenant_id)
-            .bind(organization_id)
-            .bind(branch_id)
-            .fetch_one(&mut *transaction)
+        self.tenancy
+            .require_active_membership(identity_id, tenant_id)
             .await
-            .map_err(|_| BusinessError::Storage)?;
-            if !branch_active {
-                return Err(BusinessError::OrganizationUnavailable);
-            }
+            .map_err(map_tenancy_failure)?;
+        self.tenancy
+            .require_active_organization(tenant_id, organization_id)
+            .await
+            .map_err(map_tenancy_failure)?;
+        if let Some(branch_id) = branch_id {
+            self.tenancy
+                .require_active_branch(tenant_id, organization_id, branch_id)
+                .await
+                .map_err(map_tenancy_failure)?;
         }
         let row = sqlx::query_as::<_, Establishment>(
-            "INSERT INTO business.establishments (id, tenant_id, organization_id, branch_id, display_name, status) VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at"
+            "INSERT INTO business_establishment_catalog.establishments (id, tenant_id, organization_id, branch_id, display_name, status) VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id, tenant_id, organization_id, branch_id, display_name, status, created_at::text AS created_at"
         )
         .bind(Uuid::now_v7())
         .bind(tenant_id)
@@ -134,20 +137,67 @@ impl BusinessService {
     }
 }
 
-async fn require_active_membership(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    identity_id: Uuid,
-    tenant_id: Uuid,
-) -> Result<(), BusinessError> {
-    let membership: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM core.tenant_memberships WHERE tenant_id = $1 AND identity_id = $2 AND status = 'active' FOR SHARE"
-    )
-    .bind(tenant_id)
-    .bind(identity_id)
-    .fetch_optional(&mut **transaction)
-    .await
-    .map_err(|_| BusinessError::Storage)?;
-    membership.map(|_| ()).ok_or(BusinessError::Forbidden)
+impl EstablishmentCatalog for BusinessService {
+    fn list_for_tenant<'a>(
+        &'a self,
+        identity_id: Uuid,
+        tenant_id: Uuid,
+    ) -> ContractFuture<'a, Result<Vec<EstablishmentContract>, EstablishmentFailure>> {
+        Box::pin(async move {
+            self.list_establishments(identity_id, tenant_id)
+                .await
+                .map(|rows| rows.into_iter().map(EstablishmentContract::from).collect())
+                .map_err(map_establishment_failure)
+        })
+    }
+
+    fn create<'a>(
+        &'a self,
+        input: CreateEstablishmentContract,
+    ) -> ContractFuture<'a, Result<EstablishmentContract, EstablishmentFailure>> {
+        Box::pin(async move {
+            self.create_establishment(
+                input.identity_id,
+                input.tenant_id,
+                input.organization_id,
+                input.branch_id,
+                input.display_name,
+            )
+            .await
+            .map(EstablishmentContract::from)
+            .map_err(map_establishment_failure)
+        })
+    }
+}
+
+impl From<Establishment> for EstablishmentContract {
+    fn from(value: Establishment) -> Self {
+        Self {
+            id: value.id,
+            tenant_id: value.tenant_id,
+            organization_id: value.organization_id,
+            branch_id: value.branch_id,
+            display_name: value.display_name,
+            status: value.status,
+        }
+    }
+}
+
+fn map_establishment_failure(error: BusinessError) -> EstablishmentFailure {
+    match error {
+        BusinessError::InvalidInput => EstablishmentFailure::InvalidInput,
+        BusinessError::Forbidden => EstablishmentFailure::Forbidden,
+        BusinessError::OrganizationUnavailable => EstablishmentFailure::NotFound,
+        BusinessError::Storage => EstablishmentFailure::Unavailable,
+    }
+}
+
+fn map_tenancy_failure(error: TenancyFailure) -> BusinessError {
+    match error {
+        TenancyFailure::Forbidden => BusinessError::Forbidden,
+        TenancyFailure::NotFound => BusinessError::OrganizationUnavailable,
+        TenancyFailure::Unavailable => BusinessError::Storage,
+    }
 }
 
 async fn set_tenant(

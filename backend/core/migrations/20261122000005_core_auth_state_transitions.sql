@@ -1,7 +1,9 @@
+SET LOCAL ROLE core_identity_auth_schema_owner;
+
 -- Atomic state transitions for authentication, recovery, throttling and MFA.
 -- Every function is SECURITY DEFINER with a fixed search_path and narrowly granted.
 
-CREATE OR REPLACE FUNCTION core.auth_record_login_failure(
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_record_login_failure(
     p_identity_id uuid,
     p_max_attempts integer,
     p_lock_seconds integer
@@ -18,7 +20,7 @@ BEGIN
         RAISE EXCEPTION 'invalid authentication policy' USING ERRCODE = '22023';
     END IF;
 
-    UPDATE core.identity_credentials
+    UPDATE core_identity_auth.identity_credentials
        SET failed_attempts = CASE
                WHEN locked_until IS NOT NULL AND locked_until <= clock_timestamp() THEN 1
                ELSE failed_attempts + 1
@@ -39,13 +41,13 @@ BEGIN
 END
 $$;
 
-CREATE OR REPLACE FUNCTION core.auth_record_login_success(p_identity_id uuid)
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_record_login_success(p_identity_id uuid)
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = pg_catalog, core
 AS $$
-    UPDATE core.identity_credentials
+    UPDATE core_identity_auth.identity_credentials
        SET failed_attempts = 0,
            locked_until = NULL,
            last_authenticated_at = clock_timestamp(),
@@ -55,7 +57,7 @@ AS $$
     RETURNING true
 $$;
 
-CREATE OR REPLACE FUNCTION core.auth_consume_rate_limit(
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_consume_rate_limit(
     p_subject_digest bytea,
     p_action text,
     p_window_seconds integer,
@@ -78,27 +80,27 @@ BEGIN
         RAISE EXCEPTION 'invalid rate-limit input' USING ERRCODE = '22023';
     END IF;
 
-    INSERT INTO core.auth_rate_limits (
+    INSERT INTO core_identity_auth.auth_rate_limits (
         subject_digest, action, window_started_at, attempts, blocked_until, updated_at
     ) VALUES (
         p_subject_digest, p_action, v_now, 1, NULL, v_now
     )
     ON CONFLICT (subject_digest, action) DO UPDATE
        SET window_started_at = CASE
-               WHEN core.auth_rate_limits.window_started_at
+               WHEN core_identity_auth.auth_rate_limits.window_started_at
                     + make_interval(secs => p_window_seconds) <= v_now
-               THEN v_now ELSE core.auth_rate_limits.window_started_at END,
+               THEN v_now ELSE core_identity_auth.auth_rate_limits.window_started_at END,
            attempts = CASE
-               WHEN core.auth_rate_limits.window_started_at
+               WHEN core_identity_auth.auth_rate_limits.window_started_at
                     + make_interval(secs => p_window_seconds) <= v_now
-               THEN 1 ELSE core.auth_rate_limits.attempts + 1 END,
+               THEN 1 ELSE core_identity_auth.auth_rate_limits.attempts + 1 END,
            blocked_until = CASE
-               WHEN core.auth_rate_limits.blocked_until > v_now
-               THEN core.auth_rate_limits.blocked_until
+               WHEN core_identity_auth.auth_rate_limits.blocked_until > v_now
+               THEN core_identity_auth.auth_rate_limits.blocked_until
                WHEN (CASE
-                   WHEN core.auth_rate_limits.window_started_at
+                   WHEN core_identity_auth.auth_rate_limits.window_started_at
                         + make_interval(secs => p_window_seconds) <= v_now
-                   THEN 1 ELSE core.auth_rate_limits.attempts + 1 END) > p_max_attempts
+                   THEN 1 ELSE core_identity_auth.auth_rate_limits.attempts + 1 END) > p_max_attempts
                THEN v_now + make_interval(secs => p_block_seconds)
                ELSE NULL END,
            updated_at = v_now
@@ -110,7 +112,7 @@ $$;
 
 -- Rotation is one transactionally serialized state transition. A reused old
 -- token revokes every session for that identity and records the reuse signal.
-CREATE OR REPLACE FUNCTION core.auth_rotate_refresh_token(
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_rotate_refresh_token(
     p_old_token_hash bytea,
     p_new_session_id uuid,
     p_new_token_hash bytea,
@@ -122,7 +124,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, core
 AS $$
 DECLARE
-    v_session core.auth_sessions%ROWTYPE;
+    v_session core_identity_auth.auth_sessions%ROWTYPE;
 BEGIN
     IF octet_length(p_old_token_hash) <> 32
        OR octet_length(p_new_token_hash) <> 32
@@ -132,7 +134,7 @@ BEGIN
     END IF;
 
     SELECT * INTO v_session
-      FROM core.auth_sessions
+      FROM core_identity_auth.auth_sessions
      WHERE refresh_token_hash = p_old_token_hash
      FOR UPDATE;
 
@@ -142,11 +144,11 @@ BEGIN
     END IF;
 
     IF v_session.revoked_at IS NOT NULL OR v_session.replaced_by_session_id IS NOT NULL THEN
-        UPDATE core.auth_sessions
+        UPDATE core_identity_auth.auth_sessions
            SET reuse_detected_at = COALESCE(reuse_detected_at, clock_timestamp())
          WHERE id = v_session.id;
 
-        UPDATE core.auth_sessions
+        UPDATE core_identity_auth.auth_sessions
            SET revoked_at = COALESCE(revoked_at, clock_timestamp())
          WHERE auth_sessions.identity_id = v_session.identity_id;
 
@@ -159,14 +161,14 @@ BEGIN
         RETURN;
     END IF;
 
-    INSERT INTO core.auth_sessions (
+    INSERT INTO core_identity_auth.auth_sessions (
         id, identity_id, refresh_token_hash, expires_at, ip_prefix
     ) VALUES (
         p_new_session_id, v_session.identity_id, p_new_token_hash,
         p_new_expires_at, v_session.ip_prefix
     );
 
-    UPDATE core.auth_sessions
+    UPDATE core_identity_auth.auth_sessions
        SET revoked_at = clock_timestamp(),
            replaced_by_session_id = p_new_session_id,
            last_used_at = clock_timestamp()
@@ -178,7 +180,7 @@ $$;
 
 -- Recovery completion consumes the token, replaces the Argon2id verifier,
 -- clears lockout state and revokes every extant session atomically.
-CREATE OR REPLACE FUNCTION core.auth_complete_recovery(
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_complete_recovery(
     p_token_hash bytea,
     p_new_password_hash text
 )
@@ -196,8 +198,8 @@ BEGIN
     END IF;
 
     SELECT t.identity_id, t.id INTO v_identity_id, v_recovery_id
-      FROM core.account_recovery_tokens AS t
-      JOIN core.account_recovery_token_lookup AS l
+      FROM core_identity_auth.account_recovery_tokens AS t
+      JOIN core_identity_auth.account_recovery_token_lookup AS l
         ON l.identity_id = t.identity_id AND l.recovery_id = t.id
      WHERE l.token_hash = p_token_hash
        AND t.consumed_at IS NULL
@@ -208,7 +210,7 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    UPDATE core.account_recovery_tokens
+    UPDATE core_identity_auth.account_recovery_tokens
        SET consumed_at = clock_timestamp()
      WHERE id = v_recovery_id AND consumed_at IS NULL;
 
@@ -216,7 +218,7 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    UPDATE core.identity_credentials
+    UPDATE core_identity_auth.identity_credentials
        SET password_hash = p_new_password_hash,
            password_changed_at = clock_timestamp(),
            failed_attempts = 0,
@@ -224,7 +226,7 @@ BEGIN
            updated_at = clock_timestamp()
      WHERE identity_id = v_identity_id;
 
-    UPDATE core.auth_sessions
+    UPDATE core_identity_auth.auth_sessions
        SET revoked_at = COALESCE(revoked_at, clock_timestamp())
      WHERE identity_id = v_identity_id;
 
@@ -233,14 +235,14 @@ END
 $$;
 
 -- TOTP verification must supply a strictly increasing accepted time-step.
-CREATE OR REPLACE FUNCTION core.auth_accept_totp_step(p_identity_id uuid, p_step bigint)
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_accept_totp_step(p_identity_id uuid, p_step bigint)
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, core
 AS $$
 BEGIN
-    UPDATE core.identity_mfa_totp
+    UPDATE core_identity_auth.identity_mfa_totp
        SET last_accepted_step = p_step,
            updated_at = clock_timestamp()
      WHERE identity_id = p_identity_id
@@ -250,16 +252,19 @@ BEGIN
 END
 $$;
 
-REVOKE ALL ON FUNCTION core.auth_record_login_failure(uuid, integer, integer) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_record_login_success(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_consume_rate_limit(bytea, text, integer, integer, integer) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_complete_recovery(bytea, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_accept_totp_step(uuid, bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_record_login_failure(uuid, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_record_login_success(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_consume_rate_limit(bytea, text, integer, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_complete_recovery(bytea, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_accept_totp_step(uuid, bigint) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION core.auth_record_login_failure(uuid, integer, integer) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_record_login_success(uuid) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_consume_rate_limit(bytea, text, integer, integer, integer) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_complete_recovery(bytea, text) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_accept_totp_step(uuid, bigint) TO core_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_record_login_failure(uuid, integer, integer) TO core_identity_auth_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_record_login_success(uuid) TO core_identity_auth_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_consume_rate_limit(bytea, text, integer, integer, integer) TO core_identity_auth_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_rotate_refresh_token(bytea, uuid, bytea, timestamptz) TO core_identity_auth_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_complete_recovery(bytea, text) TO core_identity_auth_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_accept_totp_step(uuid, bigint) TO core_identity_auth_runtime;
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

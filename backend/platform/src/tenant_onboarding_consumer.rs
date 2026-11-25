@@ -1,13 +1,14 @@
-use crate::tenant_onboarding::{TenantCreatedEvent, TenantOnboardingOutcome, apply_tenant_created};
 use ensambria_event_bus::{
     async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy},
     jetstream::Context,
 };
+use ensambria_platform_tenant_onboarding_contracts::{
+    OnboardingOutcome, TenantCreated, TenantOnboarding,
+};
 use futures_util::StreamExt;
 use ring::digest::{SHA256, digest};
 use serde::Deserialize;
-use sqlx::PgPool;
-use std::{env, error::Error, time::Duration};
+use std::{env, error::Error, sync::Arc, time::Duration};
 use uuid::Uuid;
 
 const STREAM: &str = "ENSAMBRIA";
@@ -36,7 +37,7 @@ struct TenantCreatedEnvelope {
 }
 
 impl TenantCreatedEnvelope {
-    fn into_event(self, raw: &[u8]) -> Result<TenantCreatedEvent, &'static str> {
+    fn into_event(self, raw: &[u8]) -> Result<TenantCreated, &'static str> {
         let tenant_id = self.tenant_id.to_string();
         let payload_tenant_id = self.payload.get("tenantId").and_then(|v| v.as_str());
         let payload_product_id = self.payload.get("productId").and_then(|v| v.as_str());
@@ -49,7 +50,7 @@ impl TenantCreatedEnvelope {
             .ok_or("invalid product ID in tenant-created payload")?;
         let product_id_string = product_id.to_string();
         let product_config_version = payload_config_version
-            .and_then(|value| i32::try_from(value).ok())
+            .and_then(|value| u32::try_from(value).ok())
             .filter(|value| *value > 0)
             .ok_or("invalid product configuration version in payload")?;
 
@@ -72,22 +73,22 @@ impl TenantCreatedEnvelope {
         let hash = digest(&SHA256, raw);
         let mut payload_hash = [0_u8; 32];
         payload_hash.copy_from_slice(hash.as_ref());
-        Ok(TenantCreatedEvent {
+        Ok(TenantCreated {
             event_id: self.event_id,
             tenant_id: self.tenant_id,
             product_id,
             product_config_version,
             aggregate_version: self.aggregate.version,
             correlation_id: self.correlation_id,
-            payload_hash,
+            payload_sha256: payload_hash,
         })
     }
 }
 
 pub async fn consume_one(
-    pool: &PgPool,
+    service: &dyn TenantOnboarding,
     jetstream: &Context,
-) -> Result<TenantOnboardingOutcome, Box<dyn Error + Send + Sync>> {
+) -> Result<OnboardingOutcome, Box<dyn Error + Send + Sync>> {
     let stream = jetstream.get_stream(STREAM).await?;
     let durable_name = env::var("PLATFORM_TENANT_ONBOARDING_DURABLE")
         .unwrap_or_else(|_| DEFAULT_DURABLE.to_owned());
@@ -124,17 +125,21 @@ pub async fn consume_one(
     let event = envelope
         .into_event(&message.payload)
         .map_err(std::io::Error::other)?;
-    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event.event_id) {
+    let event_id = event.event_id;
+    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_BEFORE_APPLY_EVENT_ID", event_id) {
         tracing::error!(
-            event_id = %event.event_id,
+            event_id = %event_id,
             "FAULT_INJECTION: paused after JetStream delivery and before Inbox transaction"
         );
         tokio::time::sleep(Duration::from_secs(60)).await;
     }
-    let outcome = apply_tenant_created(pool, &event).await?;
-    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event.event_id) {
+    let outcome = service
+        .apply_tenant_created(event)
+        .await
+        .map_err(|error| std::io::Error::other(format!("{error:?}")))?;
+    if fault_injection_matches("ENSAMBRIA_TEST_PAUSE_AFTER_COMMIT_EVENT_ID", event_id) {
         tracing::error!(
-            event_id = %event.event_id,
+            event_id = %event_id,
             "FAULT_INJECTION: paused after Inbox/onboarding commit and before JetStream ACK"
         );
         tokio::time::sleep(Duration::from_secs(60)).await;
@@ -144,9 +149,12 @@ pub async fn consume_one(
     Ok(outcome)
 }
 
-pub async fn run(pool: PgPool, jetstream: Context) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn run(
+    service: Arc<dyn TenantOnboarding>,
+    jetstream: Context,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     loop {
-        match consume_one(&pool, &jetstream).await {
+        match consume_one(service.as_ref(), &jetstream).await {
             Ok(outcome) => {
                 tracing::info!(?outcome, "PLATFORM tenant event committed and ACKed")
             }

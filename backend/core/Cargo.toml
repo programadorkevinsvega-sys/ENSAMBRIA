@@ -6,6 +6,9 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
+ensambria-platform-product-catalog-contracts = { path = "../platform-product-catalog-contracts" }
+ensambria-core-identity-auth-contracts = { path = "../core-identity-auth-contracts" }
+ensambria-core-tenancy-contracts = { path = "../core-tenancy-contracts" }
 ensambria-shared-cache = { path = "../shared-cache" }
 ensambria-platform-contract = { path = "../platform-contract" }
 ensambria-event-bus = { path = "../event-bus" }
@@ -29,5 +32,3 @@ tonic-health = "0.14.9"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 
-[dev-dependencies]
-ensambria-platform = { path = "../platform" }

@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use ensambria_core::{
     core_migrations::run_core_migrations_from_path,
+    platform_product_catalog_grpc::GrpcPlatformProductCatalog,
     platform_product_policy::{PlatformContractError, PlatformProductPolicy},
     postgres::{ActorContext, ActorId, TenantContext, TenantId},
 };
@@ -57,7 +60,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     assert_eq!(configuration.version, 1);
     assert!(!configuration.canonical_json.is_empty());
 
-    let policy = PlatformProductPolicy::new(client);
+    let policy = PlatformProductPolicy::new(Arc::new(GrpcPlatformProductCatalog::new(client)));
     let product = policy
         .require_capability(product_id, "identity.auth", "v1", 1)
         .await
@@ -66,19 +69,19 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
 
     let core_migrator_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL")
         .expect("CORE_TEST_MIGRATOR_DATABASE_URL must be configured");
-    let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let migrations = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/migrations");
     run_core_migrations_from_path(&core_migrator_url, &migrations)
         .await
         .expect("CORE migrations must apply");
-    let core_url =
-        std::env::var("CORE_TEST_DATABASE_URL").expect("CORE_TEST_DATABASE_URL must be configured");
-    let core_pool = PgPool::connect(&core_url)
+    let tenancy_url = std::env::var("CORE_TENANT_DATABASE_URL")
+        .expect("CORE_TENANT_DATABASE_URL must be configured by repository CI");
+    let tenancy_pool = PgPool::connect(&tenancy_url)
         .await
-        .expect("CORE runtime must connect");
+        .expect("CORE tenancy runtime must connect");
 
     let tenant_id = Uuid::now_v7();
     let actor_id = Uuid::now_v7();
-    let mut transaction = core_pool
+    let mut transaction = tenancy_pool
         .begin()
         .await
         .expect("tenant fixture transaction must begin");
@@ -90,13 +93,13 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
         .establish(&mut transaction)
         .await
         .expect("tenant RLS context must be established");
-    sqlx::query("INSERT INTO core.tenants (id, status) VALUES ($1, 'active')")
+    sqlx::query("INSERT INTO core_tenancy.tenants (id, status) VALUES ($1, 'active')")
         .bind(tenant_id)
         .execute(&mut *transaction)
         .await
         .expect("tenant fixture must be inserted");
     sqlx::query(
-        "INSERT INTO core.tenant_products (tenant_id, product_id, product_config_version, association_status, validated_at) VALUES ($1, $2, 1, 'active', clock_timestamp())",
+        "INSERT INTO core_tenancy.tenant_products (tenant_id, product_id, product_config_version, association_status, validated_at) VALUES ($1, $2, 1, 'active', clock_timestamp())",
     )
     .bind(tenant_id)
     .bind(product_id)
@@ -104,7 +107,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     .await
     .expect("CORE tenant-product association fixture must be inserted");
     let association_version: Option<i32> = sqlx::query_scalar(
-        "SELECT product_config_version FROM core.tenant_products WHERE tenant_id = $1 AND product_id = $2 AND association_status = 'active'",
+        "SELECT product_config_version FROM core_tenancy.tenant_products WHERE tenant_id = $1 AND product_id = $2 AND association_status = 'active'",
     )
     .bind(tenant_id)
     .bind(product_id)
@@ -162,12 +165,12 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
         .await
         .expect("PLATFORM domain resolver must be reachable")
         .expect("published verified domain must resolve");
-    assert_eq!(resolved.product_id, product_id.to_string());
+    assert_eq!(resolved.product_id, product_id);
 
     let _ = shutdown_sender.send(());
     server
         .await
         .expect("PLATFORM gRPC server task must finish cleanly");
-    core_pool.close().await;
+    tenancy_pool.close().await;
     platform_pool.close().await;
 }

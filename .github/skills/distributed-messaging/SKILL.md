@@ -23,6 +23,9 @@ Eventos durables, productores, consumidores, Outbox/Inbox, idempotencia, orden, 
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — modular boundaries and durable ownership](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [Modular boundaries and architecture compliance](../../../docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
+
 - [Transactional Outbox/Inbox ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Transactional_Outbox_Inbox.md)
 - [Contrato integrado de arquitectura, políticas y responsabilidades de ENSAMBRIA](../../../ARCHITECTURE_RULES.md)
 - [Requisitos y roadmap ENSAMBRIA](../../../docs/requerimiento.md), solo para alcance de producto y secuencia ENSAMBRIA.
@@ -68,4 +71,4 @@ Si el caso no necesita entrega durable, registra la justificación exigida por e
 
 ## Mantenimiento
 
-Revisada el 2026-11-18. Si cambian las garantías o contratos fuente, actualiza la Skill en el mismo PR. No inventes versiones ni contratos de ejemplo como si fueran reales.
+Revisada el 2026-11-24. Si cambian las garantías o contratos fuente, actualiza la Skill en el mismo PR. No inventes versiones ni contratos de ejemplo como si fueran reales.

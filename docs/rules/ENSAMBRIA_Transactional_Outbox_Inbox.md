@@ -841,3 +841,12 @@ La garantía práctica es:
 **Regla esencial de ENSAMBRIA: ningún evento crítico debe depender de que el proceso que realizó la operación de negocio permanezca vivo después del commit para poder publicarse.**
 
 La persistencia del evento debe estar garantizada por PostgreSQL; su publicación debe ser responsabilidad de un proceso recuperable; y su consumo debe ser idempotente.
+
+
+## 21. Control de cumplimiento arquitectónico
+
+Todo evento durable aplicable debe figurar en el inventario canónico con owner, contrato/version, productor, tabla Outbox, relay, stream/subject JetStream, consumidor durable, tabla Inbox, política de deduplicación, ACK post-commit y recuperación. La validación no se limita a encontrar una tabla Outbox: debe comprobar la cadena completa y sus pruebas.
+
+CI verifica contratos, configuración, wiring, artefactos de relay/consumer y pruebas de duplicados, caída, reinicio, redelivery y replay autorizado. La integración PR utiliza PostgreSQL y JetStream reales aislados. La aceptación de staging ejecuta el recorrido real con servicios desplegados y SHA exacto. No se acepta un consumer como función aislada si el diseño requiere worker independiente.
+
+El N/A se justifica por caso de uso y owner; no se crean eventos artificiales. NATS Core no sustituye JetStream para hechos durables. Véase [ADR-0012](../adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) y [la regla de fronteras modulares](ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md).

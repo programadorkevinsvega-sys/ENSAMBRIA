@@ -10,7 +10,7 @@ use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let database_url = env::var("PLATFORM_DATABASE_URL")
+    let database_url = env::var("PLATFORM_PRODUCT_CATALOG_DATABASE_URL")
         .map_err(|_| io::Error::other("PLATFORM_DATABASE_URL is required"))?;
     let listen_address = env::var("PLATFORM_GRPC_LISTEN_ADDRESS")
         .map_err(|_| io::Error::other("PLATFORM_GRPC_LISTEN_ADDRESS is required"))?

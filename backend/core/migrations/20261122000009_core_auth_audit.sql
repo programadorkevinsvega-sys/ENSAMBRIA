@@ -1,9 +1,11 @@
--- Security audit writes and safe pending-identity lookup for verification resend.
-CREATE POLICY security_audit_events_definer_access ON core.security_audit_events
-    USING (current_user = 'core_schema_owner')
-    WITH CHECK (current_user = 'core_schema_owner');
+SET LOCAL ROLE core_identity_auth_schema_owner;
 
-CREATE OR REPLACE FUNCTION core.auth_lookup_pending_identity(p_email text)
+-- Security audit writes and safe pending-identity lookup for verification resend.
+CREATE POLICY security_audit_events_definer_access ON core_identity_auth.security_audit_events
+    USING (current_user = 'core_identity_auth_schema_owner')
+    WITH CHECK (current_user = 'core_identity_auth_schema_owner');
+
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_lookup_pending_identity(p_email text)
 RETURNS TABLE(identity_id uuid, email_display text)
 LANGUAGE sql
 STABLE
@@ -11,13 +13,13 @@ SECURITY DEFINER
 SET search_path = pg_catalog, core
 AS $$
     SELECT i.id, i.email_display
-      FROM core.identities i
+      FROM core_identity_auth.identities i
      WHERE i.email_normalized = lower(btrim(p_email))
        AND i.status = 'pending_verification'
      LIMIT 1
 $$;
 
-CREATE OR REPLACE FUNCTION core.auth_record_security_event(
+CREATE OR REPLACE FUNCTION core_identity_auth.auth_record_security_event(
     p_event_id uuid,
     p_actor_id uuid,
     p_action text,
@@ -40,7 +42,7 @@ BEGIN
         RAISE EXCEPTION 'invalid security audit event' USING ERRCODE = '22023';
     END IF;
 
-    INSERT INTO core.security_audit_events (
+    INSERT INTO core_identity_auth.security_audit_events (
         id, actor_id, tenant_id, action, target_type, target_id,
         outcome, correlation_id, metadata
     ) VALUES (
@@ -50,7 +52,10 @@ BEGIN
 END
 $$;
 
-REVOKE ALL ON FUNCTION core.auth_lookup_pending_identity(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION core.auth_lookup_pending_identity(text) TO core_runtime;
-GRANT EXECUTE ON FUNCTION core.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) TO core_runtime;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_lookup_pending_identity(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_identity_auth.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_lookup_pending_identity(text) TO core_identity_auth_runtime;
+GRANT EXECUTE ON FUNCTION core_identity_auth.auth_record_security_event(uuid, uuid, text, text, uuid, text, uuid, jsonb) TO core_identity_auth_runtime;
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

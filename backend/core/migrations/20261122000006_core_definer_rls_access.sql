@@ -1,19 +1,12 @@
--- SECURITY DEFINER functions execute as core_schema_owner. FORCE RLS remains
--- enabled; these policies permit only the non-login schema owner to service
--- reviewed functions. core_runtime is not a member of that role.
+-- SECURITY DEFINER functions execute only as the non-login owner of the
+-- corresponding bounded module schema. FORCE RLS remains enabled.
+SET LOCAL ROLE core_identity_auth_schema_owner;
 DO $$
 DECLARE
     relation_name text;
 BEGIN
     FOREACH relation_name IN ARRAY ARRAY[
         'identities',
-        'tenants',
-        'organizations',
-        'branches',
-        'tenant_memberships',
-        'tenant_roles',
-        'tenant_role_permissions',
-        'membership_role_assignments',
         'identity_credentials',
         'auth_sessions',
         'account_recovery_tokens',
@@ -24,10 +17,38 @@ BEGIN
     ]
     LOOP
         EXECUTE format(
-            'CREATE POLICY %I ON core.%I USING (current_user = ''core_schema_owner'') WITH CHECK (current_user = ''core_schema_owner'')',
+            'CREATE POLICY %I ON core_identity_auth.%I USING (current_user = ''core_identity_auth_schema_owner'') WITH CHECK (current_user = ''core_identity_auth_schema_owner'')',
             relation_name || '_definer_owner_access',
             relation_name
         );
     END LOOP;
 END
 $$;
+
+SET LOCAL ROLE core_tenancy_schema_owner;
+DO $$
+DECLARE
+    relation_name text;
+BEGIN
+    FOREACH relation_name IN ARRAY ARRAY[
+        'tenants',
+        'organizations',
+        'branches',
+        'tenant_memberships',
+        'tenant_roles',
+        'tenant_role_permissions',
+        'membership_role_assignments',
+        'tenant_products'
+    ]
+    LOOP
+        EXECUTE format(
+            'CREATE POLICY %I ON core_tenancy.%I USING (current_user = ''core_tenancy_schema_owner'') WITH CHECK (current_user = ''core_tenancy_schema_owner'')',
+            relation_name || '_definer_owner_access',
+            relation_name
+        );
+    END LOOP;
+END
+$$;
+
+-- SQLx migration ledger is owned by core_tenancy_schema_owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

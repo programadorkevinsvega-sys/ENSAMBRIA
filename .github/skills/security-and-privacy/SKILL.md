@@ -22,6 +22,8 @@ Autenticación/autorización, aislamiento tenant/sucursal, auditoría de segurid
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — modular boundaries and architecture compliance](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md) (consult when the task changes module ownership, data access, or release acceptance)
+
 - [Geographic Access Policies ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Geographic_Access_Policies.md)
 - [Privacy Legal Compliance ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Privacy_Legal_Compliance.md)
 - [Privacy Data Lifecycle Management ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Privacy_Data_Lifecycle_Management.md)

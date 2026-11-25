@@ -146,7 +146,8 @@ async fn integration_connection_uses_a_non_privileged_database_role() {
 }
 
 #[tokio::test]
-async fn migrations_use_a_restricted_identity_and_runtime_cannot_own_core_schema() {
+async fn migrations_use_restricted_identity_and_module_runtime_cannot_own_or_cross_access_schemas()
+{
     let migration_database_url = std::env::var("CORE_TEST_MIGRATOR_DATABASE_URL").expect(
         "CORE_TEST_MIGRATOR_DATABASE_URL must point to an isolated PostgreSQL test database",
     );
@@ -159,40 +160,94 @@ async fn migrations_use_a_restricted_identity_and_runtime_cannot_own_core_schema
         .expect("CORE migrations must be safe to run again");
 
     let pool = test_pool().await;
-    let (schema_owner, can_use_schema, can_create_in_schema, can_read_migration_table): (
-        String,
-        bool,
-        bool,
-        bool,
-    ) = sqlx::query_as(
-        "SELECT pg_catalog.pg_get_userbyid(namespace.nspowner)::text, \
-                has_schema_privilege(current_user, 'core', 'USAGE'), \
-                has_schema_privilege(current_user, 'core', 'CREATE'), \
-                has_table_privilege(current_user, 'core._sqlx_migrations', 'SELECT') \
-         FROM pg_catalog.pg_namespace AS namespace \
-         WHERE namespace.nspname = 'core'",
+    let schema_owners: Vec<(String, String)> = sqlx::query_as(
+        r#"SELECT namespace.nspname::text,
+                  pg_catalog.pg_get_userbyid(namespace.nspowner)::text
+           FROM pg_catalog.pg_namespace AS namespace
+           WHERE namespace.nspname IN ('core_identity_auth', 'core_tenancy')
+           ORDER BY namespace.nspname"#,
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("CORE module schema ownership must be inspectable");
+
+    assert_eq!(
+        schema_owners,
+        vec![
+            (
+                "core_identity_auth".to_owned(),
+                "core_identity_auth_schema_owner".to_owned(),
+            ),
+            (
+                "core_tenancy".to_owned(),
+                "core_tenancy_schema_owner".to_owned(),
+            ),
+        ],
+        "each CORE module schema must belong to its dedicated non-login owner",
+    );
+
+    let (
+        can_use_identity_schema,
+        can_create_in_identity_schema,
+        can_read_migration_table,
+        can_use_tenancy_schema,
+    ): (bool, bool, bool, bool) = sqlx::query_as(
+        r#"SELECT has_schema_privilege(current_user, 'core_identity_auth', 'USAGE'),
+                  has_schema_privilege(current_user, 'core_identity_auth', 'CREATE'),
+                  COALESCE(
+                      (
+                          SELECT has_table_privilege(current_user, relation.oid, 'SELECT')
+                          FROM pg_catalog.pg_class AS relation
+                          JOIN pg_catalog.pg_namespace AS namespace
+                            ON namespace.oid = relation.relnamespace
+                          WHERE namespace.nspname = 'core_tenancy'
+                            AND relation.relname = '_sqlx_migrations'
+                      ),
+                      false
+                  ),
+                  has_schema_privilege(current_user, 'core_tenancy', 'USAGE')"#,
     )
     .fetch_one(&pool)
     .await
-    .expect("CORE schema ownership and runtime grants must be inspectable");
+    .expect("CORE runtime module grants must be inspectable");
 
-    assert_eq!(schema_owner, "core_schema_owner");
-    assert!(can_use_schema);
-    assert!(!can_create_in_schema);
-    assert!(!can_read_migration_table);
     assert!(
-        sqlx::query("CREATE TABLE core.runtime_must_not_create (id integer)")
-            .execute(&pool)
-            .await
-            .is_err(),
-        "runtime identity must not create objects in the CORE schema"
+        can_use_identity_schema,
+        "identity runtime needs its own schema"
     );
     assert!(
-        sqlx::query("SET ROLE core_schema_owner")
+        !can_create_in_identity_schema,
+        "identity runtime must not create schema objects"
+    );
+    assert!(
+        !can_read_migration_table,
+        "runtime must not inspect the migration ledger"
+    );
+    assert!(
+        !can_use_tenancy_schema,
+        "identity runtime must not access tenancy schema"
+    );
+
+    assert!(
+        sqlx::query("CREATE TABLE core_identity_auth.runtime_must_not_create (id integer)")
             .execute(&pool)
             .await
             .is_err(),
-        "runtime identity must not assume the schema owner role"
+        "identity runtime must not create objects in its module schema"
+    );
+    assert!(
+        sqlx::query("SELECT * FROM core_tenancy.tenants LIMIT 1")
+            .fetch_all(&pool)
+            .await
+            .is_err(),
+        "identity runtime must not read tenancy-owned tables"
+    );
+    assert!(
+        sqlx::query("SET ROLE core_identity_auth_schema_owner")
+            .execute(&pool)
+            .await
+            .is_err(),
+        "identity runtime must not assume its schema owner role"
     );
     pool.close().await;
 }

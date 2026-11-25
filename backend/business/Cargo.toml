@@ -1,4 +1,5 @@
 [package]
+autobins = false
 name = "ensambria-business"
 version = "0.1.0"
 edition = "2024"
@@ -6,12 +7,17 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
-axum = { version = "0.8", features = ["json"] }
-ensambria-core = { path = "../core" }
+ensambria-business-establishment-catalog-contracts = { path = "../business-establishment-catalog-contracts" }
+ensambria-core-tenancy-contracts = { path = "../core-tenancy-contracts" }
 ensambria-shared-cache = { path = "../shared-cache" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "json", "migrate"] }
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "json", "migrate", "derive"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 uuid = { version = "1", features = ["v7", "serde"] }
+
+[[bin]]
+name = "business-migrate"
+path = "src/bin/business-migrate.rs"

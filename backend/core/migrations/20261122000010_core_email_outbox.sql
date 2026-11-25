@@ -1,5 +1,7 @@
+SET LOCAL ROLE core_identity_auth_schema_owner;
+
 -- Durable transactional email outbox. Delivery is performed by a separately run CORE worker.
-CREATE TABLE core.email_outbox (
+CREATE TABLE core_identity_auth.email_outbox (
     id uuid PRIMARY KEY,
     recipient text NOT NULL CHECK (length(recipient) BETWEEN 3 AND 320),
     subject text NOT NULL CHECK (length(subject) BETWEEN 1 AND 998),
@@ -18,10 +20,13 @@ CREATE TABLE core.email_outbox (
     )
 );
 CREATE INDEX email_outbox_pending_idx
-    ON core.email_outbox (available_at, created_at)
+    ON core_identity_auth.email_outbox (available_at, created_at)
     WHERE status IN ('pending', 'processing');
-GRANT USAGE ON SCHEMA core TO core_runtime, core_email_worker;
-GRANT INSERT ON core.email_outbox TO core_runtime;
-GRANT SELECT, UPDATE ON core.email_outbox TO core_email_worker;
-COMMENT ON TABLE core.email_outbox IS
+GRANT USAGE ON SCHEMA core_identity_auth TO core_identity_auth_runtime, core_email_worker;
+GRANT INSERT ON core_identity_auth.email_outbox TO core_identity_auth_runtime;
+GRANT SELECT, UPDATE ON core_identity_auth.email_outbox TO core_email_worker;
+COMMENT ON TABLE core_identity_auth.email_outbox IS
     'Durable transactional email queue. Payloads contain one-time links; access is restricted to CORE runtime workers.';
+
+-- SQLx stores migration history in core_tenancy; finish as its schema owner.
+SET LOCAL ROLE core_tenancy_schema_owner;

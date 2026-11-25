@@ -13,7 +13,7 @@ use ensambria_core::identity_authentication::service::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::service::{BusinessError, BusinessService};
+use ensambria_business::service::{BusinessError, BusinessService};
 
 pub struct ApiState<D: EmailDelivery> {
     pub auth: Arc<AuthenticationService<D>>,

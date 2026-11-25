@@ -69,3 +69,10 @@ La selección entre workspace virtual y paquete raíz con target legítimo se di
 - [Requerimiento ENSAMBRIA](../requerimiento.md)
 - [Contrato de arquitectura](../../ARCHITECTURE_RULES.md)
 - [Registro de Fase 0](../registro-fase-0-descubrimiento-arquitectura.md)
+
+
+## Enmienda normativa — granularidad de crate por módulo (ADR-0012)
+
+ADR-0012 precisa la decisión de este ADR sin cambiar el requisito de un único workspace Cargo raíz ni los cuatro backends. Cada bounded context/módulo funcional implementado tendrá un crate propietario y un crate `*-contracts` separado. Los demás módulos consumen exclusivamente el crate contracts, nunca el crate de implementación. La composición en memoria inyecta una implementación del trait público. Protobuf versionado se define desde el inicio y Tonic es un adapter futuro al separar procesos.
+
+La alternativa de un único crate por backend ya no es válida como materialización de módulos funcionales. No se crean crates vacíos para módulos no implementados. El grafo de Cargo y el compilador son la defensa primaria; `cargo metadata` y cargo-deny/cargo-modules verifican el grafo y las políticas. Véase [ADR-0012](ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md).

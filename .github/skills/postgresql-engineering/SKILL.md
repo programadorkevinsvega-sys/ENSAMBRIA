@@ -21,6 +21,10 @@ Pool por proceso, presupuesto de conexiones, credenciales, migraciones, transacc
 
 ## Referencias normativas obligatorias
 
+- [ADR-0012 — modular boundaries and PostgreSQL ownership](../../../docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [PostgreSQL module ownership cutover plan](../../../docs/postgres/module-ownership-cutover.md)
+- [Canonical data ownership inventory](../../../architecture/data-ownership.yaml)
+
 - [Connection Pooling PostgreSQL ENSAMBRIA](../../../docs/rules/ENSAMBRIA_Connection_Pooling_PostgreSQL.md)
 - [Contrato integrado de arquitectura, políticas y responsabilidades de ENSAMBRIA](../../../ARCHITECTURE_RULES.md)
 - [Requisitos y roadmap ENSAMBRIA](../../../docs/requerimiento.md), cuando el caso afecte el producto o su fase.
@@ -65,4 +69,4 @@ Si el entorno o versión real no está disponible, registra el bloqueo y limita 
 
 ## Mantenimiento
 
-Revisada el 2026-11-10. Actualiza esta Skill junto con cambios a las fuentes citadas. Conserva los metadatos fuente disponibles; no inventes una versión.
+Revisada el 2026-11-24. Actualiza esta Skill junto con cambios a las fuentes citadas. Conserva los metadatos fuente disponibles; no inventes una versión.

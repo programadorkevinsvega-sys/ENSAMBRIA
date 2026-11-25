@@ -100,7 +100,7 @@ async fn subscription_lifecycle_is_idempotent_versioned_and_tenant_scoped() {
         .await
         .unwrap();
     let (audit, events, commands): (i64, i64, i64) = sqlx::query_as(
-        "SELECT (SELECT count(*) FROM platform.saas_subscription_audit WHERE subscription_id=$1), (SELECT count(*) FROM platform.saas_subscription_outbox WHERE subscription_id=$1), (SELECT count(*) FROM platform.saas_subscription_commands WHERE tenant_id=$2)",
+        "SELECT (SELECT count(*) FROM platform_product_catalog.saas_subscription_audit WHERE subscription_id=$1), (SELECT count(*) FROM platform_product_catalog.saas_subscription_outbox WHERE subscription_id=$1), (SELECT count(*) FROM platform_product_catalog.saas_subscription_commands WHERE tenant_id=$2)",
     )
     .bind(created.subscription_id)
     .bind(tenant)

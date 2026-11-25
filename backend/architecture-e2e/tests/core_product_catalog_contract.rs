@@ -73,15 +73,15 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     run_core_migrations_from_path(&core_migrator_url, &migrations)
         .await
         .expect("CORE migrations must apply");
-    let core_url =
-        std::env::var("CORE_TEST_DATABASE_URL").expect("CORE_TEST_DATABASE_URL must be configured");
-    let core_pool = PgPool::connect(&core_url)
+    let tenancy_url = std::env::var("CORE_TENANT_DATABASE_URL")
+        .expect("CORE_TENANT_DATABASE_URL must be configured by repository CI");
+    let tenancy_pool = PgPool::connect(&tenancy_url)
         .await
-        .expect("CORE runtime must connect");
+        .expect("CORE tenancy runtime must connect");
 
     let tenant_id = Uuid::now_v7();
     let actor_id = Uuid::now_v7();
-    let mut transaction = core_pool
+    let mut transaction = tenancy_pool
         .begin()
         .await
         .expect("tenant fixture transaction must begin");
@@ -171,6 +171,6 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     server
         .await
         .expect("PLATFORM gRPC server task must finish cleanly");
-    core_pool.close().await;
+    tenancy_pool.close().await;
     platform_pool.close().await;
 }

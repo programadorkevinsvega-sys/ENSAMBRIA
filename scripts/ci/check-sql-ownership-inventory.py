@@ -83,7 +83,7 @@ def main() -> int:
                         else f"{table_name}.{object_name}"
                     )
                 else:
-                    schema, object_name = match[0].split(".", 1)
+                    schema, object_name = match.split(".", 1)
                 if schema not in discovered:
                     errors.append(
                         f"{path.relative_to(ROOT)}: {section[:-1]} {schema}.{object_name} "

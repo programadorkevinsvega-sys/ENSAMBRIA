@@ -85,7 +85,9 @@ END
 $body$;
 SQL
 
-# The actual runtime identity must be able to perform tenant-scoped DML.
+# Exercise actual row-level isolation using the BUSINESS runtime identity.
+# Two tenants are created in the same transaction; each can see and mutate only
+# its own establishment. A forged tenant and missing context must fail closed.
 psql "$BUSINESS_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 BEGIN;
 SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789af', true);
@@ -95,12 +97,72 @@ VALUES
     ('018f0f2a-7b3c-7abc-8def-0123456789b0',
      '018f0f2a-7b3c-7abc-8def-0123456789af',
      '018f0f2a-7b3c-7abc-8def-0123456789b1',
-     'isolation-probe');
+     'tenant-a-probe');
+
+SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789ae', true);
+INSERT INTO business_establishment_catalog.establishments
+    (id, tenant_id, organization_id, display_name)
+VALUES
+    ('018f0f2a-7b3c-7abc-8def-0123456789b2',
+     '018f0f2a-7b3c-7abc-8def-0123456789ae',
+     '018f0f2a-7b3c-7abc-8def-0123456789b3',
+     'tenant-b-probe');
+
+SELECT set_config('app.tenant_id', '018f0f2a-7b3c-7abc-8def-0123456789af', true);
 UPDATE business_establishment_catalog.establishments
-   SET display_name = 'isolation-probe-updated'
+   SET display_name = 'tenant-a-probe-updated'
  WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789b0';
-SELECT count(*) FROM business_establishment_catalog.establishments
- WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789b0';
+
+DO $rls_runtime$
+DECLARE
+    visible_rows integer;
+    affected_rows integer;
+    spoof_rejected boolean := false;
+BEGIN
+    SELECT count(*) INTO visible_rows
+      FROM business_establishment_catalog.establishments;
+    IF visible_rows <> 1 THEN
+        RAISE EXCEPTION 'tenant A must see exactly one establishment, saw %', visible_rows;
+    END IF;
+
+    SELECT count(*) INTO visible_rows
+      FROM business_establishment_catalog.establishments
+     WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789b2';
+    IF visible_rows <> 0 THEN
+        RAISE EXCEPTION 'tenant A can read tenant B establishment';
+    END IF;
+
+    UPDATE business_establishment_catalog.establishments
+       SET display_name = 'tampered'
+     WHERE id = '018f0f2a-7b3c-7abc-8def-0123456789b2';
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    IF affected_rows <> 0 THEN
+        RAISE EXCEPTION 'tenant A modified tenant B establishment';
+    END IF;
+
+    BEGIN
+        INSERT INTO business_establishment_catalog.establishments
+            (id, tenant_id, organization_id, display_name)
+        VALUES
+            ('018f0f2a-7b3c-7abc-8def-0123456789b4',
+             '018f0f2a-7b3c-7abc-8def-0123456789ae',
+             '018f0f2a-7b3c-7abc-8def-0123456789b5',
+             'spoofed-tenant');
+    EXCEPTION WHEN insufficient_privilege THEN
+        spoof_rejected := true;
+    END;
+    IF NOT spoof_rejected THEN
+        RAISE EXCEPTION 'tenant A inserted an establishment for tenant B';
+    END IF;
+
+    PERFORM set_config('app.tenant_id', '', true);
+    SELECT count(*) INTO visible_rows
+      FROM business_establishment_catalog.establishments;
+    IF visible_rows <> 0 THEN
+        RAISE EXCEPTION 'missing tenant context must fail closed';
+    END IF;
+END
+$rls_runtime$;
 ROLLBACK;
 SQL
 

@@ -7,6 +7,7 @@ modules:
     schema: core_identity_auth
     schema_owner_role: core_identity_auth_schema_owner
     runtime_role: core_identity_auth_runtime
+    sequences:
     tables:
       - identities
       - identity_credentials
@@ -45,12 +46,33 @@ modules:
       - auth_confirm_totp_step
       - auth_lookup_pending_identity
       - auth_record_security_event
+    policies:
+      - identities.identities_actor_scope
+      - security_audit_events.security_audit_scope
+      - account_recovery_tokens.account_recovery_tokens_actor_scope
+      - identity_verification_tokens.identity_verification_tokens_actor_scope
+      - identity_credentials.identity_credentials_actor_scope
+      - auth_sessions.auth_sessions_actor_scope
+      - identity_mfa_totp.identity_mfa_totp_actor_scope
+      - identity_mfa_recovery_codes.identity_mfa_recovery_codes_actor_scope
+      - auth_rate_limits.auth_rate_limits_no_direct_access
+      - identities.identities_definer_owner_access
+      - identity_credentials.identity_credentials_definer_owner_access
+      - auth_sessions.auth_sessions_definer_owner_access
+      - account_recovery_tokens.account_recovery_tokens_definer_owner_access
+      - identity_verification_tokens.identity_verification_tokens_definer_owner_access
+      - identity_mfa_totp.identity_mfa_totp_definer_owner_access
+      - identity_mfa_recovery_codes.identity_mfa_recovery_codes_definer_owner_access
+      - auth_rate_limits.auth_rate_limits_definer_owner_access
+      - auth_mfa_challenges.auth_mfa_challenges_definer_only
+      - security_audit_events.security_audit_events_definer_access
   - id: core.tenancy-membership-organization-branch-product
     backend: CORE
     context: tenancy-membership-organization-branch-product
     schema: core_tenancy
     schema_owner_role: core_tenancy_schema_owner
     runtime_role: core_tenancy_runtime
+    sequences:
     tables:
       - tenants
       - organizations
@@ -65,6 +87,19 @@ modules:
     functions:
       - has_permission
       - resolve_regional_context
+    policies:
+      - tenants.tenants_tenant_scope
+      - tenants.tenants_definer_owner_access
+      - organizations.organizations_definer_owner_access
+      - branches.branches_definer_owner_access
+      - tenant_memberships.tenant_memberships_definer_owner_access
+      - tenant_roles.tenant_roles_definer_owner_access
+      - tenant_role_permissions.tenant_role_permissions_definer_owner_access
+      - membership_role_assignments.membership_role_assignments_definer_owner_access
+      - tenant_products.tenant_products_definer_owner_access
+      - outbox_events.outbox_tenant_insert
+      - outbox_events.outbox_relay_read
+      - outbox_events.outbox_relay_update
     contract_dependencies:
       - core.identity-authentication
       - platform.product-catalog
@@ -74,8 +109,11 @@ modules:
     schema: business_establishment_catalog
     schema_owner_role: business_establishment_catalog_schema_owner
     runtime_role: business_establishment_catalog_runtime
+    sequences:
     tables:
       - establishments
+    policies:
+      - establishments.establishments_tenant_scope
     contract_dependencies:
       - core.identity-authentication
       - core.tenancy-membership-organization-branch-product
@@ -85,6 +123,7 @@ modules:
     schema: platform_product_catalog
     schema_owner_role: platform_product_catalog_schema_owner
     runtime_role: platform_product_catalog_runtime
+    sequences:
     tables:
       - products
       - product_configurations
@@ -93,8 +132,43 @@ modules:
       - product_surfaces
       - capability_catalog
       - product_capabilities
+      - commercial_offers
+      - commercial_offer_versions
+      - saas_subscriptions
+      - saas_subscription_audit
+      - saas_subscription_commands
+      - saas_subscription_outbox
     views:
       - active_product_catalog
+    functions:
+      - prevent_published_configuration_mutation
+      - prevent_published_configuration_deletion
+      - validate_active_product_configuration
+      - validate_product_surface_configuration
+      - validate_product_capability
+      - prevent_published_offer_version_mutation
+      - validate_published_offer
+      - prevent_published_offer_deletion
+      - protect_published_offer_identity
+      - validate_subscription_transition
+    triggers:
+      - product_configuration_immutable
+      - product_configuration_no_delete
+      - product_active_configuration_required
+      - product_surface_published_configuration
+      - product_capability_available_only
+      - commercial_offer_version_immutable
+      - commercial_offer_publication_required
+      - commercial_offer_version_no_delete
+      - commercial_offer_identity_immutable
+      - saas_subscription_transition_guard
+    policies:
+      - commercial_offers.commercial_offers_read_published
+      - commercial_offer_versions.commercial_offer_versions_read_published
+      - saas_subscriptions.tenant_scope
+      - saas_subscription_audit.tenant_scope
+      - saas_subscription_commands.tenant_scope
+      - saas_subscription_outbox.tenant_scope
     contract_dependencies: []
   - id: platform.tenant-onboarding
     backend: PLATFORM
@@ -102,9 +176,13 @@ modules:
     schema: platform_tenant_onboarding
     schema_owner_role: platform_tenant_onboarding_schema_owner
     runtime_role: platform_tenant_onboarding_runtime
+    sequences:
     tables:
       - inbox_messages
       - tenant_onboardings
+    policies:
+      - inbox_messages.inbox_tenant_scope
+      - tenant_onboardings.tenant_onboardings_tenant_scope
     contract_dependencies:
       - platform.product-catalog
       - core.tenancy-membership-organization-branch-product

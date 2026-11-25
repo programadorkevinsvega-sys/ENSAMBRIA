@@ -73,13 +73,12 @@ jobs:
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
           printf 'Documentation-only change: %s\n' "$docs_only"
           printf '%s\n' "${changed[@]}"
-  # The full suite runs before integration (PR / merge queue / manual runs).
-  # A push to main only gets a cheap SHA gate; the protected PR already ran
-  # the full suite, so do not execute the same expensive matrix a second time.
+  # Run the full quality and integration matrix on PRs, merge queues, manual runs,
+  # and main pushes. The pushed main SHA receives its own complete evidence.
   rust-workspace-quality:
     name: rust-workspace-quality
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -116,7 +115,7 @@ jobs:
   protobuf-contracts:
     name: protobuf-contracts
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -134,7 +133,7 @@ jobs:
 
   deployment-contract:
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     name: deployment-contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -201,7 +200,7 @@ jobs:
   postgres-integration:
     name: postgres-integration
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -545,7 +544,7 @@ jobs:
   redis-ha-integration:
     name: redis-ha-integration
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -750,7 +749,7 @@ jobs:
   nats-jetstream-ha-integration:
     name: nats-jetstream-ha-integration
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -778,7 +777,7 @@ jobs:
   # to execute concurrently.
   repository-quality:
     name: repository-quality
-    if: always() && github.event_name != 'push' && needs.changes.result == 'success'
+    if: always() && needs.changes.result == 'success'
     needs:
       - changes
       - rust-workspace-quality
@@ -814,8 +813,8 @@ jobs:
             fi
           done
 
-  # workflow_run uses this successful, lightweight push workflow to start
-  # staging deployment. The deploy workflow checks out this exact SHA.
+  # workflow_run uses this successful full push workflow to start staging
+  # deployment. The deploy workflow checks out this exact SHA.
   main-push-gate:
     name: main-push-gate
     if: github.event_name == 'push'
@@ -872,7 +871,7 @@ jobs:
   security-dependencies:
     name: security-dependencies
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

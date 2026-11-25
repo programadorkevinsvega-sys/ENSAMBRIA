@@ -63,6 +63,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.1
       CORE_STAGING_HOST: ${{ vars.CORE_STAGING_HOST }}
       CORE_STAGING_SSH_USER: ubuntu
+      CORE_STAGING_POSTGRES_ADMIN_PROVISIONING: ${{ vars.CORE_STAGING_POSTGRES_ADMIN_PROVISIONING || 'false' }}
+      CORE_STAGING_POSTGRES_CONTAINER: ${{ vars.CORE_STAGING_POSTGRES_CONTAINER || 'crm-postgres' }}
+      CORE_STAGING_POSTGRES_DATABASE: ${{ vars.CORE_STAGING_POSTGRES_DATABASE || 'ensambria' }}
 
     steps:
       - name: Check out the exact CI-validated commit
@@ -103,6 +106,7 @@ jobs:
             install -m 0750 "target/x86_64-unknown-linux-musl/release/$binary" "$artifacts/$binary"
           done
           mkdir -p "$artifacts/migrations" "$artifacts/business-migrations/bootstrap"
+          install -m 0640 backend/core/deployment/provision-module-ownership.sql "$artifacts/provision-module-ownership.sql"
           while IFS= read -r -d '' file; do
             install -m 0640 "$file" "$artifacts/migrations/"
           done < <(find backend/core/migrations -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
@@ -119,9 +123,10 @@ jobs:
             find core core-migrate core-email-worker business business-migrate migrations business-migrations -type f -print0 \
               | sort -z \
               | xargs -0 sha256sum > SHA256SUMS
+          sha256sum provision-module-ownership.sql >> SHA256SUMS
           )
           tar --create --gzip --file "$package" --directory "$artifacts" \
-            SHA256SUMS core core-migrate core-email-worker business business-migrate migrations business-migrations
+            SHA256SUMS core core-migrate core-email-worker business business-migrate migrations business-migrations provision-module-ownership.sql
           echo "path=$package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings
@@ -135,6 +140,9 @@ jobs:
           [[ -n "$DEPLOY_SSH_KEY" ]]
           [[ -n "$TS_OAUTH_CLIENT_ID" ]]
           [[ -n "$TS_OAUTH_SECRET" ]]
+          [[ "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == true || "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == false ]]
+          [[ "$CORE_STAGING_POSTGRES_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
+          [[ "$CORE_STAGING_POSTGRES_DATABASE" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]
           install -m 0700 -d "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 0600 "$HOME/.ssh/id_ed25519"
@@ -190,6 +198,7 @@ jobs:
             backend/business/deployment/ensambria-business-migrate.service \
             backend/core/deployment/ensambria-env-reload.service \
             backend/core/deployment/ensambria-env-reload.path \
+            backend/core/deployment/provision-module-ownership.sql \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}:${REMOTE_DIRECTORY}/"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
@@ -198,7 +207,7 @@ jobs:
             -o ConnectTimeout=20 \
             -o StrictHostKeyChecking=accept-new \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
-            "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
+            "sudo -n env ENSAMBRIA_POSTGRES_ADMIN_PROVISIONING='${CORE_STAGING_POSTGRES_ADMIN_PROVISIONING}' ENSAMBRIA_POSTGRES_CONTAINER='${CORE_STAGING_POSTGRES_CONTAINER}' ENSAMBRIA_POSTGRES_DATABASE='${CORE_STAGING_POSTGRES_DATABASE}' bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
 
       - name: Verify every ENSAMBRIA staging service on the VM
         run: |

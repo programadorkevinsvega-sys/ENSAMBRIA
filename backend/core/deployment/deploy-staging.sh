@@ -144,7 +144,7 @@ safe_error_messages = {
     "CORE module schema ownership could not be verified",
     "CORE module schemas must be owned by their dedicated non-login roles",
     "CORE migration role memberships could not be verified",
-    "CORE migrator must assume only the two module schema-owner roles",
+    "CORE migrator must be a member of both CORE schema-owner roles and no CORE runtime roles",
     "CORE module schemas must be owned by their dedicated non-login roles",
     "CORE required database roles are missing",
     "CORE required database roles could not be verified",
@@ -196,7 +196,9 @@ for line in sys.stdin:
     diagnostic_fields = []
     for field in allowed_fields:
         value = fields.get(field, span_fields.get(field, ""))
-        if type(value) in (str, int) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(value)):
+        if field == "failure_reason" and isinstance(value, str) and value in safe_error_messages:
+            diagnostic_fields.append(f"{field}={value}")
+        elif type(value) in (str, int) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(value)):
             diagnostic_fields.append(f"{field}={value}")
 
     if diagnostic_fields:

@@ -69,6 +69,30 @@ BEGIN
         RAISE EXCEPTION 'identity schema owner lacks required tenancy schema USAGE';
     END IF;
 
+    IF EXISTS (
+        SELECT 1
+          FROM pg_catalog.pg_roles runtime_role
+          CROSS JOIN unnest(expected_owners) AS owner_role(role_name)
+         WHERE runtime_role.rolname IN (
+            'core_identity_auth_runtime','core_tenancy_runtime',
+            'business_establishment_catalog_runtime','platform_product_catalog_runtime',
+            'platform_tenant_onboarding_runtime','core_email_worker','core_outbox_relay'
+         )
+           AND pg_catalog.pg_has_role(runtime_role.oid, owner_role.role_name, 'MEMBER')
+    ) THEN RAISE EXCEPTION 'a runtime/worker LOGIN role is a member of a schema-owner role'; END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM pg_catalog.pg_roles runtime_role
+          CROSS JOIN unnest(expected_schemas) AS module_schema(schema_name)
+         WHERE runtime_role.rolname IN (
+            'core_identity_auth_runtime','core_tenancy_runtime',
+            'business_establishment_catalog_runtime','platform_product_catalog_runtime',
+            'platform_tenant_onboarding_runtime','core_email_worker','core_outbox_relay'
+         )
+           AND pg_catalog.has_schema_privilege(runtime_role.oid, module_schema.schema_name, 'CREATE')
+    ) THEN RAISE EXCEPTION 'a runtime/worker LOGIN role has CREATE on a module schema'; END IF;
+
     IF pg_catalog.pg_has_role('core_migrator', 'core_identity_auth_schema_owner', 'USAGE')
        OR pg_catalog.pg_has_role('core_migrator', 'core_tenancy_schema_owner', 'USAGE')
        OR pg_catalog.pg_has_role('core_migrator', 'business_establishment_catalog_schema_owner', 'USAGE')

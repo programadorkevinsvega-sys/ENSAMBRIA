@@ -1,6 +1,6 @@
--- Idempotently provision all five module owners and their restricted identities.
+-- Idempotently provision five non-login schema owners and verify existing login identities.
 -- Run only through the PostgreSQL administrative channel, against the intended database.
--- Passwords are deliberately not created, embedded, or rotated by this script.
+-- Login passwords are secret-managed and are deliberately never created or rotated here.
 DO $guard$
 DECLARE
     current_role record;
@@ -17,45 +17,80 @@ BEGIN
 END
 $guard$;
 
+DO $login_preflight$
+DECLARE
+    missing_roles text[];
+    invalid_roles text[];
+BEGIN
+    SELECT array_agg(required.role_name ORDER BY required.role_name)
+      INTO missing_roles
+      FROM unnest(ARRAY[
+          'core_migrator',
+          'core_identity_auth_runtime',
+          'core_tenancy_runtime',
+          'business_establishment_catalog_runtime',
+          'platform_product_catalog_runtime',
+          'platform_tenant_onboarding_runtime',
+          'core_email_worker',
+          'core_outbox_relay'
+      ]::text[]) AS required(role_name)
+      LEFT JOIN pg_catalog.pg_roles role ON role.rolname = required.role_name
+     WHERE role.rolname IS NULL;
+
+    IF missing_roles IS NOT NULL THEN
+        RAISE EXCEPTION 'required secret-managed PostgreSQL login roles are missing'
+            USING ERRCODE = '42704',
+                  DETAIL = 'missing roles: ' || array_to_string(missing_roles, ',');
+    END IF;
+
+    SELECT array_agg(role.rolname ORDER BY role.rolname)
+      INTO invalid_roles
+      FROM pg_catalog.pg_roles role
+     WHERE role.rolname = ANY(ARRAY[
+          'core_migrator',
+          'core_identity_auth_runtime',
+          'core_tenancy_runtime',
+          'business_establishment_catalog_runtime',
+          'platform_product_catalog_runtime',
+          'platform_tenant_onboarding_runtime',
+          'core_email_worker',
+          'core_outbox_relay'
+     ])
+       AND (NOT role.rolcanlogin OR role.rolsuper OR role.rolcreatedb
+            OR role.rolcreaterole OR role.rolinherit OR role.rolbypassrls);
+
+    IF invalid_roles IS NOT NULL THEN
+        RAISE EXCEPTION 'secret-managed PostgreSQL login roles have invalid attributes'
+            USING ERRCODE = '42501',
+                  DETAIL = 'invalid roles: ' || array_to_string(invalid_roles, ',');
+    END IF;
+END
+$login_preflight$;
+
 DO $roles$
 DECLARE
     role_name text;
-    role_login boolean;
-    role_names text[] := ARRAY[
-        'core_migrator',
+    owner_roles text[] := ARRAY[
         'core_identity_auth_schema_owner',
-        'core_identity_auth_runtime',
         'core_tenancy_schema_owner',
-        'core_tenancy_runtime',
         'business_establishment_catalog_schema_owner',
-        'business_establishment_catalog_runtime',
         'platform_product_catalog_schema_owner',
-        'platform_product_catalog_runtime',
-        'platform_tenant_onboarding_schema_owner',
-        'platform_tenant_onboarding_runtime',
-        'core_email_worker',
-        'core_outbox_relay'
+        'platform_tenant_onboarding_schema_owner'
     ];
 BEGIN
-    FOREACH role_name IN ARRAY role_names LOOP
-        role_login := role_name = 'core_migrator'
-            OR role_name LIKE '%_runtime'
-            OR role_name IN ('core_email_worker', 'core_outbox_relay');
-
+    FOREACH role_name IN ARRAY owner_roles LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name
         ) THEN
             EXECUTE format(
-                'CREATE ROLE %I %s NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
-                role_name,
-                CASE WHEN role_login THEN 'LOGIN' ELSE 'NOLOGIN' END
+                'CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
+                role_name
             );
         END IF;
 
         EXECUTE format(
-            'ALTER ROLE %I %s NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
-            role_name,
-            CASE WHEN role_login THEN 'LOGIN' ELSE 'NOLOGIN' END
+            'ALTER ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
+            role_name
         );
     END LOOP;
 END

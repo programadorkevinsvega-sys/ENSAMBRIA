@@ -253,6 +253,28 @@ jobs:
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -c "REVOKE TEMP ON DATABASE ensambria_core_test FROM PUBLIC;"
+          psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $roles$
+          DECLARE role_name text;
+          BEGIN
+              FOREACH role_name IN ARRAY ARRAY[
+                  'core_migrator',
+                  'core_identity_auth_runtime',
+                  'core_tenancy_runtime',
+                  'business_establishment_catalog_runtime',
+                  'platform_product_catalog_runtime',
+                  'platform_tenant_onboarding_runtime',
+                  'core_email_worker',
+                  'core_outbox_relay'
+              ] LOOP
+                  EXECUTE format(
+                      'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
+                      role_name
+                  );
+              END LOOP;
+          END
+          $roles$;
+          SQL
           psql "postgres://core_admin@127.0.0.1:5432/ensambria_core_test" \
             -v ON_ERROR_STOP=1 \
             -f backend/core/deployment/provision-module-ownership.sql

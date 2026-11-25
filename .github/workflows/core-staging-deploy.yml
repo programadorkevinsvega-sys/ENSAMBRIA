@@ -63,9 +63,6 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.1
       CORE_STAGING_HOST: ${{ vars.CORE_STAGING_HOST }}
       CORE_STAGING_SSH_USER: ubuntu
-      CORE_STAGING_POSTGRES_ADMIN_PROVISIONING: ${{ vars.CORE_STAGING_POSTGRES_ADMIN_PROVISIONING || 'false' }}
-      CORE_STAGING_POSTGRES_CONTAINER: ${{ vars.CORE_STAGING_POSTGRES_CONTAINER || 'crm-postgres' }}
-      CORE_STAGING_POSTGRES_DATABASE: ${{ vars.CORE_STAGING_POSTGRES_DATABASE || 'ensambria' }}
 
     steps:
       - name: Check out the exact CI-validated commit
@@ -138,9 +135,6 @@ jobs:
           [[ -n "$DEPLOY_SSH_KEY" ]]
           [[ -n "$TS_OAUTH_CLIENT_ID" ]]
           [[ -n "$TS_OAUTH_SECRET" ]]
-          [[ "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == true ]] || { echo "::error::Set CORE_STAGING_POSTGRES_ADMIN_PROVISIONING=true in the core-staging GitHub Environment to enable the audited PostgreSQL admin bootstrap." >&2; exit 1; }
-          [[ "$CORE_STAGING_POSTGRES_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
-          [[ "$CORE_STAGING_POSTGRES_DATABASE" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]
           install -m 0700 -d "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 0600 "$HOME/.ssh/id_ed25519"
@@ -196,7 +190,6 @@ jobs:
             backend/business/deployment/ensambria-business-migrate.service \
             backend/core/deployment/ensambria-env-reload.service \
             backend/core/deployment/ensambria-env-reload.path \
-            backend/core/deployment/provision-module-ownership.sql \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}:${REMOTE_DIRECTORY}/"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
@@ -205,7 +198,7 @@ jobs:
             -o ConnectTimeout=20 \
             -o StrictHostKeyChecking=accept-new \
             "${CORE_STAGING_SSH_USER}@${CORE_STAGING_HOST}" \
-            "sudo -n env ENSAMBRIA_POSTGRES_ADMIN_PROVISIONING='${CORE_STAGING_POSTGRES_ADMIN_PROVISIONING}' ENSAMBRIA_POSTGRES_CONTAINER='${CORE_STAGING_POSTGRES_CONTAINER}' ENSAMBRIA_POSTGRES_DATABASE='${CORE_STAGING_POSTGRES_DATABASE}' bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
+            "sudo -n bash '${REMOTE_DIRECTORY}/deploy-staging.sh' '${REMOTE_DIRECTORY}'"
 
       - name: Verify every ENSAMBRIA staging service on the VM
         run: |

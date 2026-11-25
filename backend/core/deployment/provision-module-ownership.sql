@@ -3,14 +3,14 @@
 -- Login passwords are secret-managed and are deliberately never created or rotated here.
 DO $guard$
 DECLARE
-    current_role record;
+    role_info record;
 BEGIN
     SELECT rolsuper, rolcreaterole
-      INTO current_role
+      INTO role_info
       FROM pg_catalog.pg_roles
      WHERE rolname = current_user;
 
-    IF NOT FOUND OR (NOT current_role.rolsuper AND NOT current_role.rolcreaterole) THEN
+    IF NOT FOUND OR (NOT role_info.rolsuper AND NOT role_info.rolcreaterole) THEN
         RAISE EXCEPTION 'module ownership provisioning requires a PostgreSQL administrator'
             USING ERRCODE = '42501';
     END IF;

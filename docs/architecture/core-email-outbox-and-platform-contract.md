@@ -17,16 +17,17 @@ The AES key is loaded from a secret-manager-provided environment variable and is
 
 Staging PostgreSQL has five module schemas and dedicated identities. The restricted `core_migrator` login is **not** a database administrator: it must never create or alter roles, schemas, or database privileges. Provisioning is an explicit administrative operation, separate from migration execution.
 
-The canonical administrative bootstrap is `backend/core/deployment/provision-module-ownership.sql`. It is idempotent and provisions the following identities without assigning or rotating passwords:
+The canonical administrative bootstrap is `backend/core/deployment/provision-module-ownership.sql`. It first requires these eight LOGIN identities to have been provisioned through the secret-management channel, with unique credentials and restricted attributes:
 
-- `core_migrator` (LOGIN; restricted migration identity)
-- `core_identity_auth_schema_owner`, `core_tenancy_schema_owner`, `business_establishment_catalog_schema_owner`, `platform_product_catalog_schema_owner`, `platform_tenant_onboarding_schema_owner` (NOLOGIN schema owners)
-- `core_identity_auth_runtime`, `core_tenancy_runtime`, `business_establishment_catalog_runtime`, `platform_product_catalog_runtime`, `platform_tenant_onboarding_runtime` (LOGIN runtime identities)
-- `core_email_worker` and `core_outbox_relay` (LOGIN worker identities)
+- `core_migrator`
+- `core_identity_auth_runtime`, `core_tenancy_runtime`
+- `business_establishment_catalog_runtime`
+- `platform_product_catalog_runtime`, `platform_tenant_onboarding_runtime`
+- `core_email_worker`, `core_outbox_relay`
 
-Run the script against the target database through the approved administrative channel (for this VM, the PostgreSQL container's local administrative socket is preferred). The operator must verify the target container and database before execution. The script rejects execution unless the current database role has the required administrative capability. It never embeds passwords; provision or rotate login credentials separately through the secret manager and ensure the corresponding application connection URLs use those credentials.
+The bootstrap deliberately does **not** create or rotate LOGIN passwords. If any login is absent or has unsafe attributes, it fails with the exact missing/invalid role names before changing schemas. It creates or repairs only the five NOLOGIN schema-owner roles: `core_identity_auth_schema_owner`, `core_tenancy_schema_owner`, `business_establishment_catalog_schema_owner`, `platform_product_catalog_schema_owner`, and `platform_tenant_onboarding_schema_owner`. The operator must ensure each application's connection URL matches the secret-managed password for its dedicated login.
 
-The bootstrap grants `core_migrator` membership only in the five schema-owner roles, creates and assigns ownership of the five canonical schemas, revokes schema access from `PUBLIC`, and grants only the cross-schema namespace usage required by CORE identity DDL. It does not grant runtime table/function access; migrations own those narrowly scoped grants. It must not grant runtime roles to `core_migrator`.
+The bootstrap grants `core_migrator` membership only in the five schema-owner roles, creates and assigns ownership of the five canonical schemas, revokes database CREATE from `PUBLIC` and `core_migrator`, revokes schema access from `PUBLIC`, and grants only the cross-schema namespace usage required by CORE identity DDL. It verifies the exact five direct schema-owner memberships and rejects any additional role membership. It does not grant runtime table/function access; migrations own those narrowly scoped grants. It must not grant runtime roles to `core_migrator`.
 
 Before applying migrations, the deployment must verify from PostgreSQL catalogs that all required roles exist with the expected LOGIN/NOLOGIN and restricted attributes; all five schemas have their dedicated owners; `core_migrator` is a member of exactly the five schema-owner roles and no runtime/worker roles; and the required database/schema privileges are present. A failed check must stop deployment before any migration runs and report the failed invariant, SQLSTATE, and missing role names without printing connection strings or secrets.
 

@@ -7,6 +7,7 @@ modules:
     schema: core_identity_auth
     schema_owner_role: core_identity_auth_schema_owner
     runtime_role: core_identity_auth_runtime
+    sequences:
     tables:
       - identities
       - identity_credentials
@@ -71,6 +72,7 @@ modules:
     schema: core_tenancy
     schema_owner_role: core_tenancy_schema_owner
     runtime_role: core_tenancy_runtime
+    sequences:
     tables:
       - tenants
       - organizations
@@ -107,6 +109,7 @@ modules:
     schema: business_establishment_catalog
     schema_owner_role: business_establishment_catalog_schema_owner
     runtime_role: business_establishment_catalog_runtime
+    sequences:
     tables:
       - establishments
     policies:
@@ -120,6 +123,7 @@ modules:
     schema: platform_product_catalog
     schema_owner_role: platform_product_catalog_schema_owner
     runtime_role: platform_product_catalog_runtime
+    sequences:
     tables:
       - products
       - product_configurations
@@ -172,6 +176,7 @@ modules:
     schema: platform_tenant_onboarding
     schema_owner_role: platform_tenant_onboarding_schema_owner
     runtime_role: platform_tenant_onboarding_runtime
+    sequences:
     tables:
       - inbox_messages
       - tenant_onboardings

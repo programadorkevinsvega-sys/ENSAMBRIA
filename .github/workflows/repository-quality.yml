@@ -153,6 +153,10 @@ jobs:
           grep -Fq 'issue_comment' .github/workflows/postgres-admin.yml
           grep -Fq '/ensambria postgres provision' .github/workflows/postgres-admin.yml
           grep -Fq '/ensambria postgres verify' .github/workflows/postgres-admin.yml
+          grep -Fq 'collaborators/$COMMENT_ACTOR/permission' .github/workflows/postgres-admin.yml
+          grep -Fq 'docker exec -i --user postgres crm-postgres' .github/workflows/postgres-admin.yml
+          grep -Fq 'pg_has_role' backend/core/deployment/verify-module-ownership.sql
+          grep -Fq 'aclexplode' backend/core/deployment/verify-module-ownership.sql
           grep -Fq 'failure_reason = error.message' backend/core/src/core_migrations.rs
           grep -Fq 'failure_reason' backend/core/deployment/deploy-staging.sh
           test -s backend/core/deployment/provision-module-ownership.sql

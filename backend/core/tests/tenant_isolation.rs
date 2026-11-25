@@ -217,9 +217,9 @@ async fn actor_rls_and_tenant_context_do_not_leak_after_commit_or_rollback() {
             .expect("actor context setting must be readable");
     let tenant_context: Option<String> =
         sqlx::query_scalar("SELECT NULLIF(current_setting('app.tenant_id', true), '')")
-            .fetch_one(&pool)
+            .fetch_one(&tenancy_pool)
             .await
-            .expect("tenant context setting must be readable");
+            .expect("tenancy runtime context setting must be readable");
     assert_eq!(actor_context, None);
     assert_eq!(tenant_context, None);
     pool.close().await;

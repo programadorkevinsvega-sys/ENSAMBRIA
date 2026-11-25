@@ -380,14 +380,24 @@ BEGIN
 END
 $ownership_catalog$;
 
+-- Load policy expectations from the canonical YAML inventory. This is
+-- outside the dollar-quoted DO block so psql variable substitution is active.
+CREATE TEMP TABLE expected_policy_catalog (
+    schema_name text NOT NULL,
+    table_name text NOT NULL,
+    policy_name text NOT NULL
+) ON COMMIT PRESERVE ROWS;
+INSERT INTO pg_temp.expected_policy_catalog VALUES :expected_policy_values;
+
 -- Exact policy reconciliation. This catches absent and unexpected policies,
 -- including policies expanded from PL/pgSQL FOREACH/EXECUTE format() loops.
 DO $policy_catalog$
 DECLARE
     mismatch text;
 BEGIN
-    WITH expected(schema_name, table_name, policy_name) AS (
-        VALUES :expected_policy_values
+    WITH expected AS (
+        SELECT schema_name, table_name, policy_name
+          FROM pg_temp.expected_policy_catalog
     ),
     actual AS (
         SELECT schemaname, tablename, policyname

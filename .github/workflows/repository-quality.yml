@@ -148,9 +148,11 @@ jobs:
           grep -Fq 'flock -n 9' backend/core/deployment/deploy-staging.sh
           grep -Fq 'validate_staging_package.py' backend/core/deployment/deploy-staging.sh
           grep -Fq 'SHA256SUMS' backend/core/deployment/deploy-staging.sh
-          grep -Fq 'provision_postgres_module_ownership' backend/core/deployment/deploy-staging.sh
-          grep -Fq 'provision-module-ownership.sql' .github/workflows/core-staging-deploy.yml
-          grep -Fq 'CORE_STAGING_POSTGRES_ADMIN_PROVISIONING' .github/workflows/core-staging-deploy.yml
+          ! grep -Eq 'provision_postgres_module_ownership|ENSAMBRIA_POSTGRES_ADMIN' backend/core/deployment/deploy-staging.sh
+          ! grep -Eq 'CORE_STAGING_POSTGRES_ADMIN|provision-module-ownership.sql' .github/workflows/core-staging-deploy.yml
+          grep -Fq 'issue_comment' .github/workflows/postgres-admin.yml
+          grep -Fq '/ensambria postgres provision' .github/workflows/postgres-admin.yml
+          grep -Fq '/ensambria postgres verify' .github/workflows/postgres-admin.yml
           grep -Fq 'failure_reason = error.message' backend/core/src/core_migrations.rs
           grep -Fq 'failure_reason' backend/core/deployment/deploy-staging.sh
           test -s backend/core/deployment/provision-module-ownership.sql

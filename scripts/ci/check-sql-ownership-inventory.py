@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "architecture/data-ownership.yaml"
-SECTIONS = ("tables", "views", "functions")
+SECTIONS = ("tables", "views", "functions", "triggers", "policies")
 PATTERNS = {
     "tables": re.compile(
         r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][\w$]*\.[a-z_][\w$]*)",
@@ -48,7 +48,7 @@ def parse_inventory(text: str) -> dict[str, dict[str, set[str]]]:
                 continue
             if re.match(r"^    [a-z_][a-z0-9_]*:", line):
                 active = None
-            item_match = re.match(r"^      - ([a-z_][a-z0-9_]*)$", line)
+            item_match = re.match(r"^      - ([a-z_][a-z0-9_.]*)$", line)
             if active and item_match:
                 modules[schema][active].add(item_match.group(1))
     return modules
@@ -67,11 +67,18 @@ def main() -> int:
     for path in sorted(set(migration_files)):
         sql = path.read_text(encoding="utf-8")
         for section, pattern in PATTERNS.items():
-            for qualified_name in pattern.findall(sql):
-                schema, object_name = qualified_name.split(".", 1)
+            for match in pattern.findall(sql):
+                if section in ("triggers", "policies"):
+                    object_name, schema, table_name = match
+                    object_name = (
+                        object_name if section == "triggers"
+                        else f"{table_name}.{object_name}"
+                    )
+                else:
+                    schema, object_name = match[0].split(".", 1)
                 if schema not in discovered:
                     errors.append(
-                        f"{path.relative_to(ROOT)}: {section[:-1]} {qualified_name} "
+                        f"{path.relative_to(ROOT)}: {section[:-1]} {schema}.{object_name} "
                         "belongs to a schema absent from data-ownership.yaml"
                     )
                     continue
@@ -86,7 +93,9 @@ def main() -> int:
                 errors.append(
                     f"{schema}.{section}: SQL objects missing from inventory: {', '.join(missing)}"
                 )
-            if stale:
+            # RLS policies generated from relation arrays or format() templates are
+            # represented in the inventory but cannot be extracted as literal DDL.
+            if stale and section not in ("policies",):
                 errors.append(
                     f"{schema}.{section}: inventory entries not found in migrations: {', '.join(stale)}"
                 )

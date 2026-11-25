@@ -106,7 +106,6 @@ jobs:
             install -m 0750 "target/x86_64-unknown-linux-musl/release/$binary" "$artifacts/$binary"
           done
           mkdir -p "$artifacts/migrations" "$artifacts/business-migrations/bootstrap"
-          install -m 0640 backend/core/deployment/provision-module-ownership.sql "$artifacts/provision-module-ownership.sql"
           while IFS= read -r -d '' file; do
             install -m 0640 "$file" "$artifacts/migrations/"
           done < <(find backend/core/migrations -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
@@ -123,10 +122,9 @@ jobs:
             find core core-migrate core-email-worker business business-migrate migrations business-migrations -type f -print0 \
               | sort -z \
               | xargs -0 sha256sum > SHA256SUMS
-          sha256sum provision-module-ownership.sql >> SHA256SUMS
           )
           tar --create --gzip --file "$package" --directory "$artifacts" \
-            SHA256SUMS core core-migrate core-email-worker business business-migrate migrations business-migrations provision-module-ownership.sql
+            SHA256SUMS core core-migrate core-email-worker business business-migrate migrations business-migrations
           echo "path=$package" >> "$GITHUB_OUTPUT"
 
       - name: Validate staging connection settings

@@ -324,6 +324,7 @@ BEGIN
 END
 $rls_runtime$;
 ROLLBACK;
+SQL
 
 echo "PASS: PLATFORM SaaS tenant tables ENABLE/FORCE RLS; tenant A cannot read, update or insert tenant B data, and missing tenant context fails closed."
 

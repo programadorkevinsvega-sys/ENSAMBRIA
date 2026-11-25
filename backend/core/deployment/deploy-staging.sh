@@ -270,6 +270,31 @@ if not found:
     fi
 }
 
+
+provision_postgres_module_ownership() {
+    local enabled="${ENSAMBRIA_POSTGRES_ADMIN_PROVISIONING:-false}"
+    local container="${ENSAMBRIA_POSTGRES_CONTAINER:-crm-postgres}"
+    local database="${ENSAMBRIA_POSTGRES_DATABASE:-ensambria}"
+
+    [[ "$enabled" == true ]] \
+        || fail "PostgreSQL administrative provisioning is disabled; set CORE_STAGING_POSTGRES_ADMIN_PROVISIONING=true in the core-staging environment"
+    [[ "$container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] \
+        || fail "invalid PostgreSQL container name"
+    [[ "$database" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]] \
+        || fail "invalid PostgreSQL database name"
+    command -v docker >/dev/null 2>&1 || fail "Docker CLI is required for PostgreSQL administrative provisioning"
+    [[ -s "${staging_directory}/provision-module-ownership.sql" ]] \
+        || fail "PostgreSQL ownership provisioning SQL is missing"
+    [[ "$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)" == true ]] \
+        || fail "configured PostgreSQL container is not running: ${container}"
+
+    printf 'Provisioning and verifying PostgreSQL module ownership in database %s (container %s).\\n' "$database" "$container"
+    docker exec --user postgres "$container" \
+        psql --no-psqlrc --set ON_ERROR_STOP=1 --username postgres --dbname "$database" \
+        < "${staging_directory}/provision-module-ownership.sql"
+}
+
+
 rollback() {
     if [[ "$rollback_available" != true ]]; then
         printf 'No rollback-compatible previous release exists; keeping the validated new release selected for manual recovery.\\n' >&2
@@ -548,6 +573,7 @@ systemctl enable "$service_name" "$email_worker_service_name" "$business_service
 ln -s "$release_directory" "$temporary_link"
 mv -Tf "$temporary_link" "$current_link"
 release_activated=true
+provision_postgres_module_ownership
 if ! systemctl start "$migration_service_name"; then
     report_migration_failure
     fail "automatic CORE staging migrations failed"

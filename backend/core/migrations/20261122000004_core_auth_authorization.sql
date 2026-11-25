@@ -245,7 +245,15 @@ AS $$
        AND t.status = 'active'
        AND (o.id IS NULL OR o.status = 'active')
        AND (b.id IS NULL OR b.status = 'active')
-$$;
+$;
+
+-- Tenancy owns these authorization functions. Keep their ACL changes in the
+-- tenancy-owner context; the identity owner must never mutate another module's
+-- function privileges. CREATE OR REPLACE above preserves the existing ACL.
+REVOKE ALL ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) TO core_tenancy_runtime;
+GRANT EXECUTE ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) TO core_tenancy_runtime;
 
 SET ROLE core_identity_auth_schema_owner;
 
@@ -290,13 +298,9 @@ GRANT INSERT, UPDATE, DELETE ON core_identity_auth.auth_rate_limits TO core_iden
 REVOKE ALL ON FUNCTION core_identity_auth.auth_lookup_identity(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION core_identity_auth.auth_find_refresh_session(bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION core_identity_auth.auth_find_recovery_token(bytea) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_lookup_identity(text) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_find_refresh_session(bytea) TO core_identity_auth_runtime;
 GRANT EXECUTE ON FUNCTION core_identity_auth.auth_find_recovery_token(bytea) TO core_identity_auth_runtime;
-GRANT EXECUTE ON FUNCTION core_tenancy.has_permission(uuid, uuid, text, uuid, uuid) TO core_tenancy_runtime;
-GRANT EXECUTE ON FUNCTION core_tenancy.resolve_regional_context(uuid, uuid, uuid) TO core_tenancy_runtime;
 
 COMMENT ON TABLE core_identity_auth.identity_credentials IS
     'Argon2id password verifier and account lockout state; plaintext passwords are never stored.';

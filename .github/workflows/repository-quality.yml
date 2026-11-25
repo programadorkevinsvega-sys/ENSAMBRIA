@@ -813,8 +813,8 @@ jobs:
             fi
           done
 
-  # workflow_run uses this successful, lightweight push workflow to start
-  # staging deployment. The deploy workflow checks out this exact SHA.
+  # workflow_run uses this successful full push workflow to start staging
+  # deployment. The deploy workflow checks out this exact SHA.
   main-push-gate:
     name: main-push-gate
     if: github.event_name == 'push'

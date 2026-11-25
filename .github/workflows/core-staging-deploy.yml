@@ -138,7 +138,7 @@ jobs:
           [[ -n "$DEPLOY_SSH_KEY" ]]
           [[ -n "$TS_OAUTH_CLIENT_ID" ]]
           [[ -n "$TS_OAUTH_SECRET" ]]
-          [[ "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == true ]]
+          [[ "$CORE_STAGING_POSTGRES_ADMIN_PROVISIONING" == true ]] || { echo "::error::Set CORE_STAGING_POSTGRES_ADMIN_PROVISIONING=true in the core-staging GitHub Environment to enable the audited PostgreSQL admin bootstrap." >&2; exit 1; }
           [[ "$CORE_STAGING_POSTGRES_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
           [[ "$CORE_STAGING_POSTGRES_DATABASE" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]
           install -m 0700 -d "$HOME/.ssh"

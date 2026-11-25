@@ -13,19 +13,26 @@ Required authentication secrets/configuration are injected into the API process 
 
 The AES key is loaded from a secret-manager-provided environment variable and is not committed. This is an environment-backed key protector, not a native KMS/Vault integration; KMS/Vault key unwrap and rotation remain a deployment/security integration requirement before production acceptance.
 
-## PostgreSQL login-role provisioning before CORE migrations
+## PostgreSQL role and schema provisioning before staging migrations
 
-The restricted `core_migrator` identity cannot create PostgreSQL roles. Before the first staging migration, the database operator must provision all login roles referenced by CORE grants and row-level-security policies. CI creates these roles explicitly; staging must do the equivalent through the approved database administration channel and inject unique passwords from the secret manager:
+Staging PostgreSQL has five module schemas and dedicated identities. The restricted `core_migrator` login is **not** a database administrator: it must never create or alter roles, schemas, or database privileges. Provisioning is an explicit administrative operation, separate from migration execution.
 
-```sql
-CREATE ROLE core_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<runtime-secret>';
-CREATE ROLE core_email_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<email-worker-secret>';
-CREATE ROLE core_outbox_relay LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '<outbox-relay-secret>';
-GRANT CONNECT ON DATABASE ensambria TO core_runtime, core_email_worker, core_outbox_relay;
-```
+The canonical administrative bootstrap is `backend/core/deployment/provision-module-ownership.sql`. It is idempotent and provisions the following identities without assigning or rotating passwords:
 
-Do not grant these roles superuser, database-creation, role-creation, or schema-creation privileges. The migrations grant only the schema/table/function permissions each role needs. The migrator performs a preflight check for all three role names and fails before applying SQL if any are absent; it does not create or alter login roles. Configure the API, email worker, and Outbox relay with their respective dedicated credentials. Never commit passwords or place them in CI logs.
+- `core_migrator` (LOGIN; restricted migration identity)
+- `core_identity_auth_schema_owner`, `core_tenancy_schema_owner`, `business_establishment_catalog_schema_owner`, `platform_product_catalog_schema_owner`, `platform_tenant_onboarding_schema_owner` (NOLOGIN schema owners)
+- `core_identity_auth_runtime`, `core_tenancy_runtime`, `business_establishment_catalog_runtime`, `platform_product_catalog_runtime`, `platform_tenant_onboarding_runtime` (LOGIN runtime identities)
+- `core_email_worker` and `core_outbox_relay` (LOGIN worker identities)
 
+Run the script against the target database through the approved administrative channel (for this VM, the PostgreSQL container's local administrative socket is preferred). The operator must verify the target container and database before execution. The script rejects execution unless the current database role has the required administrative capability. It never embeds passwords; provision or rotate login credentials separately through the secret manager and ensure the corresponding application connection URLs use those credentials.
+
+The bootstrap grants `core_migrator` membership only in the five schema-owner roles, creates and assigns ownership of the five canonical schemas, revokes schema access from `PUBLIC`, and grants only the cross-schema namespace usage required by CORE identity DDL. It does not grant runtime table/function access; migrations own those narrowly scoped grants. It must not grant runtime roles to `core_migrator`.
+
+Before applying migrations, the deployment must verify from PostgreSQL catalogs that all required roles exist with the expected LOGIN/NOLOGIN and restricted attributes; all five schemas have their dedicated owners; `core_migrator` is a member of exactly the five schema-owner roles and no runtime/worker roles; and the required database/schema privileges are present. A failed check must stop deployment before any migration runs and report the failed invariant, SQLSTATE, and missing role names without printing connection strings or secrets.
+
+CORE's migration preflight currently verifies the CORE subset (`core_identity_auth` and `core_tenancy`) and requires `core_identity_auth_runtime`, `core_tenancy_runtime`, `core_email_worker`, and `core_outbox_relay`. BUSINESS and PLATFORM migrations must enforce their own owner/runtime subsets. The deployment-level catalog check is the cross-module source of truth for all five owners.
+
+Never commit passwords or place them in CI logs.
 ## SMTP worker process
 
 Build and run the separate `core-email-worker` binary. It connects using its own PostgreSQL login, polls every five seconds, and processes batches of 25. The systemd unit is installed by staging deployment but intentionally is not enabled automatically: enable it only after the Resend domain is verified and the single shared CORE environment file contains the worker database credential and Resend SMTP secrets.

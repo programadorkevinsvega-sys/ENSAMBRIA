@@ -93,13 +93,13 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
         .establish(&mut transaction)
         .await
         .expect("tenant RLS context must be established");
-    sqlx::query("INSERT INTO core.tenants (id, status) VALUES ($1, 'active')")
+    sqlx::query("INSERT INTO core_tenancy.tenants (id, status) VALUES ($1, 'active')")
         .bind(tenant_id)
         .execute(&mut *transaction)
         .await
         .expect("tenant fixture must be inserted");
     sqlx::query(
-        "INSERT INTO core.tenant_products (tenant_id, product_id, product_config_version, association_status, validated_at) VALUES ($1, $2, 1, 'active', clock_timestamp())",
+        "INSERT INTO core_tenancy.tenant_products (tenant_id, product_id, product_config_version, association_status, validated_at) VALUES ($1, $2, 1, 'active', clock_timestamp())",
     )
     .bind(tenant_id)
     .bind(product_id)
@@ -107,7 +107,7 @@ async fn core_enforces_platform_published_product_and_capability_over_real_grpc(
     .await
     .expect("CORE tenant-product association fixture must be inserted");
     let association_version: Option<i32> = sqlx::query_scalar(
-        "SELECT product_config_version FROM core.tenant_products WHERE tenant_id = $1 AND product_id = $2 AND association_status = 'active'",
+        "SELECT product_config_version FROM core_tenancy.tenant_products WHERE tenant_id = $1 AND product_id = $2 AND association_status = 'active'",
     )
     .bind(tenant_id)
     .bind(product_id)

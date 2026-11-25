@@ -95,6 +95,51 @@ modules:
       - product_capabilities
     views:
       - active_product_catalog
+    tables:
+      - products
+      - product_configurations
+      - product_domains
+      - product_markets
+      - product_surfaces
+      - capability_catalog
+      - product_capabilities
+      - commercial_offers
+      - commercial_offer_versions
+      - saas_subscriptions
+      - saas_subscription_audit
+      - saas_subscription_commands
+      - saas_subscription_outbox
+    views:
+      - active_product_catalog
+    functions:
+      - prevent_published_configuration_mutation
+      - prevent_published_configuration_deletion
+      - validate_active_product_configuration
+      - validate_product_surface_configuration
+      - validate_product_capability
+      - prevent_published_offer_version_mutation
+      - validate_published_offer
+      - prevent_published_offer_deletion
+      - protect_published_offer_identity
+      - validate_subscription_transition
+    triggers:
+      - product_configuration_immutable
+      - product_configuration_no_delete
+      - product_active_configuration_required
+      - product_surface_published_configuration
+      - product_capability_available_only
+      - commercial_offer_version_immutable
+      - commercial_offer_publication_required
+      - commercial_offer_version_no_delete
+      - commercial_offer_identity_immutable
+      - saas_subscription_transition_guard
+    policies:
+      - commercial_offers_read_published
+      - commercial_offer_versions_read_published
+      - saas_subscriptions.tenant_scope
+      - saas_subscription_audit.tenant_scope
+      - saas_subscription_commands.tenant_scope
+      - saas_subscription_outbox.tenant_scope
     contract_dependencies: []
   - id: platform.tenant-onboarding
     backend: PLATFORM

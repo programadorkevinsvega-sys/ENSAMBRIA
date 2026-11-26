@@ -1,0 +1,10 @@
+{
+  "config": {
+    // ENSAMBRIA reference documents use long evidence tables and prose paragraphs.
+    "MD013": false,
+    // Use one compact separator style for evidence and planning tables.
+    "MD060": { "style": "compact" },
+    // The historical record uses native disclosure blocks for collapsed evidence.
+    "MD033": { "allowed_elements": ["details", "summary"] }
+  }
+}

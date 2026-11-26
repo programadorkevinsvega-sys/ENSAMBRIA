@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
+      markdown_files: ${{ steps.classify.outputs.markdown_files }}
     steps:
       - name: Check out complete history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -44,6 +45,12 @@ jobs:
         run: |
           set -euo pipefail
           docs_only=true
+          is_documentation_file() {
+            case "${1,,}" in
+              *.md|*.mdx|*.markdown|*.txt|*.text|*.rst|*.adoc|*.asciidoc) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             base="$PR_BASE_SHA"
             git cat-file -e "$base^{commit}"
@@ -65,16 +72,98 @@ jobs:
           fi
           if (( ${#changed[@]} == 0 )); then docs_only=false; fi
           for path in "${changed[@]}"; do
-            if [[ "$path" != *.md && "$path" != *.mdx && "$path" != docs/* && "$path" != documentation/* ]]; then
+            if ! is_documentation_file "$path"; then
               docs_only=false
               break
             fi
           done
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          delimiter="markdown-files-$$-$RANDOM"
+          {
+            printf 'markdown_files<<%s\n' "$delimiter"
+            for path in "${changed[@]}"; do
+              case "${path,,}" in
+                *.md|*.mdx|*.markdown)
+                  [[ -f "$path" ]] && printf '%s\n' "$path"
+                  ;;
+              esac
+            done
+            printf '%s\n' "$delimiter"
+          } >> "$GITHUB_OUTPUT"
           printf 'Documentation-only change: %s\n' "$docs_only"
           printf '%s\n' "${changed[@]}"
-  # Run the full quality and integration matrix on PRs, merge queues, manual runs,
-  # and main pushes. The pushed main SHA receives its own complete evidence.
+  documentation-validation:
+    name: documentation-validation
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Lint changed Markdown files
+        if: needs.changes.outputs.markdown_files != ''
+        uses: DavidAnson/markdownlint-cli2-action@6a36cdda56ff94d520af0c222558b603f6610c3e
+        with:
+          globs: ${{ needs.changes.outputs.markdown_files }}
+      - name: Validate changed documentation files
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git diff --check "$PR_BASE_SHA"...HEAD
+          elif [[ "$EVENT_NAME" == "merge_group" ]]; then
+            git diff --check "$MERGE_BASE_SHA"...HEAD
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            git diff --check "$PUSH_BEFORE_SHA" "$EXPECTED_SHA"
+          else
+            echo "Unsupported event for documentation-only validation: $EVENT_NAME" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          event = os.environ["EVENT_NAME"]
+          if event == "pull_request":
+              revision = f"{os.environ['PR_BASE_SHA']}...HEAD"
+              command = ["git", "diff", "--name-only", "-z", revision]
+          elif event == "merge_group":
+              revision = f"{os.environ['MERGE_BASE_SHA']}...HEAD"
+              command = ["git", "diff", "--name-only", "-z", revision]
+          else:
+              command = ["git", "diff", "--name-only", "-z", os.environ["PUSH_BEFORE_SHA"], os.environ["EXPECTED_SHA"]]
+
+          paths = subprocess.check_output(command).decode("utf-8").split("\0")
+          for name in filter(None, paths):
+              path = Path(name)
+              if not path.is_file():
+                  continue
+              content = path.read_bytes()
+              if b"\0" in content:
+                  print(f"ERROR: documentation file contains binary data: {name}", file=sys.stderr)
+                  sys.exit(1)
+              try:
+                  content.decode("utf-8")
+              except UnicodeDecodeError as error:
+                  print(f"ERROR: documentation file is not UTF-8: {name}: {error}", file=sys.stderr)
+                  sys.exit(1)
+          PY
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 scripts/validate_engineering_skills.py
+  # Run the full quality and integration matrix for code/configuration changes.
+  # Documentation-only changes use the dedicated file-validation job above.
   rust-workspace-quality:
     name: rust-workspace-quality
     needs: changes
@@ -823,6 +912,7 @@ jobs:
     if: always() && needs.changes.result == 'success'
     needs:
       - changes
+      - documentation-validation
       - rust-workspace-quality
       - deployment-contract
       - protobuf-contracts
@@ -836,6 +926,7 @@ jobs:
       - name: Require every CI suite to pass
         env:
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          DOCS_RESULT: ${{ needs.documentation-validation.result }}
           RUST_WORKSPACE_RESULT: ${{ needs.rust-workspace-quality.result }}
           DEPLOYMENT_CONTRACT_RESULT: ${{ needs.deployment-contract.result }}
           PROTOBUF_RESULT: ${{ needs.protobuf-contracts.result }}
@@ -846,7 +937,11 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$DOCS_ONLY" == true ]]; then
-            echo "Documentation-only change: build, tests, integration and security jobs intentionally skipped."
+            if [[ "$DOCS_RESULT" != success || "$SECURITY_RESULT" != success ]]; then
+              echo "Documentation checks or required security check did not pass (docs: $DOCS_RESULT; security: $SECURITY_RESULT)." >&2
+              exit 1
+            fi
+            echo "Documentation-only change passed file validations; Cargo and integration jobs were skipped."
             exit 0
           fi
           for result in "$RUST_WORKSPACE_RESULT" "$DEPLOYMENT_CONTRACT_RESULT" "$PROTOBUF_RESULT" "$POSTGRES_RESULT" "$REDIS_HA_RESULT" "$NATS_HA_RESULT" "$SECURITY_RESULT"; do
@@ -886,6 +981,12 @@ jobs:
         run: |
           set -euo pipefail
           docs_only=true
+          is_documentation_file() {
+            case "${1,,}" in
+              *.md|*.mdx|*.markdown|*.txt|*.text|*.rst|*.adoc|*.asciidoc) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
           if [[ "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
             docs_only=false
             changed=(initial-push)
@@ -894,7 +995,7 @@ jobs:
           fi
           if (( ${#changed[@]} == 0 )); then docs_only=false; fi
           for path in "${changed[@]}"; do
-            if [[ "$path" != *.md && "$path" != *.mdx && "$path" != docs/* && "$path" != documentation/* ]]; then
+            if ! is_documentation_file "$path"; then
               docs_only=false
               break
             fi
@@ -920,7 +1021,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Keep required security check green for documentation-only changes
+        if: needs.changes.outputs.docs_only == 'true'
+        run: echo "Cargo dependency audits do not apply to documentation-only changes; documentation file validation runs in documentation-validation."
+
       - name: Detect Cargo workspace manifests
+        if: needs.changes.outputs.docs_only != 'true'
         id: cargo_manifests
         shell: bash
         run: |
@@ -931,20 +1037,20 @@ jobs:
           fi
 
       - name: Install cargo-audit and cargo-deny
-        if: steps.cargo_manifests.outputs.present == 'true'
+        if: needs.changes.outputs.docs_only != 'true' && steps.cargo_manifests.outputs.present == 'true'
         uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f
         with:
           tool: cargo-audit,cargo-deny
 
       - name: Audit committed Cargo.lock for vulnerabilities (cargo audit)
-        if: steps.cargo_manifests.outputs.present == 'true'
+        if: needs.changes.outputs.docs_only != 'true' && steps.cargo_manifests.outputs.present == 'true'
         run: cargo audit
 
       - name: Validate committed dependency graph and licenses (cargo deny)
-        if: steps.cargo_manifests.outputs.present == 'true'
+        if: needs.changes.outputs.docs_only != 'true' && steps.cargo_manifests.outputs.present == 'true'
         run: cargo deny check
 
       - name: Report Rust dependency audit as not applicable
-        if: steps.cargo_manifests.outputs.present != 'true'
+        if: needs.changes.outputs.docs_only != 'true' && steps.cargo_manifests.outputs.present != 'true'
         run: |
           echo "Skipped Rust dependency audits: root Cargo.toml and Cargo.lock are not both present."

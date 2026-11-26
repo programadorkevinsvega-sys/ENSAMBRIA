@@ -801,7 +801,7 @@ Requisitos obligatorios:
 
 - TLS para comunicaciones externas e internas según el modelo de amenaza.
 - Cifrado de almacenamiento y backups.
-- Gestión de secretos mediante Vault o mecanismo seguro equivalente.
+- Gestión de secretos mediante AWS Secrets Manager conforme a ADR-0013; cualquier proveedor alternativo requiere decisión técnica aprobada.
 - Acceso de mínimo privilegio.
 - Rotación de credenciales.
 - MFA para operaciones administrativas sensibles.

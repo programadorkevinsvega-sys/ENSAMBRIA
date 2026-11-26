@@ -2,7 +2,7 @@
 
 > **BORRADOR TEMPORAL — ENSAMBRIA — PENDIENTE DE REVISIÓN Y APROBACIÓN POR ABOGADO COMPETENTE EN COLOMBIA.**
 
-> **Estado:** inventario de categorías y proveedores previstos; no hay integraciones de proveedores externas verificadas en runtime. La mención de un producto o adapter no acredita cuenta, contrato, región, DPA, configuración ni aprobación. No cargar datos personales ni secretos hasta evaluar finalidad, contrato, seguridad, retención, ubicación y supresión con Legal y el propietario técnico.
+> **Estado:** inventario de categorías y proveedores previstos; no hay integración AWS verificada o configurada para ENSAMBRIA. El propietario decidió AWS como proveedor para configuración, secretos y mTLS el 2026-11-26; ADR-0013 propone el mapa de servicios y deja pendientes la cuenta, región, costos, operación y evaluación profesional. La decisión técnica no acredita contrato, región, DPA, configuración ni aprobación legal. No cargar datos reales hasta evaluar finalidad, contrato, seguridad, retención, ubicación y supresión con Legal y el propietario técnico.
 
 ## Inventario provisional
 
@@ -11,7 +11,7 @@
 | PostgreSQL administrado/host | Cada backend con schema/rol propio | Datos autoritativos del dominio | Proveedor, región, versión, backup, soporte y contrato no seleccionados; topología de base lógica compartida definida. |
 | Redis | Cada owner que use caché TTL | Proyecciones/IDs de caché, potencialmente identificables por enlace | No desplegado; política permite solo caché con TTL y requiere claves minimizadas/aislamiento. |
 | NATS JetStream/Core | Owners productores/consumidores | Eventos minimizados, IDs, scope y correlación | No desplegado; configuración, ubicación, retención y ACL pendientes; no enviar PII o secretos. |
-| Vault / PKI | Seguridad/infraestructura por workload | Secretos y certificados | Norma prevé AppRole, ACL, KV v2 y PKI por entorno/workload; no se configura ni accede a recursos compartidos en Fase 0. |
+| AWS Systems Manager Parameter Store, AWS Secrets Manager, AWS Private CA e IAM Roles Anywhere | Plataforma/SRE y cada owner del workload | Configuración, credenciales técnicas, certificados públicos/cadenas, identidades de workload y eventos de auditoría; las claves privadas mTLS se generan y conservan en el host | AWS fue seleccionado por el propietario el 2026-11-26. El mapeo de servicios de ADR-0013 es propuesta técnica; cuenta, región, costos, roles, CA/trust anchors, bootstrap, contrato/DPA, ubicación, transferencias y retención están pendientes. No se han creado ni verificado recursos de ENSAMBRIA. |
 | Cloudflare R2 / API compatible S3 | Módulo dueño de archivos | Imágenes, adjuntos, exportaciones | Adapter inicial indicado por arquitectura; no hay cuenta, bucket, ubicación, contrato, DPA o borrado verificados. |
 | Sentry | Cada frontend por aplicación/entorno | Excepciones, metadatos técnicos y posible dato personal accidental | Sentry es obligatorio para frontends; no se han creado proyectos ni validado región/contrato, accesos, retención, redacción o exportación. Replay deshabilitado por defecto. |
 | Pasarela de pagos | CORE para pagos centrales | Referencia tokenizada, importe, estado y metadatos necesarios | Wompi es el proveedor inicial previsto, no exclusivo; no hay integración/configuración verificada. Revisar PCI/alcance, sandbox, webhooks, subprocesadores y retención con documentación oficial. |

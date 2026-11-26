@@ -220,7 +220,7 @@ La revisión debe comprobar:
 - Compatibilidad.
 - Riesgos de regresión.
 
-Los cambios críticos deben requerir revisión de responsables especializados.
+Los cambios críticos requieren revisión de responsables especializados cuando haya una persona autorizada disponible. Si el repositorio tiene una sola persona mantenedora y no existe revisor independiente disponible, aplica la excepción documentada en §8.1; no atribuir la auto-revisión a un especialista ni presentarla como revisión independiente.
 
 Los agentes de IA no deben considerarse automáticamente revisores independientes cuando han implementado el mismo cambio.
 
@@ -230,7 +230,11 @@ Cuando solo exista una persona mantenedora autorizada, no se exige designar una 
 
 La persona autora debe revisar el diff completo, verificar alcance, secretos, documentación, pruebas y riesgos, y dejar constancia en el PR. Esta auto-revisión aporta trazabilidad, pero no equivale a aprobación independiente. CODEOWNERS puede identificar a la persona titular actual sin convertirla en requisito de aprobación.
 
-Los cambios cuyo riesgo o fuente normativa exija una revisión independiente —incluidos cambios críticos de seguridad, permisos, autenticación, privacidad, infraestructura o workflows— no se autoaprueban. Si no hay revisor independiente disponible, se detiene la integración del alcance afectado hasta obtener revisión autorizada. La excepción de operación unipersonal se reevalúa al incorporar otra persona con permisos de revisión.
+Si hay otra persona autorizada disponible, los cambios cuyo riesgo o fuente normativa exija revisión independiente —incluidos cambios críticos de seguridad, permisos, autenticación, privacidad, infraestructura o workflows— requieren esa revisión antes de integrarse. Cuando el propietario sea la única persona mantenedora y no haya revisor independiente disponible, el propietario puede autorizar la integración mediante una instrucción explícita registrada en el PR, con aceptación del riesgo y auto-revisión documentadas. Deben pasar todos los checks requeridos, revisarse el diff completo y los secretos, resolverse las conversaciones, y mantenerse el PR y la protección de rama. Esta aprobación del propietario permite continuar el trabajo del proyecto sin depender de un tercero; no equivale a revisión independiente ni a aprobación especializada.
+
+La excepción se limita a la gobernanza interna del repositorio. No sustituye aprobaciones profesionales legales, certificaciones externas, autorizaciones de proveedores/servicios, validaciones contractuales ni decisiones asignadas a terceros. El agente no fusiona cambios críticos sin instrucción explícita del propietario para ese PR. La excepción se revisa si se incorpora otra persona con permisos de revisión.
+
+**Decisión del propietario — 2026-11-26:** ENSAMBRIA es un proyecto propio con una sola persona mantenedora y desarrolladora activa. El propietario dispone que su aprobación explícita documentada en el PR permite integrar cambios aun cuando una revisión independiente no esté disponible, bajo los controles y límites anteriores. Esta decisión no presenta al agente como revisor humano ni cambia los checks obligatorios.
 
 # 9. GitHub Actions e integración continua
 

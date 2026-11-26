@@ -14,21 +14,22 @@ ENSAMBRIA es una plataforma SaaS multiproducto y multindustria en desarrollo. El
 - [Reglas normativas](docs/rules/)
 - [Fronteras modulares y cumplimiento arquitectónico obligatorio](docs/rules/ENSAMBRIA_Modular_Boundaries_and_Architecture_Compliance.md)
 - [ADR-0012 — Fronteras modulares ejecutables](docs/adr/ADR-0012-fronteras-modulares-y-cumplimiento-arquitectonico.md)
+- [ADR-0013 — AWS para configuración, secretos y mTLS](docs/adr/ADR-0013-aws-configuration-secrets-mtls.md)
 - [Decisiones arquitectónicas](docs/adr/)
 
 El requerimiento, el contrato de arquitectura, los documentos de dominio, los ADR y las reglas aplicables definen el diseño y las obligaciones futuras. Su existencia no demuestra implementación ni aceptación de una fase.
 
-Las decisiones arquitectónicas que fueron aprobadas conservan su estado hasta ser sustituidas mediante el proceso de decisión del proyecto. El reinicio de código no las revoca; tampoco convierte esa aprobación en implementación o aceptación de fase.
+Las decisiones arquitectónicas aprobadas conservan su estado hasta ser sustituidas mediante el proceso de decisión del proyecto. Una aprobación documental no equivale a implementación ni a aceptación de fase.
 
 ## Arquitectura objetivo
 
-El diseño establece cuatro backends de dominio con ownership separado: CORE, BUSINESS, PLATFORM y PUBLIC. También define superficies de presentación y BFF autorizados. Estos son límites objetivo; no implican que los servicios, aplicaciones o integraciones existan en este reinicio.
+El diseño establece cuatro backends de dominio con ownership separado: CORE, BUSINESS, PLATFORM y PUBLIC. El repositorio ya contiene una implementación parcial de CORE/PLATFORM y pruebas de integración; eso no acredita que los cuatro backends, todos los frontends o las integraciones estén implementados o desplegados. Los límites objetivo y su estado real se mantienen en el [roadmap](ROADMAP.md), el [registro de Fase 0](docs/registro-fase-0-descubrimiento-arquitectura.md) y el [registro de Fase 1](docs/registro-fase-1-fundacion-core.md).
 
 La arquitectura y responsabilidades completas están en [ARCHITECTURE_RULES.md](ARCHITECTURE_RULES.md) y [docs/arquitectura-dominios.md](docs/arquitectura-dominios.md). La secuencia de implementación está en [ROADMAP.md](ROADMAP.md).
 
 ## Estado de las fases
 
-**Las fases se aceptan por separado y ninguna se considera cerrada por la mera existencia de código o CI configurado.** La Fase 1 tiene trabajo implementado en el repositorio; la subfase 1.3 tiene implementación y resiliencia CORE→PLATFORM validadas por CI #400; su aceptación formal sigue pendiente. Consulta el [estado del roadmap](ROADMAP.md#estado-vigente-de-fases) y exige CI del commit exacto más aceptación explícita.
+**Las fases se aceptan por separado y ninguna se considera cerrada por la mera existencia de código o CI configurado.** Fase 0 permanece abierta; Fase 1 contiene trabajo implementado y validado parcialmente, con aceptación de fase y verificación de staging pendientes. Consulta el [estado del roadmap](ROADMAP.md#estado-vigente-de-fases) y exige CI del commit exacto más aceptación explícita.
 
 No hay instrucciones verificadas para instalar, ejecutar, compilar o desplegar el producto. No se deben inferir a partir de la arquitectura objetivo ni de registros históricos.
 

@@ -122,7 +122,7 @@ El límite de ownership anterior está decidido y no queda como aprobación pend
 | Infrastructure/composition root | Construye cada proceso, pool por proceso/backend, transacciones/contexto RLS, transportes, observabilidad y adapters. | Reglas de negocio, pools por módulo/tenant/petición, o composición que arranque varios backends en una unidad de despliegue. |
 | BFF | Traduce REST/OpenAPI/WebSocket a contratos del backend autorizado, valida la forma de transporte y propaga identidad/correlación. | Reglas de negocio, acceso directo a PostgreSQL/Redis/NATS, proveedores o repositorios de dominio. |
 | Frontend | Presentación y consumo del BFF autorizado; estado de UI y accesibilidad. | Acceso directo a backend gRPC, módulos, base de datos, Redis, NATS o proveedor. |
-| Bibliotecas técnicas | Primitivas neutrales reutilizables para PostgreSQL/SQLx, gRPC/Protobuf, TLS/seguridad, errores, Redis, NATS/Outbox, Vault y observabilidad. | Entidades, reglas, tablas, migraciones o políticas de dominio compartidas. |
+| Bibliotecas técnicas | Primitivas neutrales reutilizables para PostgreSQL/SQLx, gRPC/Protobuf, TLS/seguridad, errores, Redis, NATS/Outbox, el proveedor AWS aprobado de configuración/secretos/certificados (ADR-0013) y observabilidad. | Entidades, reglas, tablas, migraciones o políticas de dominio compartidas. |
 
 Un módulo consume otro módulo/backend por un contrato publicado; gRPC resuelve consultas/comandos que necesitan respuesta inmediata, y Outbox + JetStream distribuye hechos persistidos que requieren entrega durable. NATS Core se reserva al fan-out efímero. No se usa un evento como RPC. PUBLIC solo conserva proyecciones explícitamente autorizadas y no consulta datos privados fuente.
 

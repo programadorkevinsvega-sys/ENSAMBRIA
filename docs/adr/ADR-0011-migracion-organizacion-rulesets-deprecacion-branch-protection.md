@@ -1,12 +1,16 @@
 # ADR-0011: Estrategia de migración a Organización GitHub, adopción de Rulesets organizacionales y plan de deprecación de Branch Protection clásica
 
-**Estado:** propuesta de gobierno aceptada documentalmente en el corte anterior; situación y aplicabilidad actuales **NO VERIFICADAS**
+**Estado:** plan de gobierno aceptado documentalmente; migración a una organización no verificada ni ejecutada. La configuración de `main` se verificó el 2026-11-26 y difiere del escenario original de doble protección.
 **Fecha:** 2026-11-16
 **Autores:** Equipo de ingeniería ENSAMBRIA
 **Revisores:** `@programadorkevinsvega-sys`
 **Reglas aplicables:** §4, §8.1, §11, §12, §14, §21 de `ENSAMBRIA_github_repository_governance_and_engineering_rules.md`
 
-> Este ADR conserva una hoja de ruta de migración basada en el repositorio y la configuración GitHub de un corte previo. No afirma que la organización, equipos, Branch Protection o Rulesets descritos estén vigentes, ni autoriza ejecutar los comandos propuestos. Verificar el propietario y la configuración remota actuales antes de adoptar o ejecutar el plan.
+> Este ADR conserva una propuesta de migración; no afirma que la organización o los equipos descritos estén vigentes ni autoriza ejecutar comandos de transferencia. Revalidar propietario, configuración y permisos antes de retomar el plan.
+
+## Estado comprobado del repositorio — 2026-11-26
+
+El repositorio continúa bajo `programadorkevinsvega-sys`; no se verificó una organización `ensambria`. El Ruleset activo es `main-protection` (ID `27596836`), sin bypass; la API de Branch Protection clásica devuelve HTTP 404. Por tanto, la fase 6 original que propone retirar la Branch Protection clásica ya no corresponde a la configuración observada. No borrar ni modificar Rulesets por este ADR. La propuesta de migración organizacional solo se retoma después de inspeccionar de nuevo permisos, owners, reglas y dependencias.
 
 ---
 
@@ -118,15 +122,15 @@ Una vez confirmado que el Organization Ruleset está activo y aplicando los bloq
    ```bash
    gh api repos/ensambria/ENSAMBRIA/rulesets
    ```
-2. Eliminar la regla de Branch Protection clásica del repositorio:
+2. Comprobar si existe Branch Protection clásica; en la verificación del 2026-11-26 la API devolvió HTTP 404, por lo que no hay una regla clásica que eliminar. No ejecutar DELETE sin una nueva comprobación y autorización.
    ```bash
-   gh api repos/ensambria/ENSAMBRIA/branches/main/protection --method DELETE
+   gh api repos/ensambria/ENSAMBRIA/branches/main/protection
    ```
-3. Eliminar el Ruleset redundante a nivel de repositorio (`protect-main`, id `27409010`) para evitar duplicidad de comprobaciones en la interfaz de GitHub:
+3. Inspeccionar Rulesets activos y conservar `main-protection` (ID `27596836`) salvo decisión posterior:
    ```bash
-   gh api repos/ensambria/ENSAMBRIA/rulesets/27409010 --method DELETE
+   gh api repos/ensambria/ENSAMBRIA/rulesets
    ```
-4. Ejecutar prueba de verificación:
+4. Si se aprueba y ejecuta una migración futura, hacer una prueba de estado no destructiva:
    - Intentar push directo a `main` desde cuenta local → Debe ser rechazado por `organization_ruleset`.
    - Crear PR de prueba → Verificar que exige checks y revisión conforme a las reglas.
 5. Documentar el fin de la deprecación en el registro de auditoría del repositorio.

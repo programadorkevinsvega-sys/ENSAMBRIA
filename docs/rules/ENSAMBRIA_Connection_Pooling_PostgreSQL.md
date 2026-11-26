@@ -92,7 +92,7 @@ Cada proceso debe permitir configurar, como mínimo:
 - Límites de concurrencia para operaciones costosas.
 - Parámetros TLS y verificación del certificado, según el entorno.
 
-Los secretos no deben quedar en el repositorio, archivos versionados, imágenes frontend ni logs. Deben obtenerse mediante el mecanismo de secretos autorizado para el entorno, por ejemplo Vault o el gestor de secretos de la infraestructura.
+Los secretos no deben quedar en el repositorio, archivos versionados, imágenes frontend ni logs. Para ENSAMBRIA, obtenerlos desde AWS Secrets Manager según ADR-0013 con la identidad IAM mínima del proceso; otro proveedor requiere decisión aprobada y registrada antes de sustituirlo.
 
 ### 3.2 Compartir el pool dentro del proceso
 
@@ -316,7 +316,7 @@ Definir umbrales de alerta a partir de la capacidad medida y los SLO del sistema
 
 - TLS para conexiones PostgreSQL cuando la topología lo requiera, validando certificados y autoridades de confianza.
 - Credenciales distintas por backend y entorno.
-- Secretos obtenidos desde Vault o el gestor autorizado.
+- Secretos obtenidos desde AWS Secrets Manager conforme a ADR-0013, o desde el proveedor alternativo explícitamente aprobado para ese entorno.
 - Rotación de credenciales con procedimiento probado.
 - Permisos SQL mínimos.
 - Sin credenciales de producción en código, frontend, logs o CI.

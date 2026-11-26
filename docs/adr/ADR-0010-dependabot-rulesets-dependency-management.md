@@ -45,6 +45,8 @@ Se habilita Dependabot para dos ecosistemas:
 
 La API del repositorio muestra activo el Ruleset `main-protection` (ID `27596836`) en `refs/heads/main`, sin bypass actors. Requiere Pull Request, actualización estricta de la rama, los checks `repository-quality` y `security-dependencies`, y resolución de conversaciones; bloquea force-push y borrado. El mínimo de aprobaciones está configurado en cero conforme a la excepción de mantenedor único de §8.1. La consulta de Branch Protection clásica devuelve HTTP 404: no existe una segunda capa clásica comprobada. El Ruleset anterior `protect-main` (ID `27409010`) y la afirmación de coexistencia son históricos, no el estado vigente.
 
+El propietario confirmó el 2026-11-26 que ENSAMBRIA es un proyecto propio mantenido por una sola persona y que autoriza su aprobación explícita documentada en el PR para integrar cambios cuando no exista revisor independiente disponible. La autorización exige todos los checks, revisión documentada del diff/secretos, resolución de conversaciones y aceptación del riesgo; no se denomina revisión independiente. Los límites y las aprobaciones externas que esta excepción no reemplaza están definidos en §8.1 de la regla de gobierno.
+
 | Control remoto adicional | Estado verificado |
 |---|---|
 | SHA pinning obligatorio en ajustes de Actions | No requerido (`sha_pinning_required: false`); las referencias `uses:` en workflows actuales están fijadas a SHA completo. La configuración remota no previene nuevas referencias flotantes. |

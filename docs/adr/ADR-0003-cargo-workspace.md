@@ -1,6 +1,6 @@
 # ADR-0003: Workspace Cargo único en la raíz y unidades de despliegue independientes
 
-- **Nota de estado tras reinicio:** La decisión arquitectónica aceptada se conserva. El manifiesto y los paquetes del repositorio anterior fueron retirados; las observaciones de implementación y resultados de comandos que siguen corresponden al corte histórico que originó este ADR, no al worktree actual.
+- **Estado del repositorio al 2026-11-26:** `Cargo.toml` existe en la raíz con crates backend, contracts y técnicos de Fase 1; la CI del `main` actual los compila/prueba. Las observaciones históricas del contexto de abajo no describen este worktree. La composición actual todavía debe reconciliarse con ADR-0012: hay bounded contexts funcionales implementados dentro de crates de backend compartidos, aunque ADR-0012 exige crate propietario y `*-contracts` por módulo.
 - **Estado:** diseño aceptado expresamente por el propietario el 2026-11-11; materialización ejecutable reservada para la fase de implementación
 - **Fecha:** 2026-11-10
 - **Ámbito:** composición de Rust para CORE, BUSINESS, PLATFORM, PUBLIC y BFF público si aplica
@@ -53,7 +53,7 @@ En Fase 0 se registra la composición objetivo y el manifiesto actual, sin adela
 
 ## Consecuencias y pendientes
 
-- El requisito arquitectónico puede estar decidido documentalmente aunque no exista un manifiesto Cargo ejecutable. El inventario vigente distingue el diseño aceptado de la composición ejecutable, retirada durante el reinicio.
+- El requisito arquitectónico puede estar decidido documentalmente antes de completarse la estructura ejecutable. El inventario vigente distingue los crates reales de Fase 1 y las brechas de composición frente a ADR-0012.
 - Antes de implementar backend Rust, se necesita definir el primer paquete real, su target, dependencias, pruebas, composición y modo de build sin crear código fuera del roadmap.
 - No se afirma que Edition 2024, el toolchain, la compatibilidad de dependencias o CI estén validados; la metadata falla antes de permitir esa comprobación.
 - El nombre y versión actuales del paquete raíz son datos comprobados, no decisiones aprobadas sobre naming/versionado de los futuros backends.
@@ -62,7 +62,7 @@ En Fase 0 se registra la composición objetivo y el manifiesto actual, sin adela
 
 El workspace único en la raíz y los despliegues independientes son decisiones ya fijadas por el requerimiento y fueron aceptados documentalmente por el propietario el 2026-11-11. No se ratifica una alternativa arquitectónica ni se declara que Cargo tenga un workspace ejecutable.
 
-La selección entre workspace virtual y paquete raíz con target legítimo se difiere hasta la primera implementación funcional porque depende de la composición real; es una decisión técnica acotada, no una excepción al workspace único. Los nombres, targets, dependencias y miembros se incorporan únicamente cuando exista código funcional y ownership definido. El estado actual no tiene manifiesto Cargo; no se declara una ejecución actual de metadata.
+La selección entre workspace virtual y paquete raíz con target legítimo se resuelve según la composición funcional presente. El estado actual sí tiene manifiesto raíz y paquetes Rust. La aceptación de ADR-0012 requiere además crates de implementación y contratos separados para cada bounded context funcional, composición correcta en `cargo xtask architecture`, build/test por paquete y unidades de despliegue independientes; ver el registro actual de Fase 0 para resultados y brechas. La falta de `cargo` local en el entorno de auditoría no se presenta como un resultado de `cargo metadata`.
 
 ## Referencias
 

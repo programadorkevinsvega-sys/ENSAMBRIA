@@ -1,12 +1,12 @@
 # ADR-0010: Gestión de dependencias con Dependabot y Rulesets como complemento de Branch Protection
 
-**Estado:** decisión de gobierno aceptada en el corte anterior; configuración actual del repositorio **NO VERIFICADA**
+**Estado:** decisión de gobierno aceptada; configuración remota verificada el 2026-11-26 con las diferencias enumeradas abajo.
 **Fecha:** 2026-11-16
 **Autores:** Equipo de ingeniería ENSAMBRIA
 **Revisores:** `@programadorkevinsvega-sys`
 **Reglas aplicables:** §11, §12, §13 de `ENSAMBRIA_github_repository_governance_and_engineering_rules.md`
 
-> Este ADR registra decisiones de gobierno y configuración histórica. El reinicio no revoca la política documental; el estado remoto del Ruleset sigue sin verificarse.
+> La política conserva su aceptación. Los hechos de configuración descritos abajo son una fotografía verificada el 2026-11-26 y deben revalidarse antes de usarlos como evidencia futura.
 
 ---
 
@@ -41,38 +41,19 @@ Se habilita Dependabot para dos ecosistemas:
 - [`deny.toml`](../../deny.toml) mantiene una lista explícita de licencias SPDX observadas en el árbol bloqueado y rechaza nuevas licencias no incluidas. La lista es una política automatizada de dependencias, no una aprobación o dictamen jurídico. Los crates propios `publish = false` se excluyen del chequeo de licencias externas; su licencia de producto permanece gobernada por el archivo [`LICENSE`](../../LICENSE).
 - No se añade `flutter` ni `dart` porque los proyectos de aplicaciones mobile no existen aún (Fase 5+).
 
-### GitHub Rulesets como complemento de Branch Protection clásica
+### Estado remoto verificado — 2026-11-26
 
-En el corte anterior se registró la creación del Ruleset `protect-main` (id: `27409010`) con enforcement `active`, cubriendo `refs/heads/main`. Su existencia/estado actual no está verificado.
+La API del repositorio muestra activo el Ruleset `main-protection` (ID `27596836`) en `refs/heads/main`, sin bypass actors. Requiere Pull Request, actualización estricta de la rama, los checks `repository-quality` y `security-dependencies`, y resolución de conversaciones; bloquea force-push y borrado. El mínimo de aprobaciones está configurado en cero conforme a la excepción de mantenedor único de §8.1. La consulta de Branch Protection clásica devuelve HTTP 404: no existe una segunda capa clásica comprobada. El Ruleset anterior `protect-main` (ID `27409010`) y la afirmación de coexistencia son históricos, no el estado vigente.
 
-**Reglas del Ruleset:**
-
-| Tipo de regla | Parámetros clave |
+| Control remoto adicional | Estado verificado |
 |---|---|
-| `deletion` | Prohíbe eliminar `main` |
-| `non_fast_forward` | Prohíbe force-push (historial no reescribible) |
-| `pull_request` | PR obligatorio; `required_approving_review_count: 0` (§8.1); `dismiss_stale_reviews_on_push: true`; `required_review_thread_resolution: true` |
-| `required_status_checks` | Contexto `repository-quality`; `strict: false` |
+| SHA pinning obligatorio en ajustes de Actions | No requerido (`sha_pinning_required: false`); las referencias `uses:` en workflows actuales están fijadas a SHA completo. La configuración remota no previene nuevas referencias flotantes. |
+| Allowlist de Actions | Se permiten todas (`allowed_actions: all`). |
+| Actions security fixes | Endpoint devuelve HTTP 200. |
+| Dependabot configuration | `.github/dependabot.yml` declara `cargo` y `github-actions`; el estado del archivo no prueba que cada actualización haya sido procesada. |
+| Vulnerability alerts endpoint | La consulta de API devolvió HTTP 404; estado no confirmado por esa interfaz. |
 
-**Coexistencia con Branch Protection clásica:**
-
-Ambos mecanismos se mantienen activos de forma complementaria. Las reglas del Ruleset que coinciden con Branch Protection se aplican como capa adicional. Las reglas exclusivas del Ruleset aportan controles no disponibles en la protección clásica:
-
-| Control | Branch Protection clásica | Ruleset `protect-main` |
-|---|---|---|
-| Prohibir `force-push` | ✅ `allow_force_pushes: false` | ✅ `non_fast_forward` |
-| Prohibir borrado de `main` | ✅ `allow_deletions: false` | ✅ `deletion` |
-| PR obligatorio | ✅ | ✅ |
-| Check `repository-quality` requerido | ✅ | ✅ |
-| `enforce_admins` | ✅ | ✅ (Rulesets aplican a todos sin excepción por diseño) |
-| Resolución de threads obligatoria | ❌ | ✅ `required_review_thread_resolution: true` |
-| `dismiss_stale_reviews_on_push` | ✅ | ✅ |
-| `bypass_actors` explícitos | N/A | Ninguno (`[]`) |
-| Visibilidad en GitHub UI (Rules tab) | ❌ | ✅ |
-| Auditabilidad en audit log | Limitada | ✅ Events `repository_ruleset.*` |
-| Exportable como código (IaC) | ❌ | ✅ (API + Terraform) |
-
-**Estrategia a largo plazo:** cuando el proyecto migre a una organización GitHub, los Rulesets de organización ofrecen cobertura de múltiples repositorios. En ese momento se evaluará deprecar la Branch Protection clásica. Por ahora ambas capas coexisten sin conflicto.
+La configuración se inspeccionó mediante GitHub API de solo lectura. Este registro no autoriza modificar Rulesets, protección, Actions ni secretos.
 
 ---
 

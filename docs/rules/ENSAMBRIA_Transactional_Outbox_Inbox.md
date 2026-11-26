@@ -526,7 +526,7 @@ Reglas obligatorias:
 - Validar tenant y ownership en el backend consumidor.
 - No aceptar comandos o eventos internos desde clientes públicos sin un flujo autorizado.
 - Aplicar TLS y gestión segura de credenciales.
-- Obtener secretos desde Vault o el gestor autorizado.
+- Obtener secretos desde AWS Secrets Manager conforme a ADR-0013 y al mecanismo autorizado del entorno.
 - No incluir tokens, contraseñas, datos de tarjetas ni secretos en los eventos.
 - Minimizar datos personales.
 - Enviar identificadores y datos estrictamente necesarios cuando sea posible.

@@ -30,7 +30,7 @@ Debe cubrir la plataforma completa:
 - Redis.
 - NATS JetStream.
 - Object Storage.
-- Vault.
+- AWS Systems Manager Parameter Store, AWS Secrets Manager, AWS Private CA e IAM Roles Anywhere cuando estén desplegados conforme a ADR-0013.
 - Sistemas de autenticación.
 - APIs internas y externas.
 - CDN y servicios de infraestructura.
@@ -1066,7 +1066,7 @@ Verificar cuando corresponda:
 - PostgreSQL.
 - Redis.
 - NATS.
-- Vault.
+- AWS Parameter Store, Secrets Manager, Private CA e IAM Roles Anywhere cuando sean dependencias de ese workload.
 - Servicios internos.
 - Proveedores críticos.
 
@@ -1499,7 +1499,7 @@ Ejemplos:
 - Errores de autorización.
 - Cambios inesperados de permisos.
 - Uso anómalo de credenciales.
-- Fallos de Vault.
+- Errores de AWS Parameter Store, Secrets Manager, Private CA, KMS e IAM Roles Anywhere cuando sean dependencias del workload conforme a ADR-0013.
 - Certificados inválidos.
 - Exposición accidental de secretos.
 

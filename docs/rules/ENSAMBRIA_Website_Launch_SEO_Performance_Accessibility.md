@@ -178,7 +178,7 @@ Nunca incluir:
 - Contraseñas.
 - Tokens de acceso privados.
 - Credenciales de bases de datos.
-- Credenciales de Vault.
+- Credenciales AWS, secretos de backend y material privado de certificados.
 - Claves de firma.
 - Secretos de servicios internos.
 - Credenciales administrativas.
@@ -202,7 +202,7 @@ Las claves publicables no deben confundirse con claves secretas.
 
 Los secretos deben permanecer en backend o en el gestor seguro correspondiente.
 
-ENSAMBRIA utilizará Vault cuando corresponda a la arquitectura y entorno.
+ENSAMBRIA usa AWS como proveedor aprobado para configuración, secretos y mTLS, según [ADR-0013](../adr/ADR-0013-aws-configuration-secrets-mtls.md). Los secretos permanecen en backend y solo llegan a workloads con identidad y permisos mínimos; su disponibilidad en AWS no autoriza a incluirlos en el frontend.
 
 Los backends deben obtener exclusivamente las credenciales necesarias para su función.
 

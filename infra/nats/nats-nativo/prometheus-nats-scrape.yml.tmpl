@@ -1,0 +1,60 @@
+scrape_configs:
+  - job_name: ensambria-nats
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    scheme: https
+    static_configs:
+      - targets:
+          - "NATS_EXPORTER_BIND_ADDRESS:7777"
+        labels:
+          app: nats
+          service: jetstream
+          environment: "NATS_ENVIRONMENT"
+          host: "NATS_HOST_LABEL"
+    basic_auth:
+      username: "NATS_EXPORTER_HTTP_USER"
+      password_file: NATS_PROMETHEUS_PASSWORD_FILE
+    tls_config:
+      ca_file: NATS_PROMETHEUS_CA_FILE
+      server_name: NATS_PROMETHEUS_SERVER_NAME
+      insecure_skip_verify: false
+
+  - job_name: ensambria-nats-node
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    scheme: https
+    static_configs:
+      - targets:
+          - "NATS_EXPORTER_BIND_ADDRESS:9100"
+        labels:
+          app: nats
+          service: node-exporter
+          environment: "NATS_ENVIRONMENT"
+          host: "NATS_HOST_LABEL"
+    basic_auth:
+      username: "NATS_NODE_EXPORTER_HTTP_USER"
+      password_file: NATS_NODE_PROMETHEUS_PASSWORD_FILE
+    tls_config:
+      ca_file: NATS_PROMETHEUS_CA_FILE
+      server_name: NATS_PROMETHEUS_SERVER_NAME
+      insecure_skip_verify: false
+
+  - job_name: ensambria-nats-processes
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    scheme: https
+    static_configs:
+      - targets:
+          - "NATS_EXPORTER_BIND_ADDRESS:9256"
+        labels:
+          app: nats
+          service: process-exporter
+          environment: "NATS_ENVIRONMENT"
+          host: "NATS_HOST_LABEL"
+    basic_auth:
+      username: "NATS_PROCESS_EXPORTER_HTTP_USER"
+      password_file: NATS_PROCESS_PROMETHEUS_PASSWORD_FILE
+    tls_config:
+      ca_file: NATS_PROMETHEUS_CA_FILE
+      server_name: NATS_PROMETHEUS_SERVER_NAME
+      insecure_skip_verify: false

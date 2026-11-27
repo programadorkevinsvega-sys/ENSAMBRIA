@@ -1,0 +1,27 @@
+[Unit]
+Description=ENSAMBRIA NATS VM node_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=node-exporter
+Group=node-exporter
+SupplementaryGroups=nats-tls
+ExecStart=/usr/local/bin/node_exporter --web.listen-address=NATS_EXPORTER_BIND_ADDRESS:9100 --web.config.file=/etc/ensambria/nats/node-exporter-web.yml
+Restart=on-failure
+RestartSec=3s
+MemoryMax=128M
+TasksMax=64
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadOnlyPaths=/etc/ensambria/nats/node-exporter-web.yml /etc/ensambria/credentials/nats/node-exporter.crt /etc/ensambria/credentials/nats/node-exporter.key
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

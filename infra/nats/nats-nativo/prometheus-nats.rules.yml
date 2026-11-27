@@ -1,0 +1,142 @@
+groups:
+  - name: ensambria-nats-native
+    rules:
+      - alert: NATSExporterTargetDown
+        expr: up{job="ensambria-nats"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: nats
+        annotations:
+          summary: NATS metrics target is down
+          description: "Prometheus cannot scrape the NATS exporter at {{ $labels.instance }}."
+
+      - alert: NATSNodeExporterTargetDown
+        expr: up{job="ensambria-nats-node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: nats-host
+        annotations:
+          summary: NATS host metrics target is down
+          description: "Prometheus cannot scrape node_exporter on {{ $labels.host }}."
+
+      - alert: NATSProcessExporterTargetDown
+        expr: up{job="ensambria-nats-processes"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: nats-host
+        annotations:
+          summary: NATS process metrics target is down
+          description: "Prometheus cannot scrape process-exporter on {{ $labels.host }}."
+
+      - alert: NATSHostCPUWarning
+        expr: 100 - avg by (host) (rate(node_cpu_seconds_total{app="nats",service="node-exporter",mode="idle"}[5m])) * 100 > 70
+        for: 10m
+        labels:
+          severity: warning
+          component: nats-host
+        annotations:
+          summary: NATS host CPU usage is above 70%
+          description: "CPU usage on {{ $labels.host }} is {{ $value | humanize }}%."
+
+      - alert: NATSHostCPUHigh
+        expr: 100 - avg by (host) (rate(node_cpu_seconds_total{app="nats",service="node-exporter",mode="idle"}[5m])) * 100 > 85
+        for: 5m
+        labels:
+          severity: critical
+          component: nats-host
+        annotations:
+          summary: NATS host CPU usage is above 85%
+          description: "CPU usage on {{ $labels.host }} is {{ $value | humanize }}%."
+
+      - alert: NATSHostMemoryWarning
+        expr: 100 * (1 - node_memory_MemAvailable_bytes{app="nats",service="node-exporter"} / node_memory_MemTotal_bytes{app="nats",service="node-exporter"}) > 75
+        for: 10m
+        labels:
+          severity: warning
+          component: nats-host
+        annotations:
+          summary: NATS host memory usage is above 75%
+          description: "Memory usage on {{ $labels.host }} is {{ $value | humanize }}%."
+
+      - alert: NATSHostMemoryHigh
+        expr: 100 * (1 - node_memory_MemAvailable_bytes{app="nats",service="node-exporter"} / node_memory_MemTotal_bytes{app="nats",service="node-exporter"}) > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: nats-host
+        annotations:
+          summary: NATS host memory usage is above 90%
+          description: "Memory usage on {{ $labels.host }} is {{ $value | humanize }}%."
+
+      - alert: NATSHostRootFilesystemWarning
+        expr: 100 * (1 - node_filesystem_avail_bytes{app="nats",service="node-exporter",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{app="nats",service="node-exporter",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"}) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: nats-host
+        annotations:
+          summary: NATS host root filesystem is above 80%
+          description: "Root filesystem usage on {{ $labels.host }} is {{ $value | humanize }}%."
+
+      - alert: NATSHostRootFilesystemHigh
+        expr: 100 * (1 - node_filesystem_avail_bytes{app="nats",service="node-exporter",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{app="nats",service="node-exporter",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"}) > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: nats-host
+        annotations:
+          summary: NATS host root filesystem is above 90%
+          description: "Root filesystem usage on {{ $labels.host }} is {{ $value | humanize }}%."
+
+      - alert: NATSJetStreamUnhealthy
+        expr: gnatsd_healthz_js_enabled_only_status_value == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: nats
+        annotations:
+          summary: NATS JetStream health check failed
+          description: "The NATS server or JetStream is unhealthy on {{ $labels.server_id }}."
+
+      - alert: NATSSlowConsumers
+        expr: gnatsd_varz_slow_consumers > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: nats
+        annotations:
+          summary: NATS has slow consumers
+          description: "NATS reports slow consumers on {{ $labels.server_id }}."
+
+      - alert: NATSJetStreamStorageWarning
+        expr: jetstream_server_total_message_bytes / jetstream_server_max_storage > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          component: nats
+        annotations:
+          summary: JetStream storage usage is above 80%
+          description: "JetStream is using {{ $value | humanizePercentage }} of its configured storage quota."
+
+      - alert: NATSJetStreamStorageCritical
+        expr: jetstream_server_total_message_bytes / jetstream_server_max_storage > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          component: nats
+        annotations:
+          summary: JetStream storage usage is above 90%
+          description: "JetStream is using {{ $value | humanizePercentage }} of its configured storage quota."
+
+      - alert: NATSJetStreamMemoryCritical
+        expr: gnatsd_varz_jetstream_stats_memory / gnatsd_varz_jetstream_config_max_memory > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          component: nats
+        annotations:
+          summary: JetStream memory usage is above 90%
+          description: "JetStream is using {{ $value | humanizePercentage }} of its configured in-memory store."

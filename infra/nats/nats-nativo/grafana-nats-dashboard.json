@@ -1,0 +1,1407 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "NATS/JetStream y recursos del host. NATS es un broker, no un servicio HTTP de negocio; las métricas http_requests_total y http_request_duration_seconds_bucket deben proceder de cada servicio HTTP propietario.",
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "1. Resumen general",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "gnatsd_healthz_js_enabled_only_status_value{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "JetStream health",
+          "refId": "A"
+        }
+      ],
+      "title": "JetStream health",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "100 - avg by (host) (rate(node_cpu_seconds_total{app=\"nats\",service=\"node-exporter\",mode=\"idle\",host=~\"$host\"}[5m])) * 100",
+          "legendFormat": "CPU {{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU actual",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "(1 - node_memory_MemAvailable_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"} / node_memory_MemTotal_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}) * 100",
+          "legendFormat": "Memory",
+          "refId": "A"
+        }
+      ],
+      "title": "Memoria actual",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "node_load1{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "1m",
+          "refId": "A"
+        }
+      ],
+      "title": "Load average (1m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - node_filesystem_avail_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\",mountpoint=\"/\",fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\",mountpoint=\"/\",fstype!~\"tmpfs|overlay|squashfs\"})",
+          "legendFormat": "/",
+          "refId": "A"
+        }
+      ],
+      "title": "Disco raíz",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"ensambria-nats-node\",app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "node_exporter",
+          "refId": "A"
+        }
+      ],
+      "title": "Node exporter target",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 101,
+      "title": "2. Recursos del servidor",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "100 - avg by (host) (rate(node_cpu_seconds_total{app=\"nats\",service=\"node-exporter\",mode=\"idle\",host=~\"$host\"}[5m])) * 100",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU usage %",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 7
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "(1 - node_memory_MemAvailable_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"} / node_memory_MemTotal_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}) * 100",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory usage %",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "node_load1{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "1m",
+          "refId": "A"
+        },
+        {
+          "expr": "node_load5{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "5m",
+          "refId": "B"
+        },
+        {
+          "expr": "node_load15{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "15m",
+          "refId": "C"
+        }
+      ],
+      "title": "Load average",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "node_memory_MemTotal_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"} - node_memory_MemAvailable_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "Used",
+          "refId": "A"
+        },
+        {
+          "expr": "node_memory_MemAvailable_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "Available",
+          "refId": "B"
+        },
+        {
+          "expr": "node_memory_Cached_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "Cache",
+          "refId": "C"
+        },
+        {
+          "expr": "node_memory_Buffers_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "legendFormat": "Buffers",
+          "refId": "D"
+        }
+      ],
+      "title": "Memoria detallada",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "binBps",
+          "custom": {
+            "fillOpacity": 12,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{app=\"nats\",service=\"node-exporter\",host=~\"$host\",device!~\"lo|veth.*|br.*|docker.*\"}[5m])",
+          "legendFormat": "RX {{device}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_network_transmit_bytes_total{app=\"nats\",service=\"node-exporter\",host=~\"$host\",device!~\"lo|veth.*|br.*|docker.*\"}[5m])",
+          "legendFormat": "TX {{device}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Red (RX / TX)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 102,
+      "title": "3. Disco e identidad del host",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "100 * (1 - node_filesystem_avail_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\",fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{app=\"nats\",service=\"node-exporter\",host=~\"$host\",fstype!~\"tmpfs|overlay|squashfs\"})",
+          "legendFormat": "{{mountpoint}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Filesystem usage by mountpoint",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "binBps",
+          "custom": {
+            "fillOpacity": 12,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "rate(node_disk_read_bytes_total{app=\"nats\",service=\"node-exporter\",host=~\"$host\",device!~\"loop.*|ram.*\"}[5m])",
+          "legendFormat": "Read {{device}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_disk_written_bytes_total{app=\"nats\",service=\"node-exporter\",host=~\"$host\",device!~\"loop.*|ram.*\"}[5m])",
+          "legendFormat": "Write {{device}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Disk I/O (read / write)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 14,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "expr": "node_uname_info{app=\"nats\",service=\"node-exporter\",host=~\"$host\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Identificación del servidor (node_uname_info)",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "id": 103,
+      "title": "4. NATS y JetStream",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "id": 15,
+      "targets": [
+        {
+          "expr": "rate(gnatsd_varz_in_msgs{app=\"nats\",service=\"jetstream\",host=~\"$host\"}[5m])",
+          "legendFormat": "Messages in/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(gnatsd_varz_out_msgs{app=\"nats\",service=\"jetstream\",host=~\"$host\"}[5m])",
+          "legendFormat": "Messages out/s",
+          "refId": "B"
+        }
+      ],
+      "title": "Message throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 16,
+      "targets": [
+        {
+          "expr": "gnatsd_varz_connections{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Connections",
+          "refId": "A"
+        },
+        {
+          "expr": "gnatsd_varz_slow_consumers{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Slow consumers",
+          "refId": "B"
+        }
+      ],
+      "title": "Connections and slow consumers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 47
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "jetstream_server_total_streams{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Streams",
+          "refId": "A"
+        },
+        {
+          "expr": "jetstream_server_total_consumers{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Consumers",
+          "refId": "B"
+        }
+      ],
+      "title": "JetStream totals",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 47
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "gnatsd_varz_cpu{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "NATS server CPU",
+          "refId": "A"
+        }
+      ],
+      "title": "NATS server CPU %",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 47
+      },
+      "id": 28,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "gnatsd_varz_mem{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "NATS server memory",
+          "refId": "A"
+        }
+      ],
+      "title": "NATS server memory",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "jetstream_server_total_message_bytes{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Used",
+          "refId": "A"
+        },
+        {
+          "expr": "jetstream_server_max_storage{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Limit",
+          "refId": "B"
+        }
+      ],
+      "title": "JetStream storage (used / configured limit)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 47
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * gnatsd_varz_jetstream_stats_memory{app=\"nats\",service=\"jetstream\",host=~\"$host\"} / gnatsd_varz_jetstream_config_max_memory{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "Memory store used",
+          "refId": "A"
+        }
+      ],
+      "title": "JetStream memory store",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 57
+      },
+      "id": 20,
+      "targets": [
+        {
+          "expr": "jetstream_stream_total_bytes{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "{{stream_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-stream storage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 57
+      },
+      "id": 21,
+      "targets": [
+        {
+          "expr": "jetstream_consumer_num_pending{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "{{stream_name}} / {{consumer_name}} pending",
+          "refId": "A"
+        },
+        {
+          "expr": "jetstream_consumer_num_ack_pending{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "{{stream_name}} / {{consumer_name}} ack pending",
+          "refId": "B"
+        },
+        {
+          "expr": "jetstream_consumer_num_redelivered{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "{{stream_name}} / {{consumer_name}} redelivered",
+          "refId": "C"
+        }
+      ],
+      "title": "Consumer backlog, ACKs and redeliveries",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 65
+      },
+      "id": 22,
+      "targets": [
+        {
+          "expr": "jetstream_consumer_delivered_stream_seq{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "{{stream_name}} / {{consumer_name}} delivered",
+          "refId": "A"
+        },
+        {
+          "expr": "jetstream_consumer_ack_floor_stream_seq{app=\"nats\",service=\"jetstream\",host=~\"$host\"}",
+          "legendFormat": "{{stream_name}} / {{consumer_name}} ack floor",
+          "refId": "B"
+        }
+      ],
+      "title": "Consumer sequence progress",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 73
+      },
+      "id": 104,
+      "title": "5. Procesos del host (allowlist)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 74
+      },
+      "id": 23,
+      "targets": [
+        {
+          "expr": "topk(10, sum by (groupname) (rate(namedprocess_namegroup_cpu_seconds_total{app=\"nats\",service=\"process-exporter\",host=~\"$host\",mode=\"user\"}[5m])) * 100)",
+          "legendFormat": "{{groupname}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top monitored processes by CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 74
+      },
+      "id": 24,
+      "targets": [
+        {
+          "expr": "topk(10, sum by (groupname) (namedprocess_namegroup_memory_bytes{app=\"nats\",service=\"process-exporter\",host=~\"$host\",memtype=\"resident\"}))",
+          "legendFormat": "{{groupname}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top monitored processes by resident memory",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      },
+      "id": 105,
+      "title": "6. Aplicaciones HTTP (requiere métricas del servicio)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 12,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 83
+      },
+      "id": 29,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, app, service) (rate(http_request_duration_seconds_bucket{app=~\"$app\",service=~\"$service\"}[5m])))",
+          "legendFormat": "{{app}} / {{service}} p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, app, service) (rate(http_request_duration_seconds_bucket{app=~\"$app\",service=~\"$service\"}[5m])))",
+          "legendFormat": "{{app}} / {{service}} p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, app, service) (rate(http_request_duration_seconds_bucket{app=~\"$app\",service=~\"$service\"}[5m])))",
+          "legendFormat": "{{app}} / {{service}} p99",
+          "refId": "C"
+        }
+      ],
+      "title": "HTTP request latency (p50 / p95 / p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 83
+      },
+      "id": 30,
+      "targets": [
+        {
+          "expr": "sum by (app, service) (rate(http_requests_total{app=~\"$app\",service=~\"$service\"}[5m]))",
+          "legendFormat": "{{app}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 91
+      },
+      "id": 31,
+      "targets": [
+        {
+          "expr": "100 * sum by (app, service) (rate(http_requests_total{app=~\"$app\",service=~\"$service\",code=~\"5..\"}[5m])) / sum by (app, service) (rate(http_requests_total{app=~\"$app\",service=~\"$service\"}[5m]))",
+          "legendFormat": "{{app}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 5xx error rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 91
+      },
+      "id": 32,
+      "targets": [
+        {
+          "expr": "sum by (app, service) (rate(process_cpu_seconds_total{app=~\"$app\",service=~\"$service\"}[5m])) * 100",
+          "legendFormat": "{{app}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Application process CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 99
+      },
+      "id": 33,
+      "targets": [
+        {
+          "expr": "sum by (app, service) (process_resident_memory_bytes{app=~\"$app\",service=~\"$service\"})",
+          "legendFormat": "{{app}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Application resident memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "text",
+        "uid": "-- Grafana --"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 107
+      },
+      "id": 25,
+      "options": {
+        "mode": "markdown",
+        "content": "### Ownership de métricas HTTP\nNATS/JetStream no es una API HTTP de negocio y no genera `http_requests_total` ni `http_request_duration_seconds_bucket`. Los paneles anteriores solo mostrarán datos cuando cada servicio HTTP publique sus propias métricas con labels `app` y `service` en este Prometheus; esta instalación nativa de NATS no crea ni simula esas señales."
+      },
+      "title": "Alcance de métricas HTTP",
+      "type": "text"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "nats",
+    "jetstream",
+    "node-exporter",
+    "process-exporter"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(node_uname_info{app=\"nats\",service=\"node-exporter\"}, host)",
+        "includeAll": true,
+        "label": "Host",
+        "multi": true,
+        "name": "host",
+        "query": "label_values(node_uname_info{app=\"nats\",service=\"node-exporter\"}, host)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(http_requests_total, app)",
+        "includeAll": true,
+        "label": "Aplicación",
+        "multi": true,
+        "name": "app",
+        "query": "label_values(http_requests_total, app)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(http_requests_total{app=~\"$app\"}, service)",
+        "includeAll": true,
+        "label": "Servicio HTTP",
+        "multi": true,
+        "name": "service",
+        "query": "label_values(http_requests_total{app=~\"$app\"}, service)",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "ENSAMBRIA NATS JetStream + Host",
+  "uid": "ensambria-nats-jetstream-host",
+  "version": 1
+}

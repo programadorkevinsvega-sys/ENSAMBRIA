@@ -1,0 +1,28 @@
+[Unit]
+Description=ENSAMBRIA native NATS JetStream server (single node)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nats
+Group=nats
+ExecStartPre=/usr/local/bin/nats-server -t -c /etc/ensambria/nats/nats.conf
+ExecStart=/usr/local/bin/nats-server -c /etc/ensambria/nats/nats.conf
+Restart=on-failure
+RestartSec=3s
+LimitNOFILE=65536
+MemoryMax=2G
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadOnlyPaths=/etc/ensambria/nats /etc/ensambria/credentials/nats
+ReadWritePaths=/var/lib/nats
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

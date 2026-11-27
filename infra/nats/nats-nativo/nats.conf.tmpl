@@ -1,0 +1,21 @@
+server_name: ensambria-nats-native-single
+listen: NATS_LISTEN_ADDRESS:4222
+http: 127.0.0.1:8222
+logtime: true
+logtime_utc: true
+
+jetstream {
+  store_dir: /var/lib/nats/jetstream
+  max_mem: 512MB
+  max_file: 65GB
+}
+
+tls {
+  cert_file: /etc/ensambria/credentials/nats/server.crt
+  key_file: /etc/ensambria/credentials/nats/server.key
+  ca_file: /etc/ensambria/credentials/nats/ca-bundle.crt
+  verify_and_map: true
+  timeout: 2
+}
+
+include ./authorization.conf

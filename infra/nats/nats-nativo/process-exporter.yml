@@ -1,0 +1,11 @@
+process_names:
+  - name: "{{.Comm}}"
+    comm:
+      - nats-server
+      - prometheus-nats
+      - node_exporter
+      - process-exporte
+      - systemd
+      - systemd-journal
+      - sshd
+      - cron

@@ -1,0 +1,23 @@
+# This is deliberately not an active user list. Do not copy it unchanged.
+# Provision one mTLS-mapped user per real workload and grant only the subjects
+# that workload owns/consumes. Empty allow lists are not a safe deny mechanism.
+authorization {
+  default_permissions {
+    publish {
+      deny: [">"]
+    }
+    subscribe {
+      deny: [">"]
+    }
+  }
+  users: [
+    # Add provisioned identities here, each with explicit non-empty scopes:
+    # {
+    #   user: "CN=<issued-service-identity>,O=ENSAMBRIA Staging"
+    #   permissions: {
+    #     publish: { allow: ["<owned-subjects>"] }
+    #     subscribe: { allow: ["<consumed-subjects>", "_INBOX.>"] }
+    #   }
+    # }
+  ]
+}
